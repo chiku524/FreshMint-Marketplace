@@ -1,9 +1,13 @@
+import { ensureDatabaseReady } from "@/lib/db-ready";
 import { prisma } from "@/lib/db";
 import type { MarketplaceState } from "@/lib/discovery";
 import type { FollowGraph, Report, Appeal } from "@/lib/discovery/types";
 import { toCollection, toCreatorProfile, toListing, toShelf } from "./mappers";
 
 export async function loadMarketplaceState(): Promise<MarketplaceState> {
+  // Guard for runtimes that don't execute instrumentation before first request.
+  await ensureDatabaseReady();
+
   const [users, listings, collections, shelves, follows, reports, appeals] =
     await Promise.all([
       prisma.user.findMany({ include: { wallets: true } }),
@@ -98,6 +102,7 @@ export async function persistListingSignals(listingId: string, signals: {
   risingEligibleAt?: Date | null;
   featuredAt?: Date | null;
 }) {
+  await ensureDatabaseReady();
   await prisma.listing.update({
     where: { id: listingId },
     data: signals,
@@ -115,5 +120,6 @@ export async function persistCreatorStats(
     firstListingAt?: Date | null;
   },
 ) {
+  await ensureDatabaseReady();
   await prisma.user.update({ where: { id: creatorId }, data });
 }

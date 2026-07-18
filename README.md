@@ -17,9 +17,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to soft-launch a work → Open Lane / Rising / metrics.
 
-### `DATABASE_URL` errors
+### Database errors
 
-If you see `Environment variable not found: DATABASE_URL`, the runtime did not load `.env` (common in previews/deploys). FreshMint now bootstraps a cwd-absolute SQLite URL in `src/lib/env.ts` / `instrumentation.ts`. For production, **set `DATABASE_URL` explicitly** (prefer hosted Postgres; SQLite is for local/demo only).
+| Error | Cause | Fix in FreshMint |
+|---|---|---|
+| `Environment variable not found: DATABASE_URL` | `.env` not injected | Runtime fallback in `src/lib/env.ts` |
+| `Unable to open the database file` (code 14) | Relative `file:./dev.db` resolved from cwd (not `prisma/`), or DB missing (gitignored) | Absolute path rewrite + auto `prisma db push` / seed on boot |
+
+For production hosts, **set `DATABASE_URL` to hosted Postgres** — SQLite is for local/demo only and won't persist on serverless.
 
 ## What’s implemented
 

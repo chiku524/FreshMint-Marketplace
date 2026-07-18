@@ -1,10 +1,13 @@
 /**
  * Runs once when the Next.js server starts — before request handlers.
- * Guarantees DATABASE_URL exists even when .env was not injected.
+ * Normalizes DATABASE_URL and provisions SQLite schema/seed if needed.
  */
 export async function register() {
-  // Prisma/SQLite are Node-only; skip Edge instrumentation runtime.
   if (process.env.NEXT_RUNTIME === "edge") return;
+
   const { ensureEnv } = await import("@/lib/env");
   ensureEnv();
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  await ensureDatabaseReady();
 }
