@@ -7,7 +7,7 @@ Multi-chain (EVM + Solana) digital-art NFT marketplace whose differentiator is *
 ```bash
 cp .env.example .env
 npm install
-npx prisma migrate dev --name init
+npx prisma migrate dev
 npm run db:seed
 npm test
 npm run dev
@@ -16,6 +16,10 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to soft-launch a work → Open Lane / Rising / metrics.
+
+### `DATABASE_URL` errors
+
+If you see `Environment variable not found: DATABASE_URL`, the runtime did not load `.env` (common in previews/deploys). FreshMint now bootstraps a cwd-absolute SQLite URL in `src/lib/env.ts` / `instrumentation.ts`. For production, **set `DATABASE_URL` explicitly** (prefer hosted Postgres; SQLite is for local/demo only).
 
 ## What’s implemented
 
@@ -39,6 +43,10 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 - **OE / auction calendar** with hourly start caps + Rising concurrency limits (`/calendar`)
 - **Moderation queue** for reports & appeals (`/moderate` — demo as Ops Moderator)
 - **Studio** for Featured editorial controls + collector shelf creation (`/studio`)
+
+### Media & chains
+- **Media upload** to `/public/uploads` via `POST /api/media/upload` (wired into Create)
+- **On-chain intents** for Sepolia + Solana Devnet (`src/lib/onchain/*`, `contracts/FreshMintMarket.sol`) — simulated until market address is configured
 
 ## Scripts
 

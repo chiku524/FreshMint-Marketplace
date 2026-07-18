@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import "@/lib/env";
 import { prisma } from "@/lib/db";
 import { DiscoveryEngine } from "@/lib/discovery";
 import { loadMarketplaceState, persistCreatorStats, persistListingSignals } from "@/lib/data/repository";
@@ -12,6 +12,9 @@ import {
   detectWashRisk,
   maybeFlagWashCluster,
 } from "@/lib/integrity/sybil";
+import { buildEvmMintIntent, buildEvmPurchaseIntent } from "@/lib/onchain/evm";
+import { buildSolanaMintIntent, buildSolanaPurchaseIntent } from "@/lib/onchain/solana";
+import { hashTextMedia } from "@/lib/media/upload";
 
 export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
   const state = await loadMarketplaceState();
@@ -20,7 +23,7 @@ export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
 }
 
 export function hashMedia(content: string): string {
-  return createHash("sha256").update(content).digest("hex").slice(0, 32);
+  return hashTextMedia(content);
 }
 
 export async function createListingForUser(input: {
@@ -32,7 +35,10 @@ export async function createListingForUser(input: {
   priceUsd?: number | null;
   medium: string;
   styleTags: string[];
-  mediaContent: string;
+  /** Fallback text stand-in when no uploaded file hash is provided. */
+  mediaContent?: string;
+  mediaHash?: string;
+  mediaUrl?: string;
   metadataComplete?: boolean;
   originalMedia?: boolean;
   oeStartsAt?: string | null;
@@ -42,7 +48,17 @@ export async function createListingForUser(input: {
   publishSoftLaunch?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
-  const mediaHash = hashMedia(input.mediaContent);
+  const mediaHash =
+    input.mediaHash ??
+    (input.mediaContent ? hashMedia(input.mediaContent) : "");
+  if (!mediaHash) {
+    return { ok: false as const, errors: ["media_required"] };
+  }
+  const mediaUrl =
+    input.mediaUrl ??
+    (input.mediaContent
+      ? `data:text/plain;base64,${Buffer.from(input.mediaContent).toString("base64").slice(0, 200)}`
+      : null);
   const now = Date.now();
 
   if (input.type === "open_edition" || input.type === "auction") {
@@ -128,7 +144,7 @@ export async function createListingForUser(input: {
       medium: input.medium,
       styleTagsJson: JSON.stringify(input.styleTags),
       mediaHash,
-      mediaUrl: `data:text/plain;base64,${Buffer.from(input.mediaContent).toString("base64").slice(0, 200)}`,
+      mediaUrl,
       metadataComplete: input.metadataComplete ?? true,
       originalMedia: input.originalMedia ?? true,
       oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt) : null,
@@ -193,19 +209,39 @@ export async function transitionListingStage(
     });
   }
 
-  // Soft mint simulation when entering soft_launch
+  // Testnet mint intent (simulated until market contract is deployed)
   if (target === "soft_launch") {
-    const txHash = `0x${randomBytes(16).toString("hex")}`;
-    const contractAddress =
+    const creator = await prisma.user.findUnique({
+      where: { id: listing.creatorId },
+      include: { wallets: true },
+    });
+    const creatorAddress =
+      creator?.wallets.find((w) => w.chain === listing.chain)?.address ??
+      creator?.wallets[0]?.address ??
+      "unknown";
+    const tokenUri =
+      (await prisma.listing.findUnique({ where: { id: listingId } }))?.mediaUrl ??
+      `freshmint://${listingId}`;
+
+    const mint =
       listing.chain === "evm"
-        ? `0xFM${randomBytes(8).toString("hex")}`
-        : `FM${randomBytes(16).toString("hex")}`;
+        ? buildEvmMintIntent({
+            creatorAddress,
+            tokenUri,
+            listingId,
+          })
+        : buildSolanaMintIntent({
+            creatorAddress,
+            metadataUri: tokenUri,
+            listingId,
+          });
+
     await prisma.listing.update({
       where: { id: listingId },
       data: {
-        mintTxHash: txHash,
-        contractAddress,
-        tokenId: String(Date.now() % 1_000_000),
+        mintTxHash: mint.txHash,
+        contractAddress: mint.contractAddress,
+        tokenId: mint.tokenId,
       },
     });
   }
@@ -442,7 +478,30 @@ export async function purchaseListing(input: {
     where: { buyerId: input.buyerId, listingId: input.listingId },
   });
   const isFirst = prior === 0;
-  const txHash = `0x${randomBytes(16).toString("hex")}`;
+
+  const buyer = await prisma.user.findUnique({
+    where: { id: input.buyerId },
+    include: { wallets: true },
+  });
+  const buyerAddress =
+    buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
+    buyer?.wallets[0]?.address ??
+    "unknown";
+
+  const purchaseIntent =
+    listing.chain === "evm"
+      ? buildEvmPurchaseIntent({
+          buyerAddress,
+          contractAddress: listing.contractAddress ?? "0x0",
+          tokenId: listing.tokenId ?? "0",
+          priceWei: String(Math.round(input.amountUsd * 1e15)),
+        })
+      : buildSolanaPurchaseIntent({
+          buyerAddress,
+          mintAddress: listing.contractAddress ?? "unknown",
+          priceLamports: Math.round(input.amountUsd * 1_000_000),
+        });
+  const txHash = purchaseIntent.txHash;
 
   await prisma.purchase.create({
     data: {

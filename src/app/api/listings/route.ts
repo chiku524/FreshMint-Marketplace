@@ -15,21 +15,28 @@ export async function GET() {
   });
 }
 
-const createSchema = z.object({
-  title: z.string().min(1).max(120),
-  description: z.string().max(2000).default(""),
-  type: z.enum(["single", "collection", "open_edition", "auction"]),
-  chain: z.enum(["evm", "solana"]),
-  priceUsd: z.number().nonnegative().nullable().optional(),
-  medium: z.string().min(1).max(64),
-  styleTags: z.array(z.string()).default([]),
-  mediaContent: z.string().min(1),
-  oeStartsAt: z.string().nullable().optional(),
-  oeEndsAt: z.string().nullable().optional(),
-  auctionStartsAt: z.string().nullable().optional(),
-  auctionEndsAt: z.string().nullable().optional(),
-  publishSoftLaunch: z.boolean().optional(),
-});
+const createSchema = z
+  .object({
+    title: z.string().min(1).max(120),
+    description: z.string().max(2000).default(""),
+    type: z.enum(["single", "collection", "open_edition", "auction"]),
+    chain: z.enum(["evm", "solana"]),
+    priceUsd: z.number().nonnegative().nullable().optional(),
+    medium: z.string().min(1).max(64),
+    styleTags: z.array(z.string()).default([]),
+    mediaContent: z.string().optional(),
+    mediaHash: z.string().optional(),
+    mediaUrl: z.string().optional(),
+    oeStartsAt: z.string().nullable().optional(),
+    oeEndsAt: z.string().nullable().optional(),
+    auctionStartsAt: z.string().nullable().optional(),
+    auctionEndsAt: z.string().nullable().optional(),
+    publishSoftLaunch: z.boolean().optional(),
+  })
+  .refine((v) => Boolean(v.mediaHash || v.mediaContent), {
+    message: "media_required",
+    path: ["mediaContent"],
+  });
 
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
@@ -55,6 +62,8 @@ export async function POST(req: NextRequest) {
     medium: body.data.medium,
     styleTags: body.data.styleTags,
     mediaContent: body.data.mediaContent,
+    mediaHash: body.data.mediaHash,
+    mediaUrl: body.data.mediaUrl,
     oeStartsAt: body.data.oeStartsAt,
     oeEndsAt: body.data.oeEndsAt,
     auctionStartsAt: body.data.auctionStartsAt,

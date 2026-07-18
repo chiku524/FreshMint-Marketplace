@@ -8,6 +8,30 @@ export function CreateListingForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [media, setMedia] = useState<{
+    mediaUrl: string;
+    mediaHash: string;
+  } | null>(null);
+
+  async function uploadFile(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/media/upload", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "upload_failed");
+      setMedia({ mediaUrl: data.mediaUrl, mediaHash: data.mediaHash });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "upload_failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -16,6 +40,7 @@ export function CreateListingForm() {
     setOk(null);
     const fd = new FormData(e.currentTarget);
     const type = String(fd.get("type"));
+    const textMedia = String(fd.get("mediaContent") ?? "");
     const payload = {
       title: String(fd.get("title")),
       description: String(fd.get("description") ?? ""),
@@ -27,7 +52,9 @@ export function CreateListingForm() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
-      mediaContent: String(fd.get("mediaContent")),
+      mediaContent: media ? undefined : textMedia,
+      mediaHash: media?.mediaHash,
+      mediaUrl: media?.mediaUrl,
       publishSoftLaunch: true,
       oeStartsAt:
         type === "open_edition" ? new Date().toISOString() : null,
@@ -42,6 +69,12 @@ export function CreateListingForm() {
           : null,
     };
 
+    if (!payload.mediaHash && !payload.mediaContent) {
+      setError("Upload a file or paste media content");
+      setBusy(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/listings", {
         method: "POST",
@@ -54,9 +87,13 @@ export function CreateListingForm() {
           (data.errors && data.errors.join(", ")) || data.error || "failed",
         );
       }
-      setOk(`Listed “${data.listing.title}” at stage ${data.listing.stage}`);
+      setOk(
+        `Listed “${data.listing.title}” · stage ${data.listing.stage}` +
+          (data.listing ? " · mint intent recorded" : ""),
+      );
       router.refresh();
       e.currentTarget.reset();
+      setMedia(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed");
     } finally {
@@ -110,8 +147,8 @@ export function CreateListingForm() {
         <label>
           Chain
           <select name="chain" defaultValue="evm" style={fieldStyle}>
-            <option value="evm">EVM (Sepolia sim)</option>
-            <option value="solana">Solana (Devnet sim)</option>
+            <option value="evm">EVM (Sepolia)</option>
+            <option value="solana">Solana (Devnet)</option>
           </select>
         </label>
       </div>
@@ -133,12 +170,33 @@ export function CreateListingForm() {
       </div>
       <div>
         <label>
-          Media content (hashed for duplicates)
+          Artwork file
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,text/plain"
+            style={fieldStyle}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadFile(file);
+            }}
+          />
+        </label>
+        {media ? (
+          <p style={{ color: "var(--emergent)", fontSize: "0.85rem", margin: "0.4rem 0 0" }}>
+            Uploaded · hash {media.mediaHash.slice(0, 12)}… ·{" "}
+            <a href={media.mediaUrl} target="_blank" rel="noreferrer">
+              preview
+            </a>
+          </p>
+        ) : null}
+      </div>
+      <div>
+        <label>
+          Or paste text media (hashed for duplicates)
           <textarea
             name="mediaContent"
-            required
-            rows={3}
-            placeholder="Paste artwork bytes, SVG, or unique text stand-in…"
+            rows={2}
+            placeholder="Optional if you uploaded a file…"
             style={fieldStyle}
           />
         </label>
@@ -154,7 +212,7 @@ export function CreateListingForm() {
           padding: "0.55rem 0.9rem",
         }}
       >
-        {busy ? "Minting…" : "Soft-launch listing"}
+        {busy ? "Working…" : "Soft-launch listing"}
       </button>
       {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
       {ok ? <p style={{ color: "var(--emergent)", margin: 0 }}>{ok}</p> : null}
