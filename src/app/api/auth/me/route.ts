@@ -33,6 +33,7 @@ export async function GET() {
       wallets: user.wallets,
       curatorScore: user.curatorScore,
       verifiedCreator: user.verifiedCreator,
+      role: user.role,
       emerging: emerging.emerging,
       emergingReasons: emerging.reasons,
     },

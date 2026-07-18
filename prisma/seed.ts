@@ -6,6 +6,7 @@ const now = Date.now();
 
 async function main() {
   await prisma.signalEvent.deleteMany();
+  await prisma.moderationAction.deleteMany();
   await prisma.purchase.deleteMany();
   await prisma.nomination.deleteMany();
   await prisma.appeal.deleteMany();
@@ -135,11 +136,30 @@ async function main() {
       displayName: "Guest Atelier",
       walletCreatedAt: new Date(now - 300 * day),
       curatorScore: 80,
+      role: "editor",
       wallets: {
         create: [
           {
             chain: "solana",
             address: "GuestCurator33333333333333333333333333",
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      id: "mod-ops",
+      displayName: "Ops Moderator",
+      walletCreatedAt: new Date(now - 500 * day),
+      curatorScore: 100,
+      role: "moderator",
+      wallets: {
+        create: [
+          {
+            chain: "evm",
+            address: "0xmod00000000000000000000000000000000001",
           },
         ],
       },
@@ -402,7 +422,7 @@ async function main() {
   }
 
   console.log("Seeded FreshMint cold-start catalog:", {
-    users: 6,
+    users: 7,
     listings: listings.length + 3,
     shelves: 2,
     shelfInk: shelf.id,

@@ -86,6 +86,39 @@ export const DISCOVERY_CONFIG = {
 
   /** Meaningful view threshold (ms dwell). */
   meaningfulViewDwellMs: 3_000,
+
+  /**
+   * Sybil-lite signal resistance.
+   * Caps engagement farming from a single viewer identity.
+   */
+  sybil: {
+    /** Max signal events per viewer per listing per hour. */
+    maxSignalsPerViewerListingPerHour: 8,
+    /** Max saves+follows from a brand-new account in first 24h. */
+    maxEngagementActionsNewAccountPerDay: 20,
+    /** New account age threshold (ms). */
+    newAccountAgeMs: 24 * 60 * 60 * 1000,
+    /** Flag wash if buyer has >N purchases from same seller with tiny dwell. */
+    washPurchaseThreshold: 3,
+    /** Minimum unique viewers before saves heavily boost quality. */
+    minUniqueViewersForSaveTrust: 3,
+  },
+
+  /** Calendar / congestion for time-boxed drops. */
+  calendar: {
+    /** Max OE drops starting in the same UTC hour (platform-wide). */
+    maxOeStartsPerHour: 4,
+    /** Max auctions starting in the same UTC hour. */
+    maxAuctionStartsPerHour: 6,
+    /** Min OE window length (ms). */
+    minOeWindowMs: 60 * 60 * 1000,
+    /** Max OE window length (ms). */
+    maxOeWindowMs: 7 * 24 * 60 * 60 * 1000,
+    /** Min auction window length (ms). */
+    minAuctionWindowMs: 30 * 60 * 1000,
+    /** Max auction window length (ms). */
+    maxAuctionWindowMs: 14 * 24 * 60 * 60 * 1000,
+  },
 } as const;
 
 export type FeedMixKey = keyof typeof DISCOVERY_CONFIG.feedMix;

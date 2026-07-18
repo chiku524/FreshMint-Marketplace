@@ -22,6 +22,8 @@ model User {
   openLaneListingsToday Int @default(0)
   curatorScore    Int      @default(20)
   establishedBadge Boolean @default(false)
+  /// member | moderator | editor
+  role            String   @default("member")
   /// Earliest linked wallet creation proxy (ms epoch stored as DateTime)
   walletCreatedAt DateTime @default(now())
 
@@ -37,6 +39,21 @@ model User {
   sessions     Session[]
   signalEvents SignalEvent[]
   purchases    Purchase[]
+  moderationActions ModerationAction[]
+}
+
+model ModerationAction {
+  id         String   @id @default(cuid())
+  actorId    String
+  targetType String // report | appeal | listing | user
+  targetId   String
+  action     String // resolve_report | approve_appeal | reject_appeal | feature | unfeature | flag_user | clear_flag
+  note       String   @default("")
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
 }
 
 model Wallet {

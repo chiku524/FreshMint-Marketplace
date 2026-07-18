@@ -6,6 +6,12 @@ import { toListing } from "@/lib/data/mappers";
 import type { Chain, LaunchStage, ListingType, ReportReason } from "@/lib/discovery/types";
 import { isEmergingListing } from "@/lib/discovery";
 import { settleNominationOutcome } from "@/lib/discovery/anti-spam";
+import { validateDropWindow } from "@/lib/marketplace/calendar";
+import {
+  checkSignalSybil,
+  detectWashRisk,
+  maybeFlagWashCluster,
+} from "@/lib/integrity/sybil";
 
 export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
   const state = await loadMarketplaceState();
@@ -38,6 +44,29 @@ export async function createListingForUser(input: {
   const engine = await getDiscoveryEngine();
   const mediaHash = hashMedia(input.mediaContent);
   const now = Date.now();
+
+  if (input.type === "open_edition" || input.type === "auction") {
+    const startsAt =
+      input.type === "open_edition"
+        ? input.oeStartsAt
+          ? new Date(input.oeStartsAt).getTime()
+          : null
+        : input.auctionStartsAt
+          ? new Date(input.auctionStartsAt).getTime()
+          : null;
+    const endsAt =
+      input.type === "open_edition"
+        ? input.oeEndsAt
+          ? new Date(input.oeEndsAt).getTime()
+          : null
+        : input.auctionEndsAt
+          ? new Date(input.auctionEndsAt).getTime()
+          : null;
+    const cal = await validateDropWindow({ type: input.type, startsAt, endsAt });
+    if (!cal.ok) {
+      return { ok: false as const, errors: cal.errors };
+    }
+  }
 
   const draft = {
     id: `tmp-${now}`,
@@ -200,6 +229,15 @@ export async function recordSignal(input: {
   });
   if (!listing) return { ok: false as const, error: "not_found" };
 
+  const sybil = await checkSignalSybil({
+    viewerId: input.viewerId,
+    listingId: input.listingId,
+    type: input.type,
+  });
+  if (!sybil.allowed) {
+    return { ok: false as const, error: sybil.reason ?? "sybil_blocked" };
+  }
+
   const engineListing = toListing(listing);
   const creatorProfile = {
     id: listing.creator.id,
@@ -222,17 +260,23 @@ export async function recordSignal(input: {
   };
   const emerging = isEmergingListing(engineListing, creatorProfile).emerging;
 
+  // Trust-weighted increments — low-trust sybil accounts move ranking less.
+  const w = sybil.trustWeight;
   const data: Record<string, number> = {};
   if (input.type === "impression" || input.type === "dwell" || input.type === "meaningful_view") {
     data.impressionsToday = listing.impressionsToday + 1;
     data.impressionsThisWeek = listing.impressionsThisWeek + 1;
-    data.uniqueViewers = listing.uniqueViewers + 1;
+    data.uniqueViewers = listing.uniqueViewers + (w >= 0.5 ? 1 : 0);
   }
   if (input.dwellMs) {
-    data.dwellMsTotal = listing.dwellMsTotal + input.dwellMs;
+    data.dwellMsTotal = listing.dwellMsTotal + Math.round(input.dwellMs * w);
   }
-  if (input.type === "save") data.saves = listing.saves + 1;
-  if (input.type === "follow") data.follows = listing.follows + 1;
+  if (input.type === "save" && w >= 0.4) {
+    data.saves = listing.saves + 1;
+  }
+  if (input.type === "follow" && w >= 0.4) {
+    data.follows = listing.follows + 1;
+  }
 
   if (Object.keys(data).length) {
     await prisma.listing.update({ where: { id: listing.id }, data });
@@ -247,10 +291,11 @@ export async function recordSignal(input: {
       emerging,
       bucket: input.bucket ?? null,
       dwellMs: input.dwellMs ?? null,
+      metaJson: JSON.stringify({ trustWeight: w }),
     },
   });
 
-  return { ok: true as const, emerging };
+  return { ok: true as const, emerging, trustWeight: w };
 }
 
 export async function nominateListingForUser(input: {
@@ -373,6 +418,24 @@ export async function purchaseListing(input: {
   const listing = await prisma.listing.findUnique({ where: { id: input.listingId } });
   if (!listing || listing.delisted) {
     return { ok: false as const, error: "unavailable" };
+  }
+
+  const wash = await detectWashRisk({
+    buyerId: input.buyerId,
+    sellerId: listing.creatorId,
+  });
+  if (wash.wash) {
+    await maybeFlagWashCluster(input.buyerId);
+    await prisma.signalEvent.create({
+      data: {
+        type: "rising_abuse",
+        listingId: listing.id,
+        creatorId: listing.creatorId,
+        viewerId: input.buyerId,
+        metaJson: JSON.stringify({ reason: wash.reason, kind: "wash_purchase" }),
+      },
+    });
+    return { ok: false as const, error: wash.reason ?? "wash_blocked" };
   }
 
   const prior = await prisma.purchase.count({

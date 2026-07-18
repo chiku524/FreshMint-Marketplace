@@ -25,13 +25,20 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 - Draft → Soft launch → Rising → Featured staging
 - Anti-spam: rate limits, media-hash duplicates, reports/appeals, nominations
 
-### Next-step platform layer
+### Platform layer
 - **SQLite + Prisma** persistence for users, wallets, listings, shelves, signals, purchases
 - **Wallet auth**: EVM `personal_sign` + Solana ed25519 verify; HTTP-only session cookies
+- **Cross-chain wallet linking** via `/api/auth/link-wallet`
 - **Demo personas** for local cold-start without a browser extension
 - **Create / soft-launch** flow with simulated Sepolia / Devnet mint refs
 - **Phase 2 signals**: impressions, dwell/meaningful views, saves, nominations, purchases
 - Cold-start seed: emerging artists, guest curator shelf, collector follows
+
+### Integrity & ops
+- **Sybil-lite** signal rate limits, new-account caps, self-engagement block, wash-purchase detection
+- **OE / auction calendar** with hourly start caps + Rising concurrency limits (`/calendar`)
+- **Moderation queue** for reports & appeals (`/moderate` — demo as Ops Moderator)
+- **Studio** for Featured editorial controls + collector shelf creation (`/studio`)
 
 ## Scripts
 

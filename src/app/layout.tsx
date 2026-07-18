@@ -57,8 +57,11 @@ export default function RootLayout({
               <Link href="/rising">Rising</Link>
               <Link href="/open">Open Lane</Link>
               <Link href="/featured">Featured</Link>
+              <Link href="/calendar">Calendar</Link>
               <Link href="/shelves">Shelves</Link>
               <Link href="/create">Create</Link>
+              <Link href="/studio">Studio</Link>
+              <Link href="/moderate">Moderate</Link>
               <Link href="/metrics">Metrics</Link>
             </nav>
           </div>

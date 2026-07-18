@@ -89,6 +89,16 @@ export function ListingActions({
           Push to Rising
         </button>
       ) : null}
+      <button
+        type="button"
+        className="badge"
+        style={{ cursor: "pointer", background: "transparent", color: "var(--danger)" }}
+        onClick={() =>
+          void post("/api/report", { listingId, reason: "spam" })
+        }
+      >
+        Report
+      </button>
       {msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
       ) : null}

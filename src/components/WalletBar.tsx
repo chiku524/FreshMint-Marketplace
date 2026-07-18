@@ -8,13 +8,15 @@ type SessionUser = {
   curatorScore: number;
   wallets: { chain: string; address: string }[];
   emerging?: boolean;
+  role?: string;
 };
 
 const DEMO_PERSONAS = [
   { id: "artist-fresh", label: "Fresh Paper (emerging)" },
   { id: "artist-nova", label: "Nova Ink" },
   { id: "collector-mira", label: "Mira Collects" },
-  { id: "curator-guest", label: "Guest Atelier" },
+  { id: "curator-guest", label: "Guest Atelier (editor)" },
+  { id: "mod-ops", label: "Ops Moderator" },
 ];
 
 export function WalletBar() {
@@ -119,7 +121,9 @@ export function WalletBar() {
         <>
           <span style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
             {user.displayName}
-            {user.emerging ? " · Emerging" : ""} · score {user.curatorScore}
+            {user.emerging ? " · Emerging" : ""}
+            {user.role && user.role !== "member" ? ` · ${user.role}` : ""} ·
+            score {user.curatorScore}
           </span>
           <button
             type="button"
