@@ -93,17 +93,113 @@ export async function getDropCalendar(now = Date.now()): Promise<{
     maxAuctionStartsPerHour: number;
   };
 }> {
-  const listings = await prisma.listing.findMany({
-    where: {
-      delisted: false,
-      OR: [
-        { type: "open_edition", oeStartsAt: { not: null } },
-        { type: "auction", auctionStartsAt: { not: null } },
-      ],
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
+  const emptyCaps = {
+    maxConcurrentOeOnRising: DISCOVERY_CONFIG.maxConcurrentOeOnRising,
+    liveAuctionStripSlots: DISCOVERY_CONFIG.liveAuctionStripSlots,
+    maxOeStartsPerHour: DISCOVERY_CONFIG.calendar.maxOeStartsPerHour,
+    maxAuctionStartsPerHour: DISCOVERY_CONFIG.calendar.maxAuctionStartsPerHour,
+  };
+
+  let listings;
+  try {
+    const { ensureDatabaseReady } = await import("@/lib/db-ready");
+    const mode = await ensureDatabaseReady();
+    if (mode === "memory") {
+      const { getMemoryState } = await import("@/lib/data/memory-store");
+      const state = getMemoryState();
+      listings = [...state.listings.values()]
+        .filter(
+          (l) =>
+            !l.delisted &&
+            ((l.type === "open_edition" && l.oeStartsAt != null) ||
+              (l.type === "auction" && l.auctionStartsAt != null)),
+        )
+        .map((l) => ({
+          ...l,
+          // Shape enough for toListing passthrough below via synthetic rows
+        }));
+      // Build calendar from memory listings directly
+      const openEditions: CalendarEvent[] = [];
+      const auctions: CalendarEvent[] = [];
+      for (const listing of state.listings.values()) {
+        if (listing.delisted) continue;
+        if (
+          listing.type === "open_edition" &&
+          listing.oeStartsAt &&
+          listing.oeEndsAt
+        ) {
+          const status =
+            now < listing.oeStartsAt
+              ? "upcoming"
+              : now > listing.oeEndsAt
+                ? "ended"
+                : "live";
+          openEditions.push({
+            listing,
+            kind: "open_edition",
+            startsAt: listing.oeStartsAt,
+            endsAt: listing.oeEndsAt,
+            status,
+          });
+        }
+        if (
+          listing.type === "auction" &&
+          listing.auctionStartsAt &&
+          listing.auctionEndsAt
+        ) {
+          const status =
+            now < listing.auctionStartsAt
+              ? "upcoming"
+              : now > listing.auctionEndsAt
+                ? "ended"
+                : "live";
+          auctions.push({
+            listing,
+            kind: "auction",
+            startsAt: listing.auctionStartsAt,
+            endsAt: listing.auctionEndsAt,
+            status,
+          });
+        }
+      }
+      openEditions.sort((a, b) => a.startsAt - b.startsAt);
+      auctions.sort((a, b) => a.startsAt - b.startsAt);
+      return {
+        openEditions,
+        auctions,
+        risingOeLiveCount: openEditions.filter(
+          (e) =>
+            e.status === "live" &&
+            (e.listing.stage === "rising_eligible" ||
+              e.listing.stage === "featured_eligible" ||
+              e.listing.stage === "featured"),
+        ).length,
+        liveAuctionStripCount: auctions.filter((e) => e.status === "live")
+          .length,
+        caps: emptyCaps,
+      };
+    }
+
+    listings = await prisma.listing.findMany({
+      where: {
+        delisted: false,
+        OR: [
+          { type: "open_edition", oeStartsAt: { not: null } },
+          { type: "auction", auctionStartsAt: { not: null } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+  } catch {
+    return {
+      openEditions: [],
+      auctions: [],
+      risingOeLiveCount: 0,
+      liveAuctionStripCount: 0,
+      caps: emptyCaps,
+    };
+  }
 
   const openEditions: CalendarEvent[] = [];
   const auctions: CalendarEvent[] = [];

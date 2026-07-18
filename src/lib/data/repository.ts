@@ -2,12 +2,28 @@ import { ensureDatabaseReady } from "@/lib/db-ready";
 import { prisma } from "@/lib/db";
 import type { MarketplaceState } from "@/lib/discovery";
 import type { FollowGraph, Report, Appeal } from "@/lib/discovery/types";
+import { getMemoryState, isMemoryMode } from "@/lib/data/memory-store";
 import { toCollection, toCreatorProfile, toListing, toShelf } from "./mappers";
 
 export async function loadMarketplaceState(): Promise<MarketplaceState> {
   // Guard for runtimes that don't execute instrumentation before first request.
-  await ensureDatabaseReady();
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    return getMemoryState();
+  }
 
+  try {
+    return await loadMarketplaceStateFromPrisma();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[freshmint] prisma load failed, using memory catalog:", message);
+    const { enableMemoryMode } = await import("@/lib/data/memory-store");
+    enableMemoryMode(message);
+    return getMemoryState();
+  }
+}
+
+async function loadMarketplaceStateFromPrisma(): Promise<MarketplaceState> {
   const [users, listings, collections, shelves, follows, reports, appeals] =
     await Promise.all([
       prisma.user.findMany({ include: { wallets: true } }),

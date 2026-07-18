@@ -19,12 +19,15 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 
 ### Database errors
 
-| Error | Cause | Fix in FreshMint |
-|---|---|---|
-| `Environment variable not found: DATABASE_URL` | `.env` not injected | Runtime fallback in `src/lib/env.ts` |
-| `Unable to open the database file` (code 14) | Relative `file:./dev.db` resolved from cwd (not `prisma/`), or DB missing (gitignored) | Absolute path rewrite + auto `prisma db push` / seed on boot |
+**No — page crashes from SQLite code 14 are not expected.** FreshMint now:
 
-For production hosts, **set `DATABASE_URL` to hosted Postgres** — SQLite is for local/demo only and won't persist on serverless.
+1. Rewrites relative SQLite URLs to an absolute path  
+2. Copies the bundled `prisma/dev.db` into `os.tmpdir()` on read-only hosts  
+3. Falls back to an **in-memory seeded catalog** if SQLite still cannot open  
+
+After pulling latest, hard-refresh / redeploy the preview. The homepage should render even when SQLite is unavailable (writes that need Prisma may still no-op until Postgres is configured).
+
+For production, **set `DATABASE_URL` to hosted Postgres**.
 
 ## What’s implemented
 

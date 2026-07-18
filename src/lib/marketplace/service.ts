@@ -17,9 +17,24 @@ import { buildSolanaMintIntent, buildSolanaPurchaseIntent } from "@/lib/onchain/
 import { hashTextMedia } from "@/lib/media/upload";
 
 export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
-  const state = await loadMarketplaceState();
-  const engine = new DiscoveryEngine(state);
-  return engine;
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory") {
+    const { getMemoryEngine } = await import("@/lib/data/memory-store");
+    return getMemoryEngine();
+  }
+
+  try {
+    const state = await loadMarketplaceState();
+    return new DiscoveryEngine(state);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const { enableMemoryMode, getMemoryEngine } = await import(
+      "@/lib/data/memory-store"
+    );
+    enableMemoryMode(message);
+    return getMemoryEngine();
+  }
 }
 
 export function hashMedia(content: string): string {

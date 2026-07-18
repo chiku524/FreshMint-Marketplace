@@ -1,4 +1,10 @@
-import { accessSync, constants, mkdirSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -18,17 +24,31 @@ function canWriteDir(dir: string): boolean {
 
 /**
  * Resolve a writable absolute SQLite path.
- * Relative `file:./dev.db` breaks under Next.js because PrismaClient
- * datasource overrides resolve against process.cwd(), not prisma/.
+ *
+ * Preview/serverless hosts often ship a read-only app directory. In that case
+ * we copy the bundled prisma/dev.db into os.tmpdir() and open that instead.
  */
 export function resolveSqlitePath(): string {
-  const preferred = path.join(process.cwd(), "prisma");
-  if (canWriteDir(preferred)) {
-    return path.join(preferred, "dev.db");
+  const bundled = path.join(process.cwd(), "prisma", "dev.db");
+  const preferredDir = path.join(process.cwd(), "prisma");
+
+  if (canWriteDir(preferredDir)) {
+    return path.join(preferredDir, "dev.db");
   }
+
   const fallbackDir = path.join(tmpdir(), "freshmint");
   mkdirSync(fallbackDir, { recursive: true });
-  return path.join(fallbackDir, "dev.db");
+  const fallbackDb = path.join(fallbackDir, "dev.db");
+
+  if (existsSync(bundled)) {
+    try {
+      copyFileSync(bundled, fallbackDb);
+    } catch {
+      // Another instance may have created it; continue if readable.
+    }
+  }
+
+  return fallbackDb;
 }
 
 function isRelativeSqliteUrl(url: string | undefined): boolean {
@@ -37,7 +57,6 @@ function isRelativeSqliteUrl(url: string | undefined): boolean {
   const filePath = url.slice("file:".length);
   if (filePath.startsWith("./") || filePath.startsWith(".\\")) return true;
   if (filePath === "dev.db" || filePath === "prisma/dev.db") return true;
-  // file:/absolute or file:C:/absolute are fine
   if (filePath.startsWith("/") || /^[A-Za-z]:\//.test(filePath)) return false;
   return !path.isAbsolute(filePath);
 }
