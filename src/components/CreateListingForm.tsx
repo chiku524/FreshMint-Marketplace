@@ -1,5 +1,6 @@
 "use client";
 
+import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -87,10 +88,23 @@ export function CreateListingForm() {
           (data.errors && data.errors.join(", ")) || data.error || "failed",
         );
       }
-      setOk(
-        `Listed “${data.listing.title}” · stage ${data.listing.stage}` +
-          (data.listing ? " · mint intent recorded" : ""),
-      );
+      let note = `Listed “${data.listing.title}” · stage ${data.listing.stage}`;
+      try {
+        const hash = await maybeSendWalletTx({
+          walletTx: data.walletTx,
+          listingId: data.listing.id,
+          action: "mint",
+          amountUsd: data.listing.priceUsd ?? undefined,
+        });
+        if (hash) {
+          note += ` · on-chain mint ${hash.slice(0, 14)}…`;
+        } else {
+          note += " · mint intent recorded";
+        }
+      } catch (walletErr) {
+        note += ` · wallet: ${walletErr instanceof Error ? walletErr.message : "skipped"}`;
+      }
+      setOk(note);
       router.refresh();
       e.currentTarget.reset();
       setMedia(null);

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     await createSession(user.id);
     return NextResponse.json({
       ok: true,
-      mode: "sqlite",
+      mode: "prisma",
       user: {
         id: user.id,
         displayName: user.displayName,

@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: freshmint
+      POSTGRES_PASSWORD: freshmint
+      POSTGRES_DB: freshmint
+    volumes:
+      - freshmint_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freshmint -d freshmint"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  freshmint_pg:

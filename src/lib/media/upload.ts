@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { put } from "@vercel/blob";
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
 const ALLOWED = new Set([
@@ -18,6 +19,35 @@ export interface StoredMedia {
   mimeType: string;
   size: number;
   fileName: string;
+  storage: "vercel-blob" | "local";
+}
+
+function extFor(mimeType: string): string {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "image/svg+xml") return "svg";
+  return "bin";
+}
+
+async function storeLocal(
+  bytes: Buffer,
+  fileName: string,
+  mimeType: string,
+  mediaHash: string,
+): Promise<StoredMedia> {
+  const dir = path.join(process.cwd(), "public", "uploads");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, fileName), bytes);
+  return {
+    mediaUrl: `/uploads/${fileName}`,
+    mediaHash,
+    mimeType,
+    size: bytes.length,
+    fileName,
+    storage: "local",
+  };
 }
 
 export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
@@ -28,31 +58,25 @@ export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const mediaHash = createHash("sha256").update(bytes).digest("hex").slice(0, 32);
-  const ext =
-    mimeType === "image/png"
-      ? "png"
-      : mimeType === "image/jpeg"
-        ? "jpg"
-        : mimeType === "image/webp"
-          ? "webp"
-          : mimeType === "image/gif"
-            ? "gif"
-            : mimeType === "image/svg+xml"
-              ? "svg"
-              : "bin";
+  const fileName = `${Date.now()}-${randomBytes(4).toString("hex")}.${extFor(mimeType)}`;
 
-  const fileName = `${Date.now()}-${randomBytes(4).toString("hex")}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, fileName), bytes);
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`freshmint/${fileName}`, bytes, {
+      access: "public",
+      contentType: mimeType,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    return {
+      mediaUrl: blob.url,
+      mediaHash,
+      mimeType,
+      size: bytes.length,
+      fileName,
+      storage: "vercel-blob",
+    };
+  }
 
-  return {
-    mediaUrl: `/uploads/${fileName}`,
-    mediaHash,
-    mimeType,
-    size: bytes.length,
-    fileName,
-  };
+  return storeLocal(bytes, fileName, mimeType, mediaHash);
 }
 
 export function hashTextMedia(content: string): string {

@@ -1,5 +1,6 @@
 "use client";
 
+import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -25,10 +26,9 @@ export function ListingActions({
     const data = await res.json();
     if (!res.ok) {
       setMsg(data.error || data.errors?.join(", ") || "failed");
-      return;
+      return null;
     }
-    setMsg("Done");
-    router.refresh();
+    return data as Record<string, unknown>;
   }
 
   return (
@@ -42,6 +42,11 @@ export function ListingActions({
             listingId,
             type: "meaningful_view",
             dwellMs: 4000,
+          }).then((d) => {
+            if (d) {
+              setMsg("Done");
+              router.refresh();
+            }
           })
         }
       >
@@ -51,7 +56,14 @@ export function ListingActions({
         type="button"
         className="badge"
         style={{ cursor: "pointer", background: "transparent" }}
-        onClick={() => void post("/api/signals", { listingId, type: "save" })}
+        onClick={() =>
+          void post("/api/signals", { listingId, type: "save" }).then((d) => {
+            if (d) {
+              setMsg("Done");
+              router.refresh();
+            }
+          })
+        }
       >
         Save
       </button>
@@ -59,7 +71,14 @@ export function ListingActions({
         type="button"
         className="badge"
         style={{ cursor: "pointer", background: "transparent" }}
-        onClick={() => void post("/api/nominate", { listingId })}
+        onClick={() =>
+          void post("/api/nominate", { listingId }).then((d) => {
+            if (d) {
+              setMsg("Done");
+              router.refresh();
+            }
+          })
+        }
       >
         Nominate
       </button>
@@ -69,7 +88,27 @@ export function ListingActions({
           className="badge featured"
           style={{ cursor: "pointer", background: "transparent" }}
           onClick={() =>
-            void post("/api/purchase", { listingId, amountUsd: priceUsd })
+            void (async () => {
+              const data = await post("/api/purchase", {
+                listingId,
+                amountUsd: priceUsd,
+              });
+              if (!data) return;
+              let note = `Purchase · ${String(data.txHash).slice(0, 14)}…`;
+              try {
+                const hash = await maybeSendWalletTx({
+                  walletTx: data.walletTx,
+                  listingId,
+                  action: "buy",
+                  amountUsd: priceUsd,
+                });
+                if (hash) note = `On-chain buy · ${hash.slice(0, 14)}…`;
+              } catch (e) {
+                note += ` · wallet: ${e instanceof Error ? e.message : "skipped"}`;
+              }
+              setMsg(note);
+              router.refresh();
+            })()
           }
         >
           Buy ${priceUsd}
@@ -83,6 +122,11 @@ export function ListingActions({
           onClick={() =>
             void post(`/api/listings/${listingId}/stage`, {
               target: "rising_eligible",
+            }).then((d) => {
+              if (d) {
+                setMsg("Done");
+                router.refresh();
+              }
             })
           }
         >
@@ -94,7 +138,12 @@ export function ListingActions({
         className="badge"
         style={{ cursor: "pointer", background: "transparent", color: "var(--danger)" }}
         onClick={() =>
-          void post("/api/report", { listingId, reason: "spam" })
+          void post("/api/report", { listingId, reason: "spam" }).then((d) => {
+            if (d) {
+              setMsg("Done");
+              router.refresh();
+            }
+          })
         }
       >
         Report

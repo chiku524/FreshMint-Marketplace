@@ -6,8 +6,9 @@ Multi-chain (EVM + Solana) digital-art NFT marketplace whose differentiator is *
 
 ```bash
 cp .env.example .env
+docker compose up -d          # Postgres on localhost:5433
 npm install
-npx prisma migrate dev
+npx prisma migrate deploy     # or: npx prisma db push
 npm run db:seed
 npm test
 npm run dev
@@ -19,16 +20,25 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 
 ### Database / preview notes
 
-Runtime **never** shells out to `npx prisma` (that crashes Vercel sandboxes). Instead:
+- Primary store is **Postgres** via `DATABASE_URL` (local Docker maps **5433→5432**).
+- Runtime **never** shells out to `npx prisma` (that crashes Vercel sandboxes).
+- If Postgres is unset or unreachable → **in-memory seeded catalog**.
+- Check `GET /api/health` for `{ mode: "prisma" | "memory", blobConfigured, evmMarket }`.
 
-1. Rewrites relative SQLite URLs to an absolute path  
-2. Copies bundled `prisma/dev.db` into place when missing (incl. `/tmp` on read-only hosts)  
-3. Falls back to an **in-memory seeded catalog** if SQLite still cannot open  
-4. Instrumentation errors are swallowed so the process stays up  
+For hosted previews, set `DATABASE_URL` to a managed Postgres URL (Neon, Supabase, Vercel Postgres, etc.).
 
-Check `GET /api/health` for `{ mode: "sqlite" | "memory" }`.
+### Object storage
 
-For production persistence, **set `DATABASE_URL` to hosted Postgres**.
+- With `BLOB_READ_WRITE_TOKEN` (Vercel Blob) → uploads go to Blob CDN URLs.
+- Without it → local `public/uploads` (fine for `npm run dev`).
+
+### On-chain (Sepolia + Solana Devnet)
+
+1. Deploy `contracts/FreshMintMarket.sol` (see `contracts/README.md`).
+2. Set `NEXT_PUBLIC_EVM_MARKET_ADDRESS` + optional `EVM_MINTER_PRIVATE_KEY` / `EVM_RPC_URL`.
+3. Solana Devnet memos: optional `SOLANA_MINTER_SECRET_KEY` (JSON byte array) or sign from Phantom via `/api/onchain/prepare`.
+
+Without a market address, EVM stays **simulated**. With it, create/buy returns `walletTx` for MetaMask / Phantom, or submits via the server key when configured.
 
 ## What’s implemented
 
@@ -39,11 +49,11 @@ For production persistence, **set `DATABASE_URL` to hosted Postgres**.
 - Anti-spam: rate limits, media-hash duplicates, reports/appeals, nominations
 
 ### Platform layer
-- **SQLite + Prisma** persistence for users, wallets, listings, shelves, signals, purchases
+- **Postgres + Prisma** persistence (memory fallback)
 - **Wallet auth**: EVM `personal_sign` + Solana ed25519 verify; HTTP-only session cookies
 - **Cross-chain wallet linking** via `/api/auth/link-wallet`
 - **Demo personas** for local cold-start without a browser extension
-- **Create / soft-launch** flow with simulated Sepolia / Devnet mint refs
+- **Create / soft-launch** with Sepolia / Devnet mint intents + optional live wallet txs
 - **Phase 2 signals**: impressions, dwell/meaningful views, saves, nominations, purchases
 - Cold-start seed: emerging artists, guest curator shelf, collector follows
 
@@ -54,24 +64,26 @@ For production persistence, **set `DATABASE_URL` to hosted Postgres**.
 - **Studio** for Featured editorial controls + collector shelf creation (`/studio`)
 
 ### Media & chains
-- **Media upload** to `/public/uploads` via `POST /api/media/upload` (wired into Create)
-- **On-chain intents** for Sepolia + Solana Devnet (`src/lib/onchain/*`, `contracts/FreshMintMarket.sol`) — simulated until market address is configured
+- **Media upload** via `POST /api/media/upload` → Vercel Blob or local disk
+- **On-chain intents** in `src/lib/onchain/*` + `POST /api/onchain/prepare`
 
 ## Scripts
 
 | Command | Purpose |
 |---|---|
+| `docker compose up -d` | Local Postgres (:5433) |
 | `npm run dev` | Local app |
 | `npm test` | Discovery unit tests |
 | `npm run db:seed` | Reset cold-start catalog |
-| `npm run db:studio` | Browse SQLite |
+| `npm run db:studio` | Browse Postgres |
 
 ## API highlights
 
 - `POST /api/auth/nonce` · `POST /api/auth/verify` · `POST /api/auth/demo`
 - `POST /api/listings` · `POST /api/listings/:id/stage`
 - `POST /api/signals` · `POST /api/nominate` · `POST /api/purchase`
-- `GET /api/feed` · `/api/rising` · `/api/open` · `/api/metrics`
+- `POST /api/media/upload` · `POST /api/onchain/prepare`
+- `GET /api/feed` · `/api/rising` · `/api/open` · `/api/metrics` · `/api/health`
 
 ## Principles (enforced in code)
 

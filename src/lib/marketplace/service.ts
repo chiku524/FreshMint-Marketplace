@@ -12,9 +12,19 @@ import {
   detectWashRisk,
   maybeFlagWashCluster,
 } from "@/lib/integrity/sybil";
-import { buildEvmMintIntent, buildEvmPurchaseIntent } from "@/lib/onchain/evm";
-import { buildSolanaMintIntent, buildSolanaPurchaseIntent } from "@/lib/onchain/solana";
+import {
+  buildEvmMintIntent,
+  buildEvmPurchaseIntent,
+  sendEvmMintWithServerKey,
+  sendEvmBuyWithServerKey,
+} from "@/lib/onchain/evm";
+import {
+  buildSolanaMintIntent,
+  buildSolanaPurchaseIntent,
+  sendSolanaMemoWithServerKey,
+} from "@/lib/onchain/solana";
 import { hashTextMedia } from "@/lib/media/upload";
+import { parseEther } from "viem";
 
 export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
@@ -240,72 +250,129 @@ export async function transitionListingStage(
   }
 
   const listing = result.listing;
-  await prisma.listing.update({
-    where: { id: listingId },
-    data: {
-      stage: listing.stage,
-      softLaunchedAt: listing.softLaunchedAt
-        ? new Date(listing.softLaunchedAt)
-        : null,
-      risingEligibleAt: listing.risingEligibleAt
-        ? new Date(listing.risingEligibleAt)
-        : null,
-      featuredAt: listing.featuredAt ? new Date(listing.featuredAt) : null,
-    },
-  });
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
 
-  const creator = engine.state.creators.get(listing.creatorId);
-  if (creator) {
-    await persistCreatorStats(listing.creatorId, {
-      risingEntriesThisWeek: creator.risingEntriesThisWeek,
-      openLaneListingsToday: creator.openLaneListingsToday,
-      firstListingAt: creator.firstListingAt
-        ? new Date(creator.firstListingAt)
-        : null,
-    });
-  }
-
-  // Testnet mint intent (simulated until market contract is deployed)
-  if (target === "soft_launch") {
-    const creator = await prisma.user.findUnique({
-      where: { id: listing.creatorId },
-      include: { wallets: true },
-    });
-    const creatorAddress =
-      creator?.wallets.find((w) => w.chain === listing.chain)?.address ??
-      creator?.wallets[0]?.address ??
-      "unknown";
-    const tokenUri =
-      (await prisma.listing.findUnique({ where: { id: listingId } }))?.mediaUrl ??
-      `freshmint://${listingId}`;
-
-    const mint =
-      listing.chain === "evm"
-        ? buildEvmMintIntent({
-            creatorAddress,
-            tokenUri,
-            listingId,
-          })
-        : buildSolanaMintIntent({
-            creatorAddress,
-            metadataUri: tokenUri,
-            listingId,
-          });
-
+  if (!memory) {
     await prisma.listing.update({
       where: { id: listingId },
       data: {
-        mintTxHash: mint.txHash,
-        contractAddress: mint.contractAddress,
-        tokenId: mint.tokenId,
+        stage: listing.stage,
+        softLaunchedAt: listing.softLaunchedAt
+          ? new Date(listing.softLaunchedAt)
+          : null,
+        risingEligibleAt: listing.risingEligibleAt
+          ? new Date(listing.risingEligibleAt)
+          : null,
+        featuredAt: listing.featuredAt ? new Date(listing.featuredAt) : null,
       },
     });
+
+    const creator = engine.state.creators.get(listing.creatorId);
+    if (creator) {
+      await persistCreatorStats(listing.creatorId, {
+        risingEntriesThisWeek: creator.risingEntriesThisWeek,
+        openLaneListingsToday: creator.openLaneListingsToday,
+        firstListingAt: creator.firstListingAt
+          ? new Date(creator.firstListingAt)
+          : null,
+      });
+    }
+  }
+
+  let walletTx: unknown;
+  if (target === "soft_launch") {
+    const creatorProfile = engine.state.creators.get(listing.creatorId);
+    const creatorAddress =
+      creatorProfile?.wallets.find((w) => w.chain === listing.chain)?.address ??
+      creatorProfile?.wallets[0]?.address ??
+      "unknown";
+    const tokenUri = listing.id.startsWith("listing")
+      ? `freshmint://${listingId}`
+      : `freshmint://${listingId}`;
+
+    if (listing.chain === "evm") {
+      const mint = buildEvmMintIntent({
+        creatorAddress,
+        tokenUri,
+        listingId,
+        priceUsd: listing.priceUsd,
+      });
+      walletTx = mint.walletTx;
+      const server = await sendEvmMintWithServerKey({
+        creatorAddress,
+        tokenUri,
+        priceWei: parseEther("0"),
+      });
+      if (server) {
+        mint.txHash = server.txHash;
+        mint.status = "submitted";
+        walletTx = undefined;
+      }
+      if (!memory) {
+        await prisma.listing.update({
+          where: { id: listingId },
+          data: {
+            mintTxHash: mint.txHash || null,
+            contractAddress: mint.contractAddress,
+            tokenId: mint.tokenId,
+          },
+        });
+      } else {
+        const row = engine.state.listings.get(listingId);
+        if (row) {
+          engine.state.listings.set(listingId, {
+            ...row,
+            // mint fields live in DB only; keep stage advance in memory
+          });
+        }
+      }
+    } else {
+      const mint = buildSolanaMintIntent({
+        creatorAddress,
+        metadataUri: tokenUri,
+        listingId,
+      });
+      walletTx = mint.walletTx;
+      const server = await sendSolanaMemoWithServerKey(String(mint.calldata));
+      if (server) {
+        mint.txHash = server.txHash;
+        mint.status = "submitted";
+        walletTx = undefined;
+      }
+      if (!memory) {
+        await prisma.listing.update({
+          where: { id: listingId },
+          data: {
+            mintTxHash: mint.txHash || null,
+            contractAddress: mint.contractAddress,
+            tokenId: mint.tokenId,
+          },
+        });
+      }
+    }
+  }
+
+  if (memory) {
+    return {
+      ok: true as const,
+      listing: engine.state.listings.get(listingId) ?? listing,
+      errors: [] as string[],
+      walletTx,
+    };
   }
 
   const updated = await prisma.listing.findUniqueOrThrow({
     where: { id: listingId },
   });
-  return { ok: true as const, listing: toListing(updated), errors: [] as string[] };
+  return {
+    ok: true as const,
+    listing: toListing(updated),
+    errors: [] as string[],
+    walletTx,
+  };
 }
 
 export async function recordSignal(input: {
@@ -544,20 +611,46 @@ export async function purchaseListing(input: {
     buyer?.wallets[0]?.address ??
     "unknown";
 
+  const priceWei = String(Math.round(input.amountUsd * 1e15));
   const purchaseIntent =
     listing.chain === "evm"
       ? buildEvmPurchaseIntent({
           buyerAddress,
           contractAddress: listing.contractAddress ?? "0x0",
           tokenId: listing.tokenId ?? "0",
-          priceWei: String(Math.round(input.amountUsd * 1e15)),
+          priceWei,
         })
       : buildSolanaPurchaseIntent({
           buyerAddress,
           mintAddress: listing.contractAddress ?? "unknown",
           priceLamports: Math.round(input.amountUsd * 1_000_000),
+          listingId: listing.id,
         });
-  const txHash = purchaseIntent.txHash;
+
+  let txHash = purchaseIntent.txHash;
+  let walletTx =
+    "walletTx" in purchaseIntent ? purchaseIntent.walletTx : undefined;
+
+  if (listing.chain === "evm") {
+    const server = await sendEvmBuyWithServerKey({
+      tokenId: listing.tokenId ?? "0",
+      valueWei: BigInt(priceWei || "0"),
+    });
+    if (server) {
+      txHash = server.txHash;
+      walletTx = undefined;
+    }
+  } else if ("message" in purchaseIntent) {
+    const server = await sendSolanaMemoWithServerKey(purchaseIntent.message);
+    if (server) {
+      txHash = server.txHash;
+      walletTx = undefined;
+    }
+  }
+
+  if (!txHash) {
+    txHash = `pending:${listing.id}:${Date.now()}`;
+  }
 
   await prisma.purchase.create({
     data: {
@@ -602,7 +695,7 @@ export async function purchaseListing(input: {
     },
   });
 
-  return { ok: true as const, txHash, isFirst, emerging };
+  return { ok: true as const, txHash, isFirst, emerging, walletTx };
 }
 
 export async function getPersistedMetrics() {

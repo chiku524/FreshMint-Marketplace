@@ -45,5 +45,9 @@ export async function POST(
   if (!result.ok) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
   }
-  return NextResponse.json({ ok: true, listing: result.listing });
+  return NextResponse.json({
+    ok: true,
+    listing: result.listing,
+    walletTx: "walletTx" in result ? result.walletTx : undefined,
+  });
 }

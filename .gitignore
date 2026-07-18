@@ -31,8 +31,8 @@ yarn-error.log*
 next-env.d.ts
 
 *.db-journal
-# Keep bundled demo DB so previews can open SQLite without provisioning.
-# Local overrides still work; /tmp copy is used on read-only hosts.
+*.db
+/prisma/dev.db
 /src/generated/prisma
 /public/uploads/*
 !/public/uploads/.gitkeep

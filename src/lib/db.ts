@@ -1,15 +1,19 @@
 import { PrismaClient } from "@prisma/client";
-import { getDatabaseUrl } from "@/lib/env";
+import { getDatabaseUrl, ensureEnv } from "@/lib/env";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createClient() {
+  ensureEnv();
+  const url = getDatabaseUrl();
   return new PrismaClient({
-    datasources: {
-      db: {
-        url: getDatabaseUrl(),
-      },
-    },
+    ...(url
+      ? {
+          datasources: {
+            db: { url },
+          },
+        }
+      : {}),
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 }

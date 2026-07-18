@@ -50,7 +50,7 @@ export async function validateDropWindow(input: {
         errors.push("oe_hour_capacity_full");
       }
     } catch {
-      // memory / sqlite-unavailable — skip capacity count
+      // memory / db-unavailable — skip capacity count
     }
   }
 
@@ -74,7 +74,7 @@ export async function validateDropWindow(input: {
         errors.push("auction_hour_capacity_full");
       }
     } catch {
-      // memory / sqlite-unavailable — skip capacity count
+      // memory / db-unavailable — skip capacity count
     }
   }
 

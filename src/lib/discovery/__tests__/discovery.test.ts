@@ -19,8 +19,8 @@ import {
 } from "@/lib/discovery";
 import type { RankedListing, SessionContext } from "@/lib/discovery/types";
 
-const emptySession = (): SessionContext => ({
-  viewerId: null,
+const emptySession = (viewerId: string | null = null): SessionContext => ({
+  viewerId,
   seenArtistIds: [],
   seenListingIds: [],
   seenCollectionIds: [],
