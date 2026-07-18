@@ -1,9 +1,11 @@
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
-import { getEngine } from "@/lib/data/store";
 import { DISCOVERY_CONFIG } from "@/lib/discovery";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
-export default function HomePage() {
-  const engine = getEngine();
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const engine = await getDiscoveryEngine();
   const home = engine.buildHomepage("collector-mira", 12);
   const mix = DISCOVERY_CONFIG.feedMix;
 
@@ -82,6 +84,7 @@ export default function HomePage() {
             alignItems: "baseline",
             gap: "1rem",
             marginBottom: "1.25rem",
+            flexWrap: "wrap",
           }}
         >
           <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
@@ -106,7 +109,7 @@ export default function HomePage() {
           </h2>
           <div className="lane-rail">
             {home.liveAuctions.map((listing) => (
-              <WorkCard key={listing.id} listing={listing} bucket="live" />
+              <WorkCard key={listing.id} listing={listing} bucket="live" showActions />
             ))}
           </div>
         </section>

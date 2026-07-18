@@ -1,8 +1,10 @@
 import { RankedWorkCard } from "@/components/WorkCard";
-import { getEngine } from "@/lib/data/store";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
-export default function FeaturedPage() {
-  const engine = getEngine();
+export const dynamic = "force-dynamic";
+
+export default async function FeaturedPage() {
+  const engine = await getDiscoveryEngine();
   const featured = engine.buildFeatured();
   const budgets = engine.getBudgets();
 

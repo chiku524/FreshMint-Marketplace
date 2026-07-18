@@ -1,18 +1,7 @@
 import { DiscoveryEngine } from "@/lib/discovery";
-import { buildSeedState } from "./seed";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
-const globalForStore = globalThis as unknown as {
-  __discoveryEngine?: DiscoveryEngine;
-};
-
-export function getEngine(): DiscoveryEngine {
-  if (!globalForStore.__discoveryEngine) {
-    globalForStore.__discoveryEngine = new DiscoveryEngine(buildSeedState());
-  }
-  return globalForStore.__discoveryEngine;
-}
-
-export function resetEngine(): DiscoveryEngine {
-  globalForStore.__discoveryEngine = new DiscoveryEngine(buildSeedState());
-  return globalForStore.__discoveryEngine;
+/** @deprecated Prefer getDiscoveryEngine() for DB-backed state. */
+export async function getEngine(): Promise<DiscoveryEngine> {
+  return getDiscoveryEngine();
 }

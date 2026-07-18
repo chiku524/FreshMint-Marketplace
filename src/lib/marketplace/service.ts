@@ -1,0 +1,488 @@
+import { createHash, randomBytes } from "node:crypto";
+import { prisma } from "@/lib/db";
+import { DiscoveryEngine } from "@/lib/discovery";
+import { loadMarketplaceState, persistCreatorStats, persistListingSignals } from "@/lib/data/repository";
+import { toListing } from "@/lib/data/mappers";
+import type { Chain, LaunchStage, ListingType, ReportReason } from "@/lib/discovery/types";
+import { isEmergingListing } from "@/lib/discovery";
+import { settleNominationOutcome } from "@/lib/discovery/anti-spam";
+
+export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
+  const state = await loadMarketplaceState();
+  const engine = new DiscoveryEngine(state);
+  return engine;
+}
+
+export function hashMedia(content: string): string {
+  return createHash("sha256").update(content).digest("hex").slice(0, 32);
+}
+
+export async function createListingForUser(input: {
+  creatorId: string;
+  title: string;
+  description: string;
+  type: ListingType;
+  chain: Chain;
+  priceUsd?: number | null;
+  medium: string;
+  styleTags: string[];
+  mediaContent: string;
+  metadataComplete?: boolean;
+  originalMedia?: boolean;
+  oeStartsAt?: string | null;
+  oeEndsAt?: string | null;
+  auctionStartsAt?: string | null;
+  auctionEndsAt?: string | null;
+  publishSoftLaunch?: boolean;
+}) {
+  const engine = await getDiscoveryEngine();
+  const mediaHash = hashMedia(input.mediaContent);
+  const now = Date.now();
+
+  const draft = {
+    id: `tmp-${now}`,
+    title: input.title,
+    description: input.description,
+    creatorId: input.creatorId,
+    type: input.type,
+    chain: input.chain,
+    stage: "draft" as const,
+    priceUsd: input.priceUsd ?? null,
+    medium: input.medium,
+    styleTags: input.styleTags,
+    mediaHash,
+    metadataComplete: input.metadataComplete ?? true,
+    originalMedia: input.originalMedia ?? true,
+    createdAt: now,
+    softLaunchedAt: null,
+    risingEligibleAt: null,
+    featuredAt: null,
+    oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt).getTime() : null,
+    oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt).getTime() : null,
+    auctionStartsAt: input.auctionStartsAt
+      ? new Date(input.auctionStartsAt).getTime()
+      : null,
+    auctionEndsAt: input.auctionEndsAt
+      ? new Date(input.auctionEndsAt).getTime()
+      : null,
+    collectionId: null,
+    isCollectionHero: false,
+    signals: {
+      saves: 0,
+      follows: 0,
+      dwellMsTotal: 0,
+      uniqueViewers: 0,
+      impressionsToday: 0,
+      impressionsThisWeek: 0,
+      reportRate: 0,
+      nominationScore: 0,
+    },
+    delisted: false,
+    appealStatus: "none" as const,
+  };
+
+  // Validate against current inventory duplicates / quality.
+  const validation = engine.createListing(draft);
+  if (!validation.ok) {
+    return { ok: false as const, errors: validation.errors };
+  }
+
+  const created = await prisma.listing.create({
+    data: {
+      title: input.title,
+      description: input.description,
+      creatorId: input.creatorId,
+      type: input.type,
+      chain: input.chain,
+      stage: "draft",
+      priceUsd: input.priceUsd ?? null,
+      medium: input.medium,
+      styleTagsJson: JSON.stringify(input.styleTags),
+      mediaHash,
+      mediaUrl: `data:text/plain;base64,${Buffer.from(input.mediaContent).toString("base64").slice(0, 200)}`,
+      metadataComplete: input.metadataComplete ?? true,
+      originalMedia: input.originalMedia ?? true,
+      oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt) : null,
+      oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt) : null,
+      auctionStartsAt: input.auctionStartsAt
+        ? new Date(input.auctionStartsAt)
+        : null,
+      auctionEndsAt: input.auctionEndsAt
+        ? new Date(input.auctionEndsAt)
+        : null,
+    },
+  });
+
+  const user = await prisma.user.findUnique({ where: { id: input.creatorId } });
+  if (user && !user.firstListingAt) {
+    await prisma.user.update({
+      where: { id: input.creatorId },
+      data: { firstListingAt: new Date() },
+    });
+  }
+
+  if (input.publishSoftLaunch) {
+    return transitionListingStage(created.id, "soft_launch");
+  }
+
+  return { ok: true as const, listing: toListing(created), errors: [] as string[] };
+}
+
+export async function transitionListingStage(
+  listingId: string,
+  target: LaunchStage,
+) {
+  const engine = await getDiscoveryEngine();
+  const result = engine.transitionListing(listingId, target);
+  if (!result.ok || !result.listing) {
+    return { ok: false as const, errors: result.errors };
+  }
+
+  const listing = result.listing;
+  await prisma.listing.update({
+    where: { id: listingId },
+    data: {
+      stage: listing.stage,
+      softLaunchedAt: listing.softLaunchedAt
+        ? new Date(listing.softLaunchedAt)
+        : null,
+      risingEligibleAt: listing.risingEligibleAt
+        ? new Date(listing.risingEligibleAt)
+        : null,
+      featuredAt: listing.featuredAt ? new Date(listing.featuredAt) : null,
+    },
+  });
+
+  const creator = engine.state.creators.get(listing.creatorId);
+  if (creator) {
+    await persistCreatorStats(listing.creatorId, {
+      risingEntriesThisWeek: creator.risingEntriesThisWeek,
+      openLaneListingsToday: creator.openLaneListingsToday,
+      firstListingAt: creator.firstListingAt
+        ? new Date(creator.firstListingAt)
+        : null,
+    });
+  }
+
+  // Soft mint simulation when entering soft_launch
+  if (target === "soft_launch") {
+    const txHash = `0x${randomBytes(16).toString("hex")}`;
+    const contractAddress =
+      listing.chain === "evm"
+        ? `0xFM${randomBytes(8).toString("hex")}`
+        : `FM${randomBytes(16).toString("hex")}`;
+    await prisma.listing.update({
+      where: { id: listingId },
+      data: {
+        mintTxHash: txHash,
+        contractAddress,
+        tokenId: String(Date.now() % 1_000_000),
+      },
+    });
+  }
+
+  const updated = await prisma.listing.findUniqueOrThrow({
+    where: { id: listingId },
+  });
+  return { ok: true as const, listing: toListing(updated), errors: [] as string[] };
+}
+
+export async function recordSignal(input: {
+  listingId: string;
+  viewerId?: string | null;
+  type: "impression" | "meaningful_view" | "save" | "follow" | "dwell";
+  dwellMs?: number;
+  bucket?: string;
+}) {
+  const listing = await prisma.listing.findUnique({
+    where: { id: input.listingId },
+    include: { creator: { include: { wallets: true } } },
+  });
+  if (!listing) return { ok: false as const, error: "not_found" };
+
+  const engineListing = toListing(listing);
+  const creatorProfile = {
+    id: listing.creator.id,
+    displayName: listing.creator.displayName,
+    wallets: listing.creator.wallets.map((w) => ({
+      chain: w.chain as Chain,
+      address: w.address,
+    })),
+    firstListingAt: listing.creator.firstListingAt?.getTime() ?? null,
+    lifetimePrimaryVolumeUsd: listing.creator.lifetimePrimaryVolumeUsd,
+    completedSales: listing.creator.completedSales,
+    flagged: listing.creator.flagged,
+    washCluster: listing.creator.washCluster,
+    verifiedCreator: listing.creator.verifiedCreator,
+    walletCreatedAt: listing.creator.walletCreatedAt.getTime(),
+    risingEntriesThisWeek: listing.creator.risingEntriesThisWeek,
+    openLaneListingsToday: listing.creator.openLaneListingsToday,
+    curatorScore: listing.creator.curatorScore,
+    establishedBadge: listing.creator.establishedBadge,
+  };
+  const emerging = isEmergingListing(engineListing, creatorProfile).emerging;
+
+  const data: Record<string, number> = {};
+  if (input.type === "impression" || input.type === "dwell" || input.type === "meaningful_view") {
+    data.impressionsToday = listing.impressionsToday + 1;
+    data.impressionsThisWeek = listing.impressionsThisWeek + 1;
+    data.uniqueViewers = listing.uniqueViewers + 1;
+  }
+  if (input.dwellMs) {
+    data.dwellMsTotal = listing.dwellMsTotal + input.dwellMs;
+  }
+  if (input.type === "save") data.saves = listing.saves + 1;
+  if (input.type === "follow") data.follows = listing.follows + 1;
+
+  if (Object.keys(data).length) {
+    await prisma.listing.update({ where: { id: listing.id }, data });
+  }
+
+  await prisma.signalEvent.create({
+    data: {
+      type: input.type,
+      listingId: listing.id,
+      creatorId: listing.creatorId,
+      viewerId: input.viewerId ?? null,
+      emerging,
+      bucket: input.bucket ?? null,
+      dwellMs: input.dwellMs ?? null,
+    },
+  });
+
+  return { ok: true as const, emerging };
+}
+
+export async function nominateListingForUser(input: {
+  listingId: string;
+  nominatorId: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const result = engine.nominate(input.listingId, input.nominatorId);
+  if (!result.ok || !result.listing || !result.curator) {
+    return { ok: false as const, error: result.error ?? "failed" };
+  }
+
+  await persistListingSignals(input.listingId, {
+    nominationScore: result.listing.signals.nominationScore,
+  });
+  await persistCreatorStats(input.nominatorId, {
+    curatorScore: result.curator.curatorScore,
+  });
+  await prisma.nomination.create({
+    data: {
+      listingId: input.listingId,
+      nominatorId: input.nominatorId,
+      stakePoints: 10,
+    },
+  });
+
+  return { ok: true as const, listing: result.listing };
+}
+
+export async function settleNomination(input: {
+  nominationId: string;
+  outcome: "success" | "abuse";
+}) {
+  const nomination = await prisma.nomination.findUnique({
+    where: { id: input.nominationId },
+  });
+  if (!nomination) return { ok: false as const, error: "not_found" };
+  const nominator = await prisma.user.findUnique({
+    where: { id: nomination.nominatorId },
+    include: { wallets: true },
+  });
+  if (!nominator) return { ok: false as const, error: "nominator_missing" };
+
+  const updated = settleNominationOutcome(
+    {
+      id: nominator.id,
+      displayName: nominator.displayName,
+      wallets: [],
+      firstListingAt: null,
+      lifetimePrimaryVolumeUsd: 0,
+      completedSales: 0,
+      flagged: false,
+      washCluster: false,
+      verifiedCreator: false,
+      walletCreatedAt: nominator.walletCreatedAt.getTime(),
+      risingEntriesThisWeek: 0,
+      openLaneListingsToday: 0,
+      curatorScore: nominator.curatorScore,
+      establishedBadge: false,
+    },
+    input.outcome,
+  );
+
+  await prisma.user.update({
+    where: { id: nominator.id },
+    data: { curatorScore: updated.curatorScore },
+  });
+  await prisma.nomination.update({
+    where: { id: nomination.id },
+    data: { outcome: input.outcome },
+  });
+  return { ok: true as const, curatorScore: updated.curatorScore };
+}
+
+export async function reportListingForUser(input: {
+  listingId: string;
+  reporterId: string;
+  reason: ReportReason;
+}) {
+  const engine = await getDiscoveryEngine();
+  const result = engine.reportListing({
+    id: `report-${Date.now()}`,
+    listingId: input.listingId,
+    reporterId: input.reporterId,
+    reason: input.reason,
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  await prisma.report.create({
+    data: {
+      listingId: input.listingId,
+      reporterId: input.reporterId,
+      reason: input.reason,
+    },
+  });
+  await persistListingSignals(input.listingId, {
+    delisted: result.listing.delisted,
+    reportRate: result.listing.signals.reportRate,
+    appealStatus: result.listing.appealStatus,
+  });
+
+  await prisma.signalEvent.create({
+    data: {
+      type: "report",
+      listingId: input.listingId,
+      creatorId: result.listing.creatorId,
+      viewerId: input.reporterId,
+      metaJson: JSON.stringify({ reason: input.reason, delisted: result.delisted }),
+    },
+  });
+
+  return result;
+}
+
+export async function purchaseListing(input: {
+  listingId: string;
+  buyerId: string;
+  amountUsd: number;
+}) {
+  const listing = await prisma.listing.findUnique({ where: { id: input.listingId } });
+  if (!listing || listing.delisted) {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  const prior = await prisma.purchase.count({
+    where: { buyerId: input.buyerId, listingId: input.listingId },
+  });
+  const isFirst = prior === 0;
+  const txHash = `0x${randomBytes(16).toString("hex")}`;
+
+  await prisma.purchase.create({
+    data: {
+      listingId: input.listingId,
+      buyerId: input.buyerId,
+      amountUsd: input.amountUsd,
+      isFirst,
+      txHash,
+      chain: listing.chain,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: listing.creatorId },
+    data: {
+      completedSales: { increment: 1 },
+      lifetimePrimaryVolumeUsd: { increment: input.amountUsd },
+    },
+  });
+
+  const engine = await getDiscoveryEngine();
+  engine.recordPurchase({
+    listingId: input.listingId,
+    buyerId: input.buyerId,
+    amountUsd: input.amountUsd,
+    isFirstPurchaseForBuyerOnArtifact: isFirst,
+  });
+
+  const creator = engine.state.creators.get(listing.creatorId);
+  const emerging = creator
+    ? isEmergingListing(toListing(listing), creator).emerging
+    : false;
+
+  await prisma.signalEvent.create({
+    data: {
+      type: isFirst ? "first_purchase" : "purchase",
+      listingId: listing.id,
+      creatorId: listing.creatorId,
+      viewerId: input.buyerId,
+      emerging,
+      metaJson: JSON.stringify({ amountUsd: input.amountUsd, txHash }),
+    },
+  });
+
+  return { ok: true as const, txHash, isFirst, emerging };
+}
+
+export async function getPersistedMetrics() {
+  const engine = await getDiscoveryEngine();
+  // Rebuild impression metrics from signal events for durability.
+  const events = await prisma.signalEvent.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 5000,
+  });
+  engine.metrics.clear();
+  for (const e of events.reverse()) {
+    if (
+      e.type === "impression" ||
+      e.type === "meaningful_view" ||
+      e.type === "first_purchase" ||
+      e.type === "purchase" ||
+      e.type === "report" ||
+      e.type === "duplicate_blocked" ||
+      e.type === "rising_abuse"
+    ) {
+      engine.metrics.record({
+        type: e.type as
+          | "impression"
+          | "meaningful_view"
+          | "first_purchase"
+          | "purchase"
+          | "report"
+          | "duplicate_blocked"
+          | "rising_abuse",
+        listingId: e.listingId ?? undefined,
+        creatorId: e.creatorId ?? undefined,
+        viewerId: e.viewerId ?? undefined,
+        emerging: e.emerging,
+        bucket: e.bucket ?? undefined,
+        timestamp: e.createdAt.getTime(),
+      });
+    }
+  }
+
+  // Register first listings for TTFV
+  const creators = await prisma.user.findMany({
+    where: { firstListingAt: { not: null } },
+  });
+  for (const c of creators) {
+    if (c.firstListingAt) {
+      engine.metrics.registerCreatorFirstListing(c.id, c.firstListingAt.getTime());
+    }
+  }
+
+  return {
+    config: {
+      emerging: engine.getConfig().emerging,
+      emergingRisingQuota: engine.getConfig().emergingRisingQuota,
+      feedMix: engine.getConfig().feedMix,
+      risingSlotsPerDay: engine.getConfig().risingSlotsPerDay,
+      featuredSlotsPerDay: engine.getConfig().featuredSlotsPerDay,
+    },
+    budgets: engine.getBudgets(),
+    metrics: engine.metrics.snapshot(),
+  };
+}

@@ -1,8 +1,8 @@
-import { getEngine } from "@/lib/data/store";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const engine = getEngine();
+  const engine = await getDiscoveryEngine();
   return NextResponse.json({
     items: engine.buildFeatured(),
     budgets: engine.getBudgets(),

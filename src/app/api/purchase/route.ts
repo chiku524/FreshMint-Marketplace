@@ -1,18 +1,11 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { reportListingForUser } from "@/lib/marketplace/service";
-import type { ReportReason } from "@/lib/discovery/types";
+import { purchaseListing } from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const schema = z.object({
   listingId: z.string(),
-  reason: z.enum([
-    "spam",
-    "stolen_art",
-    "duplicate",
-    "policy_violation",
-    "other",
-  ]),
+  amountUsd: z.number().positive(),
 });
 
 export async function POST(req: NextRequest) {
@@ -25,13 +18,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const result = await reportListingForUser({
+  const result = await purchaseListing({
     listingId: body.data.listingId,
-    reporterId: user.id,
-    reason: body.data.reason as ReportReason,
+    buyerId: user.id,
+    amountUsd: body.data.amountUsd,
   });
   if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error }, { status: 404 });
+    return NextResponse.json(result, { status: 400 });
   }
   return NextResponse.json(result);
 }

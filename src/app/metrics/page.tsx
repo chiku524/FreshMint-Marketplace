@@ -1,16 +1,16 @@
-import { getEngine } from "@/lib/data/store";
 import { DISCOVERY_CONFIG } from "@/lib/discovery";
+import { getPersistedMetrics } from "@/lib/marketplace/service";
+
+export const dynamic = "force-dynamic";
 
 function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-export default function MetricsPage() {
-  const engine = getEngine();
-  // Ensure some impressions exist for the dashboard.
-  engine.buildHomepage("collector-mira", 16);
-  const snap = engine.metrics.snapshot();
-  const budgets = engine.getBudgets();
+export default async function MetricsPage() {
+  const data = await getPersistedMetrics();
+  const snap = data.metrics;
+  const budgets = data.budgets;
 
   const cards = [
     {
@@ -69,7 +69,8 @@ export default function MetricsPage() {
         {pct(DISCOVERY_CONFIG.feedMix.emerging_rising)} /{" "}
         {pct(DISCOVERY_CONFIG.feedMix.following)} /{" "}
         {pct(DISCOVERY_CONFIG.feedMix.featured)} /{" "}
-        {pct(DISCOVERY_CONFIG.feedMix.auctions_live)}.
+        {pct(DISCOVERY_CONFIG.feedMix.auctions_live)}. Metrics persist from
+        SignalEvent rows in SQLite.
       </p>
       <div className="metric-grid">
         {cards.map((card) => (

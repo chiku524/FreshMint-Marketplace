@@ -1,8 +1,10 @@
 import { WorkCard } from "@/components/WorkCard";
-import { getEngine } from "@/lib/data/store";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
-export default function ShelvesPage() {
-  const engine = getEngine();
+export const dynamic = "force-dynamic";
+
+export default async function ShelvesPage() {
+  const engine = await getDiscoveryEngine();
   const shelves = [...engine.state.shelves.values()];
 
   return (
@@ -30,7 +32,7 @@ export default function ShelvesPage() {
             </p>
             <div className="lane-rail">
               {listings.map((listing) => (
-                <WorkCard key={listing.id} listing={listing} />
+                <WorkCard key={listing.id} listing={listing} showActions />
               ))}
             </div>
           </section>

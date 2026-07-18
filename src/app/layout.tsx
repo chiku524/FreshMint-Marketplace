@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
+import { WalletBar } from "@/components/WalletBar";
 import "./globals.css";
 
 const syne = Syne({
@@ -32,29 +33,36 @@ export default function RootLayout({
         <header
           style={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: "1rem",
             padding: "1.25rem clamp(1rem, 4vw, 3rem)",
             borderBottom: "1px solid var(--line)",
           }}
         >
-          <Link href="/" className="display" style={{ fontSize: "1.35rem", fontWeight: 700 }}>
-            FreshMint
-          </Link>
-          <nav
-            style={{
-              display: "flex",
-              gap: "1.25rem",
-              fontSize: "0.95rem",
-              color: "var(--ink-muted)",
-            }}
-          >
-            <Link href="/rising">Rising</Link>
-            <Link href="/open">Open Lane</Link>
-            <Link href="/featured">Featured</Link>
-            <Link href="/shelves">Shelves</Link>
-            <Link href="/metrics">Metrics</Link>
-          </nav>
+          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+            <Link href="/" className="display" style={{ fontSize: "1.35rem", fontWeight: 700 }}>
+              FreshMint
+            </Link>
+            <nav
+              style={{
+                display: "flex",
+                gap: "1rem",
+                fontSize: "0.95rem",
+                color: "var(--ink-muted)",
+                flexWrap: "wrap",
+              }}
+            >
+              <Link href="/rising">Rising</Link>
+              <Link href="/open">Open Lane</Link>
+              <Link href="/featured">Featured</Link>
+              <Link href="/shelves">Shelves</Link>
+              <Link href="/create">Create</Link>
+              <Link href="/metrics">Metrics</Link>
+            </nav>
+          </div>
+          <WalletBar />
         </header>
         <main style={{ flex: 1 }}>{children}</main>
         <footer

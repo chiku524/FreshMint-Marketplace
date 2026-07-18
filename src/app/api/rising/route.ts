@@ -1,9 +1,9 @@
-import { getEngine } from "@/lib/data/store";
 import { emergingShare } from "@/lib/discovery";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const engine = getEngine();
+  const engine = await getDiscoveryEngine();
   const rising = engine.buildRising();
   return NextResponse.json({
     items: rising,

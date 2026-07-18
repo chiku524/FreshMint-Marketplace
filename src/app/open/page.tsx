@@ -1,6 +1,8 @@
 import { WorkCard } from "@/components/WorkCard";
-import { getEngine } from "@/lib/data/store";
 import { OpenLaneFilters } from "@/components/OpenLaneFilters";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
+
+export const dynamic = "force-dynamic";
 
 export default async function OpenLanePage({
   searchParams,
@@ -12,7 +14,7 @@ export default async function OpenLanePage({
   const q = typeof sp.q === "string" ? sp.q : undefined;
   const type = typeof sp.type === "string" ? sp.type : undefined;
 
-  const engine = getEngine();
+  const engine = await getDiscoveryEngine();
   const items = engine.buildOpenLane({
     chain: chain === "evm" || chain === "solana" ? chain : undefined,
     query: q,
@@ -40,7 +42,7 @@ export default async function OpenLanePage({
       </p>
       <div className="lane-rail">
         {items.map((listing) => (
-          <WorkCard key={listing.id} listing={listing} />
+          <WorkCard key={listing.id} listing={listing} showActions />
         ))}
       </div>
     </div>

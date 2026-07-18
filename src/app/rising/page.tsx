@@ -1,9 +1,11 @@
 import { RankedWorkCard } from "@/components/WorkCard";
-import { getEngine } from "@/lib/data/store";
 import { emergingShare } from "@/lib/discovery";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
-export default function RisingPage() {
-  const engine = getEngine();
+export const dynamic = "force-dynamic";
+
+export default async function RisingPage() {
+  const engine = await getDiscoveryEngine();
   const rising = engine.buildRising();
   const share = emergingShare(rising);
   const budgets = engine.getBudgets();

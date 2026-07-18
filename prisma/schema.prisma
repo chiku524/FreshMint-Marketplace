@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  displayName     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  firstListingAt  DateTime?
+  lifetimePrimaryVolumeUsd Float @default(0)
+  completedSales  Int      @default(0)
+  flagged         Boolean  @default(false)
+  washCluster     Boolean  @default(false)
+  verifiedCreator Boolean  @default(false)
+  risingEntriesThisWeek Int @default(0)
+  openLaneListingsToday Int @default(0)
+  curatorScore    Int      @default(20)
+  establishedBadge Boolean @default(false)
+  /// Earliest linked wallet creation proxy (ms epoch stored as DateTime)
+  walletCreatedAt DateTime @default(now())
+
+  wallets      Wallet[]
+  listings     Listing[]
+  collections  Collection[]
+  shelves      Shelf[]       @relation("ShelfCurator")
+  reports      Report[]
+  appeals      Appeal[]
+  nominations  Nomination[]  @relation("Nominator")
+  followsFrom  Follow[]      @relation("Follower")
+  followsTo    Follow[]      @relation("Followee")
+  sessions     Session[]
+  signalEvents SignalEvent[]
+  purchases    Purchase[]
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String
+  chain     String // evm | solana
+  address   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chain, address])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthNonce {
+  id        String   @id @default(cuid())
+  chain     String
+  address   String
+  nonce     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([chain, address])
+}
+
+model Listing {
+  id               String   @id @default(cuid())
+  title            String
+  description      String   @default("")
+  creatorId        String
+  type             String // single | collection | open_edition | auction
+  chain            String // evm | solana
+  stage            String   @default("draft")
+  priceUsd         Float?
+  medium           String   @default("digital")
+  styleTagsJson    String   @default("[]")
+  mediaHash        String
+  mediaUrl         String?
+  metadataComplete Boolean  @default(true)
+  originalMedia    Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  softLaunchedAt   DateTime?
+  risingEligibleAt DateTime?
+  featuredAt       DateTime?
+  oeStartsAt       DateTime?
+  oeEndsAt         DateTime?
+  auctionStartsAt  DateTime?
+  auctionEndsAt    DateTime?
+  collectionId     String?
+  isCollectionHero Boolean  @default(false)
+  delisted         Boolean  @default(false)
+  appealStatus     String   @default("none")
+  /// Simulated on-chain refs for testnet path
+  mintTxHash       String?
+  contractAddress  String?
+  tokenId          String?
+
+  saves              Int   @default(0)
+  follows            Int   @default(0)
+  dwellMsTotal       Int   @default(0)
+  uniqueViewers      Int   @default(0)
+  impressionsToday   Int   @default(0)
+  impressionsThisWeek Int  @default(0)
+  reportRate         Float @default(0)
+  nominationScore    Int   @default(0)
+
+  creator      User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  collection   Collection?  @relation(fields: [collectionId], references: [id])
+  reports      Report[]
+  appeals      Appeal[]
+  nominations  Nomination[]
+  signalEvents SignalEvent[]
+  purchases    Purchase[]
+  shelfItems   ShelfItem[]
+
+  @@index([creatorId])
+  @@index([stage])
+  @@index([chain])
+  @@index([mediaHash])
+}
+
+model Collection {
+  id              String  @id @default(cuid())
+  title           String
+  creatorId       String
+  chain           String
+  heroListingId   String?
+  sampleIdsJson   String  @default("[]")
+  totalItems      Int     @default(0)
+
+  creator  User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  listings Listing[]
+}
+
+model Shelf {
+  id        String   @id @default(cuid())
+  name      String
+  curatorId String
+  createdAt DateTime @default(now())
+
+  curator    User        @relation("ShelfCurator", fields: [curatorId], references: [id], onDelete: Cascade)
+  items      ShelfItem[]
+  followers  ShelfFollow[]
+}
+
+model ShelfItem {
+  id        String @id @default(cuid())
+  shelfId   String
+  listingId String
+  position  Int    @default(0)
+
+  shelf   Shelf   @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([shelfId, listingId])
+}
+
+model ShelfFollow {
+  id         String @id @default(cuid())
+  shelfId    String
+  followerId String
+
+  shelf Shelf @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+
+  @@unique([shelfId, followerId])
+}
+
+model Follow {
+  id         String @id @default(cuid())
+  followerId String
+  followeeId String
+  kind       String @default("artist") // artist | collector
+
+  follower User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followee User @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followeeId, kind])
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  listingId  String
+  reporterId String
+  reason     String
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  listing  Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reporter User    @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+}
+
+model Appeal {
+  id        String   @id @default(cuid())
+  listingId String
+  creatorId String
+  message   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+model Nomination {
+  id          String   @id @default(cuid())
+  listingId   String
+  nominatorId String
+  stakePoints Int
+  createdAt   DateTime @default(now())
+  outcome     String? // success | abuse | null pending
+
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  nominator User    @relation("Nominator", fields: [nominatorId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+}
+
+model SignalEvent {
+  id        String   @id @default(cuid())
+  type      String // impression | meaningful_view | save | follow | dwell
+  listingId String?
+  creatorId String?
+  viewerId  String?
+  emerging  Boolean  @default(false)
+  bucket    String?
+  dwellMs   Int?
+  createdAt DateTime @default(now())
+  metaJson  String   @default("{}")
+
+  listing Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  viewer  User?    @relation(fields: [viewerId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([listingId])
+}
+
+model Purchase {
+  id        String   @id @default(cuid())
+  listingId String
+  buyerId   String
+  amountUsd Float
+  isFirst   Boolean  @default(false)
+  txHash    String?
+  chain     String
+  createdAt DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer   User    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+}
+
+model MetricCounter {
+  id    String @id
+  value Float  @default(0)
+}

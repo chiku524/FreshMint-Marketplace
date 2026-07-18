@@ -1,10 +1,10 @@
-import { getEngine } from "@/lib/data/store";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import type { Chain, ListingType } from "@/lib/discovery/types";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
-  const engine = getEngine();
+  const engine = await getDiscoveryEngine();
   const items = engine.buildOpenLane({
     chain: (sp.get("chain") as Chain | null) ?? undefined,
     medium: sp.get("medium") ?? undefined,

@@ -1,5 +1,5 @@
-import type { RankedListing } from "@/lib/discovery/types";
-import type { Listing } from "@/lib/discovery/types";
+import type { RankedListing, Listing } from "@/lib/discovery/types";
+import { ListingActions } from "./ListingActions";
 
 function hueFromId(id: string): number {
   let h = 0;
@@ -12,11 +12,13 @@ export function WorkCard({
   emerging,
   bucket,
   score,
+  showActions = false,
 }: {
   listing: Listing;
   emerging?: boolean;
   bucket?: string;
   score?: number;
+  showActions?: boolean;
 }) {
   const hue = hueFromId(listing.id);
   return (
@@ -36,6 +38,7 @@ export function WorkCard({
           {bucket ? <span className="badge">{bucket.replace("_", " ")}</span> : null}
           <span className="badge">{listing.chain}</span>
           <span className="badge">{listing.type.replace("_", " ")}</span>
+          <span className="badge">{listing.stage.replace("_", " ")}</span>
         </div>
         <h3 className="display" style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>
           {listing.title}
@@ -45,18 +48,32 @@ export function WorkCard({
           {listing.priceUsd != null ? ` · $${listing.priceUsd}` : " · auction"}
           {score != null ? ` · score ${score.toFixed(1)}` : ""}
         </p>
+        {showActions ? (
+          <ListingActions
+            listingId={listing.id}
+            priceUsd={listing.priceUsd}
+            stage={listing.stage}
+          />
+        ) : null}
       </div>
     </article>
   );
 }
 
-export function RankedWorkCard({ item }: { item: RankedListing }) {
+export function RankedWorkCard({
+  item,
+  showActions = true,
+}: {
+  item: RankedListing;
+  showActions?: boolean;
+}) {
   return (
     <WorkCard
       listing={item.listing}
       emerging={item.emerging}
       bucket={String(item.bucket)}
       score={item.score}
+      showActions={showActions}
     />
   );
 }
