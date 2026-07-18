@@ -17,17 +17,18 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to soft-launch a work → Open Lane / Rising / metrics.
 
-### Database errors
+### Database / preview notes
 
-**No — page crashes from SQLite code 14 are not expected.** FreshMint now:
+Runtime **never** shells out to `npx prisma` (that crashes Vercel sandboxes). Instead:
 
 1. Rewrites relative SQLite URLs to an absolute path  
-2. Copies the bundled `prisma/dev.db` into `os.tmpdir()` on read-only hosts  
+2. Copies bundled `prisma/dev.db` into place when missing (incl. `/tmp` on read-only hosts)  
 3. Falls back to an **in-memory seeded catalog** if SQLite still cannot open  
+4. Instrumentation errors are swallowed so the process stays up  
 
-After pulling latest, hard-refresh / redeploy the preview. The homepage should render even when SQLite is unavailable (writes that need Prisma may still no-op until Postgres is configured).
+Check `GET /api/health` for `{ mode: "sqlite" | "memory" }`.
 
-For production, **set `DATABASE_URL` to hosted Postgres**.
+For production persistence, **set `DATABASE_URL` to hosted Postgres**.
 
 ## What’s implemented
 

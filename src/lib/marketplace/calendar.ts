@@ -38,15 +38,19 @@ export async function validateDropWindow(input: {
       errors.push("oe_window_too_long");
     }
     const { start, end } = hourBucket(input.startsAt);
-    const concurrent = await prisma.listing.count({
-      where: {
-        type: "open_edition",
-        delisted: false,
-        oeStartsAt: { gte: start, lt: end },
-      },
-    });
-    if (concurrent >= DISCOVERY_CONFIG.calendar.maxOeStartsPerHour) {
-      errors.push("oe_hour_capacity_full");
+    try {
+      const concurrent = await prisma.listing.count({
+        where: {
+          type: "open_edition",
+          delisted: false,
+          oeStartsAt: { gte: start, lt: end },
+        },
+      });
+      if (concurrent >= DISCOVERY_CONFIG.calendar.maxOeStartsPerHour) {
+        errors.push("oe_hour_capacity_full");
+      }
+    } catch {
+      // memory / sqlite-unavailable — skip capacity count
     }
   }
 
@@ -58,15 +62,19 @@ export async function validateDropWindow(input: {
       errors.push("auction_window_too_long");
     }
     const { start, end } = hourBucket(input.startsAt);
-    const concurrent = await prisma.listing.count({
-      where: {
-        type: "auction",
-        delisted: false,
-        auctionStartsAt: { gte: start, lt: end },
-      },
-    });
-    if (concurrent >= DISCOVERY_CONFIG.calendar.maxAuctionStartsPerHour) {
-      errors.push("auction_hour_capacity_full");
+    try {
+      const concurrent = await prisma.listing.count({
+        where: {
+          type: "auction",
+          delisted: false,
+          auctionStartsAt: { gte: start, lt: end },
+        },
+      });
+      if (concurrent >= DISCOVERY_CONFIG.calendar.maxAuctionStartsPerHour) {
+        errors.push("auction_hour_capacity_full");
+      }
+    } catch {
+      // memory / sqlite-unavailable — skip capacity count
     }
   }
 

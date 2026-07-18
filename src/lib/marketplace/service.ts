@@ -147,6 +147,47 @@ export async function createListingForUser(input: {
     return { ok: false as const, errors: validation.errors };
   }
 
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  // Preview / serverless memory path — keep working without Prisma writes.
+  if (mode === "memory" || isMemoryMode()) {
+    const mem = getMemoryEngine();
+    const id = `listing-mem-${now}`;
+    if (!mem.state.creators.has(input.creatorId)) {
+      mem.state.creators.set(input.creatorId, {
+        id: input.creatorId,
+        displayName: "Guest Creator",
+        wallets: [{ chain: input.chain, address: `mem-${input.creatorId}` }],
+        firstListingAt: now,
+        lifetimePrimaryVolumeUsd: 0,
+        completedSales: 0,
+        flagged: false,
+        washCluster: false,
+        verifiedCreator: false,
+        walletCreatedAt: now - 30 * 24 * 60 * 60 * 1000,
+        risingEntriesThisWeek: 0,
+        openLaneListingsToday: 0,
+        curatorScore: 25,
+        establishedBadge: false,
+      });
+    }
+    mem.state.listings.delete(draft.id);
+    const listing = {
+      ...draft,
+      id,
+    };
+    mem.state.listings.set(id, listing);
+    if (input.publishSoftLaunch) {
+      const advanced = mem.transitionListing(id, "soft_launch");
+      if (advanced.ok && advanced.listing) {
+        return { ok: true as const, listing: advanced.listing, errors: [] as string[] };
+      }
+    }
+    return { ok: true as const, listing, errors: [] as string[] };
+  }
+
   const created = await prisma.listing.create({
     data: {
       title: input.title,

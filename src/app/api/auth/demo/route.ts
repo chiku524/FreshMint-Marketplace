@@ -1,5 +1,7 @@
 import { createSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
+import { ensureDatabaseReady } from "@/lib/db-ready";
+import { getMemoryState, isMemoryMode } from "@/lib/data/memory-store";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -7,9 +9,17 @@ const schema = z.object({
   userId: z.string().min(1),
 });
 
-/** Development / demo login into seeded personas (no wallet extension required). */
+function demoAuthAllowed() {
+  if (process.env.ALLOW_DEMO_AUTH === "true") return true;
+  if (process.env.NODE_ENV !== "production") return true;
+  // Preview demos on Vercel
+  if (process.env.VERCEL) return true;
+  return false;
+}
+
+/** Demo login into seeded personas (no wallet extension required). */
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_AUTH !== "true") {
+  if (!demoAuthAllowed()) {
     return NextResponse.json({ error: "disabled" }, { status: 403 });
   }
 
@@ -18,22 +28,53 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: body.data.userId },
-    include: { wallets: true },
-  });
-  if (!user) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const creator = getMemoryState().creators.get(body.data.userId);
+    if (!creator) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    // Best-effort session; ignore prisma failures in memory mode.
+    try {
+      await createSession(creator.id);
+    } catch {
+      // Cookie session may still fail without DB — client can use demo id locally.
+    }
+    return NextResponse.json({
+      ok: true,
+      mode: "memory",
+      user: {
+        id: creator.id,
+        displayName: creator.displayName,
+        wallets: creator.wallets,
+        curatorScore: creator.curatorScore,
+      },
+    });
   }
 
-  await createSession(user.id);
-  return NextResponse.json({
-    ok: true,
-    user: {
-      id: user.id,
-      displayName: user.displayName,
-      wallets: user.wallets,
-      curatorScore: user.curatorScore,
-    },
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: body.data.userId },
+      include: { wallets: true },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+
+    await createSession(user.id);
+    return NextResponse.json({
+      ok: true,
+      mode: "sqlite",
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        wallets: user.wallets,
+        curatorScore: user.curatorScore,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "auth_failed", detail: message }, { status: 500 });
+  }
 }
