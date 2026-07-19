@@ -38,6 +38,14 @@ const GROUPS: NavGroup[] = [
     items: [{ href: "/bridge", label: "Bridge" }],
   },
   {
+    id: "account",
+    label: "Account",
+    items: [
+      { href: "/me", label: "Profile & assets" },
+      { href: "/me/security", label: "Security (2FA)" },
+    ],
+  },
+  {
     id: "ops",
     label: "Ops",
     items: [

@@ -36,6 +36,7 @@ export async function GET() {
       role: user.role,
       emerging: emerging.emerging,
       emergingReasons: emerging.reasons,
+      totpEnabled: user.totpEnabled,
     },
   });
 }

@@ -27,6 +27,13 @@ model User {
   /// Earliest linked wallet creation proxy (ms epoch stored as DateTime)
   walletCreatedAt DateTime @default(now())
 
+  /// TOTP 2FA
+  totpEnabled      Boolean   @default(false)
+  totpSecretEnc    String?
+  totpVerifiedAt   DateTime?
+  /// JSON array of scrypt hashes for one-time backup codes
+  backupCodesHash  String?
+
   wallets      Wallet[]
   listings     Listing[]
   collections  Collection[]

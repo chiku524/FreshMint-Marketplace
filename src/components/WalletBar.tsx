@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import bs58 from "bs58";
+import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
 type SessionUser = {
   id: string;
@@ -10,6 +12,7 @@ type SessionUser = {
   wallets: { chain: string; address: string }[];
   emerging?: boolean;
   role?: string;
+  totpEnabled?: boolean;
 };
 
 const DEMO_PERSONAS = [
@@ -24,6 +27,10 @@ export function WalletBar() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<{
+    pendingToken: string;
+    displayName: string;
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/auth/me");
@@ -34,6 +41,22 @@ export function WalletBar() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  function handleAuthResponse(data: {
+    requires2fa?: boolean;
+    pendingToken?: string;
+    displayName?: string;
+    user?: SessionUser;
+  }) {
+    if (data.requires2fa && data.pendingToken) {
+      setChallenge({
+        pendingToken: data.pendingToken,
+        displayName: data.displayName ?? "account",
+      });
+      return;
+    }
+    if (data.user) setUser(data.user);
+  }
 
   async function demoLogin(userId: string) {
     setBusy(true);
@@ -46,7 +69,7 @@ export function WalletBar() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "login_failed");
-      setUser(data.user);
+      handleAuthResponse(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "login_failed");
     } finally {
@@ -95,7 +118,7 @@ export function WalletBar() {
       });
       const data = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
-      setUser(data.user);
+      handleAuthResponse(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "connect_failed");
     } finally {
@@ -110,8 +133,9 @@ export function WalletBar() {
       const provider = (
         window as unknown as {
           solana?: {
-            isPhantom?: boolean;
-            connect: () => Promise<{ publicKey: { toBytes: () => Uint8Array; toString: () => string } }>;
+            connect: () => Promise<{
+              publicKey: { toBytes: () => Uint8Array; toString: () => string };
+            }>;
             signMessage: (
               msg: Uint8Array,
               display?: string,
@@ -143,8 +167,11 @@ export function WalletBar() {
       });
       const data = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
-      if (data.user) setUser(data.user);
-      else await refresh();
+      if (endpoint === "/api/auth/verify") {
+        handleAuthResponse(data);
+      } else {
+        await refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "solana_connect_failed");
     } finally {
@@ -207,35 +234,82 @@ export function WalletBar() {
   const hasSol = user?.wallets.some((w) => w.chain === "solana");
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "0.6rem",
-        alignItems: "center",
-        justifyContent: "flex-end",
-      }}
-    >
-      {user ? (
-        <>
-          <span style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-            {user.displayName}
-            {user.emerging ? " · Emerging" : ""}
-            {user.role && user.role !== "member" ? ` · ${user.role}` : ""} ·
-            score {user.curatorScore}
-          </span>
-          {!hasEvm ? (
+    <>
+      {challenge ? (
+        <TwoFactorChallenge
+          pendingToken={challenge.pendingToken}
+          displayName={challenge.displayName}
+          onCancel={() => setChallenge(null)}
+          onSuccess={(u) => {
+            setChallenge(null);
+            setUser(u as SessionUser);
+            void refresh();
+          }}
+        />
+      ) : null}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.6rem",
+          alignItems: "center",
+          justifyContent: "flex-end",
+        }}
+      >
+        {user ? (
+          <>
+            <Link
+              href="/me"
+              style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}
+            >
+              {user.displayName}
+              {user.emerging ? " · Emerging" : ""}
+              {user.role && user.role !== "member" ? ` · ${user.role}` : ""} ·
+              score {user.curatorScore}
+              {user.totpEnabled ? " · 2FA" : ""}
+            </Link>
+            {!hasEvm ? (
+              <button
+                type="button"
+                className="badge"
+                disabled={busy}
+                onClick={() => void linkEvm()}
+                style={{ cursor: "pointer", background: "transparent" }}
+              >
+                Link EVM
+              </button>
+            ) : null}
+            {!hasSol ? (
+              <button
+                type="button"
+                className="badge emerging"
+                disabled={busy}
+                onClick={() => void connectSolana()}
+                style={{ cursor: "pointer", background: "transparent" }}
+              >
+                Link Solana
+              </button>
+            ) : null}
             <button
               type="button"
               className="badge"
-              disabled={busy}
-              onClick={() => void linkEvm()}
+              onClick={() => void logout()}
               style={{ cursor: "pointer", background: "transparent" }}
             >
-              Link EVM
+              Sign out
             </button>
-          ) : null}
-          {!hasSol ? (
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="badge featured"
+              disabled={busy}
+              onClick={() => void connectEvm()}
+              style={{ cursor: "pointer", background: "transparent" }}
+            >
+              Connect EVM
+            </button>
             <button
               type="button"
               className="badge emerging"
@@ -243,65 +317,38 @@ export function WalletBar() {
               onClick={() => void connectSolana()}
               style={{ cursor: "pointer", background: "transparent" }}
             >
-              Link Solana
+              Connect Solana
             </button>
-          ) : null}
-          <button
-            type="button"
-            className="badge"
-            onClick={() => void logout()}
-            style={{ cursor: "pointer", background: "transparent" }}
-          >
-            Sign out
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="badge featured"
-            disabled={busy}
-            onClick={() => void connectEvm()}
-            style={{ cursor: "pointer", background: "transparent" }}
-          >
-            Connect EVM
-          </button>
-          <button
-            type="button"
-            className="badge emerging"
-            disabled={busy}
-            onClick={() => void connectSolana()}
-            style={{ cursor: "pointer", background: "transparent" }}
-          >
-            Connect Solana
-          </button>
-          <select
-            disabled={busy}
-            defaultValue=""
-            onChange={(e) => {
-              if (e.target.value) void demoLogin(e.target.value);
-            }}
-            style={{
-              background: "var(--panel)",
-              border: "1px solid var(--line)",
-              color: "var(--ink)",
-              padding: "0.3rem 0.5rem",
-            }}
-          >
-            <option value="" disabled>
-              Demo persona…
-            </option>
-            {DEMO_PERSONAS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
+            <select
+              disabled={busy}
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) void demoLogin(e.target.value);
+              }}
+              style={{
+                background: "var(--panel)",
+                border: "1px solid var(--line)",
+                color: "var(--ink)",
+                padding: "0.3rem 0.5rem",
+              }}
+            >
+              <option value="" disabled>
+                Demo persona…
               </option>
-            ))}
-          </select>
-        </>
-      )}
-      {error ? (
-        <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>{error}</span>
-      ) : null}
-    </div>
+              {DEMO_PERSONAS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        {error ? (
+          <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+            {error}
+          </span>
+        ) : null}
+      </div>
+    </>
   );
 }

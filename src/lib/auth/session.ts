@@ -23,6 +23,7 @@ export type SessionUser = {
   risingEntriesThisWeek: number;
   openLaneListingsToday: number;
   establishedBadge: boolean;
+  totpEnabled: boolean;
 };
 
 function secretKey() {
@@ -38,6 +39,7 @@ export function hashToken(token: string): string {
 }
 
 function creatorToSession(creator: CreatorProfile): SessionUser {
+  // Lazy import avoided — memory TOTP looked up by callers when needed.
   return {
     id: creator.id,
     displayName: creator.displayName,
@@ -60,6 +62,7 @@ function creatorToSession(creator: CreatorProfile): SessionUser {
     risingEntriesThisWeek: creator.risingEntriesThisWeek,
     openLaneListingsToday: creator.openLaneListingsToday,
     establishedBadge: creator.establishedBadge,
+    totpEnabled: false,
   };
 }
 
@@ -144,7 +147,10 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     if (memory) {
       const creator = getMemoryState().creators.get(userId);
       if (!creator) return null;
-      return creatorToSession(creator);
+      const session = creatorToSession(creator);
+      const { getMemoryTotp } = await import("@/lib/auth/totp");
+      session.totpEnabled = getMemoryTotp(userId).totpEnabled;
+      return session;
     }
 
     const session = await prisma.session.findUnique({
@@ -172,8 +178,46 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       risingEntriesThisWeek: u.risingEntriesThisWeek,
       openLaneListingsToday: u.openLaneListingsToday,
       establishedBadge: u.establishedBadge,
+      totpEnabled: u.totpEnabled,
     };
   } catch {
     return null;
   }
+}
+
+/** After wallet/demo auth: either create session or return pending 2FA token. */
+export async function completeLoginOrChallenge(userId: string): Promise<
+  | { ok: true; requires2fa: false }
+  | { ok: true; requires2fa: true; pendingToken: string; displayName: string }
+> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+
+  let totpEnabled = false;
+  let displayName = userId;
+
+  if (memory) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const { getMemoryTotp } = await import("@/lib/auth/totp");
+    const creator = getMemoryState().creators.get(userId);
+    if (!creator) throw new Error("user_not_found");
+    displayName = creator.displayName;
+    totpEnabled = getMemoryTotp(userId).totpEnabled;
+  } else {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("user_not_found");
+    displayName = user.displayName;
+    totpEnabled = user.totpEnabled;
+  }
+
+  if (totpEnabled) {
+    const { createPending2faToken } = await import("@/lib/auth/totp");
+    const pendingToken = await createPending2faToken(userId);
+    return { ok: true, requires2fa: true, pendingToken, displayName };
+  }
+
+  await createSession(userId);
+  return { ok: true, requires2fa: false };
 }

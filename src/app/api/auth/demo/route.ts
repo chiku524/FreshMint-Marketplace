@@ -1,4 +1,4 @@
-import { createSession } from "@/lib/auth/session";
+import { completeLoginOrChallenge, getSessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import { getMemoryState, isMemoryMode } from "@/lib/data/memory-store";
@@ -12,7 +12,6 @@ const schema = z.object({
 function demoAuthAllowed() {
   if (process.env.ALLOW_DEMO_AUTH === "true") return true;
   if (process.env.NODE_ENV !== "production") return true;
-  // Preview demos on Vercel
   if (process.env.VERCEL) return true;
   return false;
 }
@@ -35,15 +34,26 @@ export async function POST(req: NextRequest) {
     if (!creator) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    await createSession(creator.id);
+    const login = await completeLoginOrChallenge(creator.id);
+    if (login.requires2fa) {
+      return NextResponse.json({
+        ok: true,
+        mode: "memory",
+        requires2fa: true,
+        pendingToken: login.pendingToken,
+        displayName: login.displayName,
+      });
+    }
     return NextResponse.json({
       ok: true,
       mode: "memory",
+      requires2fa: false,
       user: {
         id: creator.id,
         displayName: creator.displayName,
         wallets: creator.wallets,
         curatorScore: creator.curatorScore,
+        totpEnabled: (await getSessionUser())?.totpEnabled ?? false,
       },
     });
   }
@@ -57,15 +67,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
-    await createSession(user.id);
+    const login = await completeLoginOrChallenge(user.id);
+    if (login.requires2fa) {
+      return NextResponse.json({
+        ok: true,
+        mode: "prisma",
+        requires2fa: true,
+        pendingToken: login.pendingToken,
+        displayName: login.displayName,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       mode: "prisma",
+      requires2fa: false,
       user: {
         id: user.id,
         displayName: user.displayName,
         wallets: user.wallets,
         curatorScore: user.curatorScore,
+        totpEnabled: user.totpEnabled,
       },
     });
   } catch (err) {
