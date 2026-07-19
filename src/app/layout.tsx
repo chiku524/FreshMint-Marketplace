@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
+import { BrandMark } from "@/components/MintLeaf";
 import { WalletBar } from "@/components/WalletBar";
 import "./globals.css";
 
@@ -31,19 +32,19 @@ export default function RootLayout({
     <html lang="en" className={`${syne.variable} ${literata.variable} h-full`}>
       <body className="site-shell min-h-full">
         <header
+          className="site-header"
           style={{
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
             gap: "1rem",
-            padding: "1.25rem clamp(1rem, 4vw, 3rem)",
-            borderBottom: "1px solid var(--line)",
+            padding: "1.1rem clamp(1rem, 4vw, 3rem)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-            <Link href="/" className="display" style={{ fontSize: "1.35rem", fontWeight: 700 }}>
-              FreshMint
+            <Link href="/" style={{ fontSize: "1.3rem" }}>
+              <BrandMark size={32} />
             </Link>
             <nav
               style={{

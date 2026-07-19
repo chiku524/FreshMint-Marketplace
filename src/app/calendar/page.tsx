@@ -31,7 +31,7 @@ export default async function CalendarPage() {
           style={{
             border: "1px solid var(--line)",
             padding: "1rem",
-            background: "rgba(20,53,44,0.55)",
+            background: "var(--panel)",
           }}
         >
           <div style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
@@ -45,7 +45,7 @@ export default async function CalendarPage() {
           style={{
             border: "1px solid var(--line)",
             padding: "1rem",
-            background: "rgba(20,53,44,0.55)",
+            background: "var(--panel)",
           }}
         >
           <div style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>

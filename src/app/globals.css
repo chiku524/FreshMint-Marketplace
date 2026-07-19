@@ -1,16 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --bg-deep: #0c1f1a;
-  --bg-mid: #14352c;
-  --bg-lift: #1c463a;
-  --ink: #f3efe4;
-  --ink-muted: #b8c4b0;
-  --accent: #e6a23c;
-  --accent-soft: #f0c57a;
-  --line: rgba(243, 239, 228, 0.14);
-  --emergent: #7dcea0;
-  --danger: #e07a5f;
+  /* Near-black with cool mint undertone */
+  --bg-deep: #050807;
+  --bg-mid: #0a1210;
+  --bg-lift: #101a16;
+  --panel: rgba(8, 16, 13, 0.82);
+  --panel-solid: #0c1411;
+  --ink: #e8ebe6;
+  --ink-muted: #8a968c;
+  --accent: #c9953a;
+  --accent-soft: #d4ae66;
+  --line: rgba(232, 235, 230, 0.08);
+  --emergent: #6ecf9a;
+  --danger: #d4785c;
+  --mint-leaf: #4db884;
+  --mint-leaf-hi: #7ed9a8;
+  --mint-leaf-lo: #2f8a5e;
+  --mint-stem: #3d6b52;
+  --mint-vein: #0e2418;
   --font-display: var(--font-syne);
   --font-body: var(--font-literata);
 }
@@ -35,9 +43,10 @@ body {
   color: var(--ink);
   font-family: var(--font-body), Georgia, serif;
   background:
-    radial-gradient(1200px 700px at 10% -10%, rgba(230, 162, 60, 0.18), transparent 55%),
-    radial-gradient(900px 600px at 90% 0%, rgba(125, 206, 160, 0.12), transparent 50%),
-    linear-gradient(165deg, var(--bg-deep) 0%, #0a1814 45%, var(--bg-mid) 100%);
+    radial-gradient(900px 560px at 8% -8%, rgba(77, 184, 132, 0.07), transparent 52%),
+    radial-gradient(700px 480px at 92% 4%, rgba(201, 149, 58, 0.06), transparent 48%),
+    radial-gradient(1000px 800px at 50% 100%, rgba(10, 28, 20, 0.55), transparent 55%),
+    linear-gradient(168deg, #030504 0%, var(--bg-deep) 38%, var(--bg-mid) 100%);
   background-attachment: fixed;
 }
 
@@ -46,8 +55,8 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.35;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+  opacity: 0.22;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   mix-blend-mode: soft-light;
   z-index: 0;
 }
@@ -60,6 +69,12 @@ a {
 .site-shell {
   position: relative;
   z-index: 1;
+}
+
+.site-header {
+  background: rgba(5, 8, 7, 0.78);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
 }
 
 .display {
@@ -83,21 +98,21 @@ a {
   overflow: hidden;
   border: 1px solid var(--line);
   background:
-    linear-gradient(145deg, rgba(28, 70, 58, 0.75), rgba(12, 31, 26, 0.9));
+    linear-gradient(155deg, rgba(16, 28, 22, 0.95), rgba(5, 8, 7, 0.98));
   transition: transform 280ms ease, border-color 280ms ease;
 }
 
 .work-tile:hover {
   transform: translateY(-3px);
-  border-color: rgba(230, 162, 60, 0.45);
+  border-color: rgba(110, 207, 154, 0.35);
 }
 
 .work-media {
   aspect-ratio: 4 / 5;
   background:
-    linear-gradient(135deg, rgba(230, 162, 60, 0.35), transparent 40%),
-    linear-gradient(320deg, rgba(125, 206, 160, 0.3), transparent 45%),
-    #102820;
+    linear-gradient(135deg, rgba(77, 184, 132, 0.22), transparent 42%),
+    linear-gradient(320deg, rgba(201, 149, 58, 0.12), transparent 48%),
+    #0a100e;
 }
 
 .badge {
@@ -114,12 +129,12 @@ a {
 
 .badge.emerging {
   color: var(--emergent);
-  border-color: rgba(125, 206, 160, 0.45);
+  border-color: rgba(110, 207, 154, 0.4);
 }
 
 .badge.featured {
   color: var(--accent-soft);
-  border-color: rgba(230, 162, 60, 0.45);
+  border-color: rgba(201, 149, 58, 0.4);
 }
 
 .metric-grid {
@@ -145,15 +160,15 @@ a {
   }
 }
 
-@keyframes aperture-breathe {
+@keyframes leaf-breathe {
   0%,
   100% {
-    opacity: 0.55;
-    transform: scale(1);
+    opacity: 0.4;
+    transform: scale(1) rotate(-2deg);
   }
   50% {
-    opacity: 0.9;
-    transform: scale(1.03);
+    opacity: 0.7;
+    transform: scale(1.04) rotate(1deg);
   }
 }
 
@@ -167,7 +182,7 @@ a {
 }
 
 .hero-orb {
-  animation: aperture-breathe 6s ease-in-out infinite;
+  animation: leaf-breathe 7s ease-in-out infinite;
 }
 
 @media (max-width: 800px) {

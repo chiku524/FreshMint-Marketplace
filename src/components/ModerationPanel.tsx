@@ -98,7 +98,7 @@ export function ModerationPanel() {
                 style={{
                   border: "1px solid var(--line)",
                   padding: "0.9rem 1rem",
-                  background: "rgba(20,53,44,0.45)",
+                  background: "var(--panel)",
                 }}
               >
                 <strong>{n.listingTitle}</strong>
@@ -159,7 +159,7 @@ export function ModerationPanel() {
                 style={{
                   border: "1px solid var(--line)",
                   padding: "0.9rem 1rem",
-                  background: "rgba(20,53,44,0.45)",
+                  background: "var(--panel)",
                 }}
               >
                 <strong>{r.listing.title}</strong>
@@ -220,7 +220,7 @@ export function ModerationPanel() {
                 style={{
                   border: "1px solid var(--line)",
                   padding: "0.9rem 1rem",
-                  background: "rgba(20,53,44,0.45)",
+                  background: "var(--panel)",
                 }}
               >
                 <strong>{a.listing.title}</strong>

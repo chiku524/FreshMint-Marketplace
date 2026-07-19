@@ -1,3 +1,4 @@
+import { BrandMark, MintLeaf } from "@/components/MintLeaf";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { DISCOVERY_CONFIG } from "@/lib/discovery";
@@ -31,28 +32,37 @@ export default async function HomePage() {
           aria-hidden
           style={{
             position: "absolute",
-            inset: "8% 5% auto auto",
-            width: "min(48vw, 420px)",
+            inset: "4% 2% auto auto",
+            width: "min(52vw, 440px)",
             aspectRatio: "1",
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle at 35% 35%, rgba(230,162,60,0.45), transparent 55%), radial-gradient(circle at 70% 60%, rgba(125,206,160,0.35), transparent 50%)",
-            filter: "blur(2px)",
+            display: "grid",
+            placeItems: "center",
             zIndex: 0,
+            opacity: 0.55,
           }}
-        />
-        <div style={{ position: "relative", zIndex: 1, maxWidth: "40rem" }}>
-          <p
-            className="display anim-rise"
+        >
+          <div
             style={{
-              margin: "0 0 0.75rem",
-              fontSize: "clamp(2.8rem, 8vw, 5.2rem)",
-              fontWeight: 800,
-              lineHeight: 0.95,
+              position: "absolute",
+              inset: "12%",
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle at 40% 35%, rgba(77,184,132,0.28), transparent 55%), radial-gradient(circle at 70% 65%, rgba(201,149,58,0.12), transparent 50%)",
+              filter: "blur(8px)",
+            }}
+          />
+          <MintLeaf size={220} gradientId="hero-leaf" />
+        </div>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: "40rem" }}>
+          <div
+            className="anim-rise"
+            style={{
+              margin: "0 0 0.85rem",
+              fontSize: "clamp(2.6rem, 7.5vw, 4.8rem)",
             }}
           >
-            FreshMint
-          </p>
+            <BrandMark size={56} />
+          </div>
           <h1
             className="anim-rise-delay"
             style={{

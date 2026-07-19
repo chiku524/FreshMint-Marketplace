@@ -126,7 +126,7 @@ export function CreateListingForm() {
 
   const fieldStyle: React.CSSProperties = {
     width: "100%",
-    background: "rgba(12,31,26,0.65)",
+    background: "var(--panel)",
     border: "1px solid var(--line)",
     color: "var(--ink)",
     padding: "0.55rem 0.7rem",
@@ -142,7 +142,7 @@ export function CreateListingForm() {
         maxWidth: "36rem",
         border: "1px solid var(--line)",
         padding: "1.25rem",
-        background: "rgba(20,53,44,0.45)",
+        background: "var(--panel)",
       }}
     >
       <div>

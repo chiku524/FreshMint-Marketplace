@@ -152,7 +152,7 @@ export function WalletBar() {
               if (e.target.value) void demoLogin(e.target.value);
             }}
             style={{
-              background: "rgba(12,31,26,0.65)",
+              background: "var(--panel)",
               border: "1px solid var(--line)",
               color: "var(--ink)",
               padding: "0.3rem 0.5rem",

@@ -122,7 +122,7 @@ export function StudioPanel() {
             placeholder="Shelf name"
             required
             style={{
-              background: "rgba(12,31,26,0.65)",
+              background: "var(--panel)",
               border: "1px solid var(--line)",
               color: "var(--ink)",
               padding: "0.55rem 0.7rem",

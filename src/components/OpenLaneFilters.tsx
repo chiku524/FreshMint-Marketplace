@@ -87,7 +87,7 @@ export function OpenLaneFilters({
           defaultValue={q}
           placeholder="Search style, title…"
           style={{
-            background: "rgba(12,31,26,0.65)",
+            background: "var(--panel)",
             border: "1px solid var(--line)",
             color: "var(--ink)",
             padding: "0.35rem 0.6rem",
