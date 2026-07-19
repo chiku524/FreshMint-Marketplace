@@ -1,5 +1,8 @@
+"use client";
+
 import type { RankedListing, Listing } from "@/lib/discovery/types";
 import Link from "next/link";
+import { useState } from "react";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
 
@@ -30,13 +33,32 @@ export function WorkCard({
   const media = listing.mediaUrl;
   const featured =
     listing.stage === "featured" || bucket === "featured";
+  const [spinning, setSpinning] = useState(false);
+
   const tileClass = [
     "work-tile",
     featured ? "work-tile--featured" : "work-tile--compact",
-  ].join(" ");
+    !featured && spinning ? "is-spinning" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <article className={tileClass}>
+    <article
+      className={tileClass}
+      onMouseEnter={() => {
+        if (!featured && !spinning) setSpinning(true);
+      }}
+      onAnimationEnd={(event) => {
+        if (
+          !featured &&
+          event.animationName === "work-card-spin" &&
+          event.target === event.currentTarget
+        ) {
+          setSpinning(false);
+        }
+      }}
+    >
       {trackImpression ? (
         <ImpressionTracker listingId={listing.id} bucket={bucket} />
       ) : null}

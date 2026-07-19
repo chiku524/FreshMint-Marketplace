@@ -280,14 +280,18 @@ a {
   padding: 0.12rem 0.4rem;
 }
 
-.work-tile--compact:hover {
+.work-tile--compact:hover,
+.work-tile--compact.is-spinning {
   z-index: 3;
   border-color: rgba(110, 207, 154, 0.4);
   box-shadow:
     0 0 0 1px rgba(110, 207, 154, 0.12),
     0 10px 28px rgba(0, 0, 0, 0.4),
     0 0 24px rgba(110, 207, 154, 0.14);
-  animation: work-card-spin 0.95s ease-in-out;
+}
+
+.work-tile--compact.is-spinning {
+  animation: work-card-spin 0.55s ease-in-out;
 }
 
 @keyframes work-card-spin {
@@ -382,7 +386,8 @@ a {
     opacity: 0.45;
   }
 
-  .work-tile--compact:hover {
+  .work-tile--compact:hover,
+  .work-tile--compact.is-spinning {
     animation: none !important;
     transform: translateY(-3px);
   }
