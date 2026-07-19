@@ -3,6 +3,7 @@ import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
 import { EngraveBackground } from "@/components/EngraveBackground";
 import { BrandMark } from "@/components/MintLeaf";
+import { SiteNav } from "@/components/SiteNav";
 import { WalletBar } from "@/components/WalletBar";
 import "./globals.css";
 
@@ -49,28 +50,7 @@ export default function RootLayout({
               <Link href="/" style={{ fontSize: "1.3rem" }}>
                 <BrandMark size={32} />
               </Link>
-              <nav
-                style={{
-                  display: "flex",
-                  gap: "1rem",
-                  fontSize: "0.95rem",
-                  color: "var(--ink-muted)",
-                  flexWrap: "wrap",
-                }}
-              >
-                <Link href="/rising">Rising</Link>
-                <Link href="/open">Open Lane</Link>
-                <Link href="/featured">Featured</Link>
-                <Link href="/auctions">Auctions</Link>
-                <Link href="/bridge">Bridge</Link>
-                <Link href="/calendar">Calendar</Link>
-                <Link href="/shelves">Shelves</Link>
-                <Link href="/create">Create</Link>
-                <Link href="/studio">Studio</Link>
-                <Link href="/moderate">Moderate</Link>
-                <Link href="/metrics">Metrics</Link>
-                <Link href="/docs">Docs</Link>
-              </nav>
+              <SiteNav />
             </div>
             <WalletBar />
           </header>
