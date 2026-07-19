@@ -43,6 +43,8 @@ export function EngraveBackground() {
       <div className="fm-engrave-stone" />
       <div className="fm-engrave-hatch" />
       <div className="fm-engrave-grain" />
+      <div className="fm-engrave-glow fm-engrave-glow--mint" />
+      <div className="fm-engrave-glow fm-engrave-glow--gold" />
       <svg
         className="fm-engrave-vein"
         xmlns="http://www.w3.org/2000/svg"
@@ -65,7 +67,15 @@ export function EngraveBackground() {
             <stop offset="0%" stopColor="#c5d4c8" stopOpacity="0.22" />
             <stop offset="100%" stopColor="#6ecf9a" stopOpacity="0.05" />
           </radialGradient>
+          <filter id={`${gid}-glow`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
+        <g className="fm-engrave-vein__live" filter={`url(#${gid}-glow)`}>
 
         {/* —— Upper-right: engraved orbital plate —— */}
         <g transform="translate(860 140)">
@@ -438,6 +448,7 @@ export function EngraveBackground() {
             width={0.45}
             dash="3 6"
           />
+        </g>
         </g>
       </svg>
     </div>

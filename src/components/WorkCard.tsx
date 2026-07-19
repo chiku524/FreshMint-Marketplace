@@ -28,9 +28,15 @@ export function WorkCard({
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
+  const featured =
+    listing.stage === "featured" || bucket === "featured";
+  const tileClass = [
+    "work-tile",
+    featured ? "work-tile--featured" : "work-tile--compact",
+  ].join(" ");
 
   return (
-    <article className="work-tile" style={{ position: "relative" }}>
+    <article className={tileClass}>
       {trackImpression ? (
         <ImpressionTracker listingId={listing.id} bucket={bucket} />
       ) : null}
@@ -53,21 +59,22 @@ export function WorkCard({
           }
         />
       </Link>
-      <div style={{ padding: "0.9rem 1rem 1.1rem" }}>
+      <div className="work-tile__body">
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.55rem" }}>
           {emerging ? <span className="badge emerging">Emerging</span> : null}
+          {featured ? <span className="badge featured">Featured</span> : null}
           {bucket === "sold" ? (
             <span className="badge featured">Sold</span>
-          ) : bucket ? (
+          ) : bucket && bucket !== "featured" ? (
             <span className="badge">{bucket.replace("_", " ")}</span>
           ) : null}
           <span className="badge">{listing.chain}</span>
           <span className="badge">{listing.type.replace("_", " ")}</span>
-          {bucket !== "sold" ? (
+          {bucket !== "sold" && !featured ? (
             <span className="badge">{listing.stage.replace("_", " ")}</span>
           ) : null}
         </div>
-        <h3 className="display" style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>
+        <h3 className="display work-tile__title">
           <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
         </h3>
         <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem" }}>
