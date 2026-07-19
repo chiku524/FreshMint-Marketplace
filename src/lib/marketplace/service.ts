@@ -635,6 +635,16 @@ export async function nominateListingForUser(input: {
   }
 
   if (await inMemoryMode()) {
+    const { getMemoryNominations } = await import("@/lib/data/memory-store");
+    const { DISCOVERY_CONFIG } = await import("@/lib/discovery/config");
+    getMemoryNominations().push({
+      id: `nom-mem-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      listingId: input.listingId,
+      nominatorId: input.nominatorId,
+      stakePoints: DISCOVERY_CONFIG.nominationStakePoints,
+      createdAt: Date.now(),
+      outcome: null,
+    });
     return { ok: true as const, listing: result.listing };
   }
 
@@ -655,14 +665,75 @@ export async function nominateListingForUser(input: {
   return { ok: true as const, listing: result.listing };
 }
 
+export async function listPendingNominations() {
+  if (await inMemoryMode()) {
+    const { getMemoryNominations, getMemoryEngine } = await import(
+      "@/lib/data/memory-store"
+    );
+    const engine = getMemoryEngine();
+    return getMemoryNominations()
+      .filter((n) => !n.outcome)
+      .map((n) => ({
+        id: n.id,
+        listingId: n.listingId,
+        nominatorId: n.nominatorId,
+        stakePoints: n.stakePoints,
+        createdAt: new Date(n.createdAt).toISOString(),
+        listingTitle: engine.state.listings.get(n.listingId)?.title ?? n.listingId,
+        nominatorName:
+          engine.state.creators.get(n.nominatorId)?.displayName ?? n.nominatorId,
+      }));
+  }
+
+  const rows = await prisma.nomination.findMany({
+    where: { outcome: null },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: {
+      listing: { select: { title: true } },
+      nominator: { select: { displayName: true } },
+    },
+  });
+  return rows.map((n) => ({
+    id: n.id,
+    listingId: n.listingId,
+    nominatorId: n.nominatorId,
+    stakePoints: n.stakePoints,
+    createdAt: n.createdAt.toISOString(),
+    listingTitle: n.listing.title,
+    nominatorName: n.nominator.displayName,
+  }));
+}
+
 export async function settleNomination(input: {
   nominationId: string;
   outcome: "success" | "abuse";
 }) {
+  if (await inMemoryMode()) {
+    const { getMemoryNominations, getMemoryEngine } = await import(
+      "@/lib/data/memory-store"
+    );
+    const nominations = getMemoryNominations();
+    const nomination = nominations.find((n) => n.id === input.nominationId);
+    if (!nomination || nomination.outcome) {
+      return { ok: false as const, error: "not_found" };
+    }
+    const engine = getMemoryEngine();
+    const nominator = engine.state.creators.get(nomination.nominatorId);
+    if (!nominator) return { ok: false as const, error: "nominator_missing" };
+    const updated = settleNominationOutcome(nominator, input.outcome);
+    engine.state.creators.set(nominator.id, updated);
+    nomination.outcome = input.outcome;
+    return { ok: true as const, curatorScore: updated.curatorScore };
+  }
+
   const nomination = await prisma.nomination.findUnique({
     where: { id: input.nominationId },
   });
   if (!nomination) return { ok: false as const, error: "not_found" };
+  if (nomination.outcome) {
+    return { ok: false as const, error: "already_settled" };
+  }
   const nominator = await prisma.user.findUnique({
     where: { id: nomination.nominatorId },
     include: { wallets: true },
@@ -889,10 +960,6 @@ export async function purchaseListing(input: {
   });
 
   const creator = engine.state.creators.get(listing.creatorId);
-  if (creator && memory) {
-    creator.completedSales += 1;
-    creator.lifetimePrimaryVolumeUsd += input.amountUsd;
-  }
 
   const domainListing =
     engine.state.listings.get(listing.id) ??

@@ -4,6 +4,7 @@ import {
   decideAppeal,
   listModerationQueue,
   resolveReport,
+  settleNominationForModerator,
 } from "@/lib/marketplace/moderation";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -30,6 +31,11 @@ const schema = z.discriminatedUnion("kind", [
     status: z.enum(["approved", "rejected"]),
     note: z.string().optional(),
   }),
+  z.object({
+    kind: z.literal("nomination"),
+    nominationId: z.string(),
+    outcome: z.enum(["success", "abuse"]),
+  }),
 ]);
 
 export async function POST(req: NextRequest) {
@@ -51,6 +57,14 @@ export async function POST(req: NextRequest) {
       note: body.data.note,
     });
     return NextResponse.json(result, { status: result.ok ? 200 : 404 });
+  }
+
+  if (body.data.kind === "nomination") {
+    const result = await settleNominationForModerator({
+      nominationId: body.data.nominationId,
+      outcome: body.data.outcome,
+    });
+    return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   }
 
   const result = await decideAppeal({

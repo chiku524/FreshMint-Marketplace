@@ -27,6 +27,8 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 
 For hosted previews, set `DATABASE_URL` to a managed Postgres URL (Neon, Supabase, Vercel Postgres, etc.).
 
+Step-by-step Vercel Blob + Neon/Prisma Postgres setup: [`docs/vercel-hosting.md`](docs/vercel-hosting.md).
+
 ### Object storage
 
 - With `BLOB_READ_WRITE_TOKEN` (Vercel Blob) → uploads go to Blob CDN URLs.

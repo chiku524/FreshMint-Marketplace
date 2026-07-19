@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { resolveAppeal } from "@/lib/discovery/anti-spam";
 import { toListing } from "@/lib/data/mappers";
+import { listPendingNominations, settleNomination } from "./service";
 
 export function canModerate(role: string): boolean {
   return role === "moderator" || role === "editor";
@@ -10,7 +11,60 @@ export function canEditFeatured(role: string): boolean {
   return role === "editor" || role === "moderator";
 }
 
+async function inMemoryMode(): Promise<boolean> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  return mode === "memory" || isMemoryMode();
+}
+
 export async function listModerationQueue() {
+  const nominations = await listPendingNominations();
+
+  if (await inMemoryMode()) {
+    const { getMemoryEngine } = await import("@/lib/data/memory-store");
+    const engine = getMemoryEngine();
+    const reports = engine.state.reports
+      .filter((r) => !r.resolved)
+      .map((r) => {
+        const listing = engine.state.listings.get(r.listingId);
+        const reporter = engine.state.creators.get(r.reporterId);
+        return {
+          id: r.id,
+          reason: r.reason,
+          listingId: r.listingId,
+          listing: {
+            title: listing?.title ?? r.listingId,
+            delisted: listing?.delisted ?? false,
+          },
+          reporter: {
+            id: r.reporterId,
+            displayName: reporter?.displayName ?? r.reporterId,
+          },
+        };
+      });
+    const appeals = engine.state.appeals
+      .filter((a) => a.status === "pending")
+      .map((a) => {
+        const listing = engine.state.listings.get(a.listingId);
+        const creator = engine.state.creators.get(a.creatorId);
+        return {
+          id: a.id,
+          message: a.message,
+          listingId: a.listingId,
+          listing: { title: listing?.title ?? a.listingId },
+          creator: {
+            id: a.creatorId,
+            displayName: creator?.displayName ?? a.creatorId,
+          },
+        };
+      });
+    const delisted = [...engine.state.listings.values()]
+      .filter((l) => l.delisted)
+      .slice(0, 50);
+    return { reports, appeals, delisted, nominations };
+  }
+
   const [reports, appeals, delisted] = await Promise.all([
     prisma.report.findMany({
       where: { resolved: false },
@@ -37,7 +91,7 @@ export async function listModerationQueue() {
     }),
   ]);
 
-  return { reports, appeals, delisted };
+  return { reports, appeals, delisted, nominations };
 }
 
 export async function resolveReport(input: {
@@ -46,6 +100,21 @@ export async function resolveReport(input: {
   action: "dismiss" | "uphold";
   note?: string;
 }) {
+  if (await inMemoryMode()) {
+    const { getMemoryEngine } = await import("@/lib/data/memory-store");
+    const engine = getMemoryEngine();
+    const report = engine.state.reports.find((r) => r.id === input.reportId);
+    if (!report) return { ok: false as const, error: "not_found" };
+    report.resolved = true;
+    if (input.action === "uphold") {
+      const listing = engine.state.listings.get(report.listingId);
+      if (listing) {
+        engine.state.listings.set(listing.id, { ...listing, delisted: true });
+      }
+    }
+    return { ok: true as const };
+  }
+
   const report = await prisma.report.findUnique({
     where: { id: input.reportId },
   });
@@ -68,7 +137,7 @@ export async function resolveReport(input: {
       actorId: input.actorId,
       targetType: "report",
       targetId: report.id,
-      action: input.action === "uphold" ? "resolve_report" : "resolve_report",
+      action: "resolve_report",
       note: `${input.action}${input.note ? `: ${input.note}` : ""}`,
     },
   });
@@ -82,6 +151,14 @@ export async function decideAppeal(input: {
   status: "approved" | "rejected";
   note?: string;
 }) {
+  if (await inMemoryMode()) {
+    const { getMemoryEngine } = await import("@/lib/data/memory-store");
+    const engine = getMemoryEngine();
+    const result = engine.resolveAppeal(input.appealId, input.status);
+    if (!result.ok) return { ok: false as const, error: result.error };
+    return { ok: true as const, listing: result.listing };
+  }
+
   const appeal = await prisma.appeal.findUnique({
     where: { id: input.appealId },
   });
@@ -129,11 +206,36 @@ export async function decideAppeal(input: {
   return { ok: true as const, listing: resolved.listing };
 }
 
+export async function settleNominationForModerator(input: {
+  nominationId: string;
+  outcome: "success" | "abuse";
+}) {
+  return settleNomination(input);
+}
+
 export async function submitListingAppeal(input: {
   listingId: string;
   creatorId: string;
   message: string;
 }) {
+  if (await inMemoryMode()) {
+    const { getMemoryEngine } = await import("@/lib/data/memory-store");
+    const engine = getMemoryEngine();
+    const listing = engine.state.listings.get(input.listingId);
+    if (!listing) return { ok: false as const, error: "not_found" };
+    if (listing.creatorId !== input.creatorId) {
+      return { ok: false as const, error: "forbidden" };
+    }
+    if (!listing.delisted) return { ok: false as const, error: "not_delisted" };
+    const result = engine.appealListing({
+      id: `appeal-mem-${Date.now()}`,
+      listingId: input.listingId,
+      creatorId: input.creatorId,
+      message: input.message,
+    });
+    return result;
+  }
+
   const listing = await prisma.listing.findUnique({
     where: { id: input.listingId },
   });

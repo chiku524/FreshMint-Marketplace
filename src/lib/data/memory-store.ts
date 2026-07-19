@@ -1,10 +1,20 @@
 import { DiscoveryEngine, type MarketplaceState } from "@/lib/discovery";
 import { buildSeedState } from "@/lib/data/seed";
 
+export type MemoryNomination = {
+  id: string;
+  listingId: string;
+  nominatorId: string;
+  stakePoints: number;
+  createdAt: number;
+  outcome: string | null;
+};
+
 const globalMemory = globalThis as unknown as {
   __freshmintMemoryState?: MarketplaceState;
   __freshmintMemoryEngine?: DiscoveryEngine;
   __freshmintUseMemory?: boolean;
+  __freshmintNominations?: MemoryNomination[];
 };
 
 export function enableMemoryMode(reason: string): void {
@@ -34,4 +44,18 @@ export function getMemoryEngine(): DiscoveryEngine {
   // Keep engine.state pointing at the live map
   globalMemory.__freshmintMemoryEngine.state = getMemoryState();
   return globalMemory.__freshmintMemoryEngine;
+}
+
+export function getMemoryNominations(): MemoryNomination[] {
+  if (!globalMemory.__freshmintNominations) {
+    globalMemory.__freshmintNominations = [];
+  }
+  return globalMemory.__freshmintNominations;
+}
+
+export function resetMemoryStoreForTests(): void {
+  globalMemory.__freshmintMemoryState = undefined;
+  globalMemory.__freshmintMemoryEngine = undefined;
+  globalMemory.__freshmintUseMemory = true;
+  globalMemory.__freshmintNominations = [];
 }

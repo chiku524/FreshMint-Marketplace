@@ -19,10 +19,20 @@ type AppealRow = {
   creator: { displayName: string };
 };
 
+type NominationRow = {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  nominatorName: string;
+  stakePoints: number;
+  createdAt: string;
+};
+
 export function ModerationPanel() {
   const router = useRouter();
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [appeals, setAppeals] = useState<AppealRow[]>([]);
+  const [nominations, setNominations] = useState<NominationRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -35,6 +45,7 @@ export function ModerationPanel() {
     }
     setReports(data.reports ?? []);
     setAppeals(data.appeals ?? []);
+    setNominations(data.nominations ?? []);
   }
 
   useEffect(() => {
@@ -69,6 +80,70 @@ export function ModerationPanel() {
       {error && error !== "forbidden" ? (
         <p style={{ color: "var(--danger)" }}>{error}</p>
       ) : null}
+
+      <section>
+        <h2 className="display" style={{ fontSize: "1.4rem" }}>
+          Pending nominations ({nominations.length})
+        </h2>
+        <p style={{ color: "var(--ink-muted)", fontSize: "0.9rem", marginTop: 0 }}>
+          Settle curator stakes: success rewards reputation; abuse penalizes it.
+        </p>
+        <div style={{ display: "grid", gap: "0.75rem", marginTop: "0.75rem" }}>
+          {nominations.length === 0 ? (
+            <p style={{ color: "var(--ink-muted)" }}>No open nominations.</p>
+          ) : (
+            nominations.map((n) => (
+              <div
+                key={n.id}
+                style={{
+                  border: "1px solid var(--line)",
+                  padding: "0.9rem 1rem",
+                  background: "rgba(20,53,44,0.45)",
+                }}
+              >
+                <strong>{n.listingTitle}</strong>
+                <div style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+                  Nominated by {n.nominatorName} · stake {n.stakePoints} pts
+                </div>
+                <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.55rem" }}>
+                  <button
+                    type="button"
+                    className="badge emerging"
+                    style={{ cursor: "pointer", background: "transparent" }}
+                    onClick={() =>
+                      void act({
+                        kind: "nomination",
+                        nominationId: n.id,
+                        outcome: "success",
+                      })
+                    }
+                  >
+                    Mark success
+                  </button>
+                  <button
+                    type="button"
+                    className="badge"
+                    style={{
+                      cursor: "pointer",
+                      background: "transparent",
+                      color: "var(--danger)",
+                    }}
+                    onClick={() =>
+                      void act({
+                        kind: "nomination",
+                        nominationId: n.id,
+                        outcome: "abuse",
+                      })
+                    }
+                  >
+                    Mark abuse
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       <section>
         <h2 className="display" style={{ fontSize: "1.4rem" }}>
