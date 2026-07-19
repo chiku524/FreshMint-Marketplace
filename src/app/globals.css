@@ -314,23 +314,31 @@ a {
   transform: translateY(1px);
 }
 
+/* Transparent bridge so the pointer never “falls through” between trigger & panel */
 .site-nav__menu {
   position: absolute;
-  top: calc(100% - 0.1rem);
+  top: 100%;
   left: 0;
   z-index: 40;
   min-width: 10.5rem;
-  padding: 0.4rem;
-  display: grid;
-  gap: 0.15rem;
-  border: 1px solid var(--line);
-  background: rgba(8, 14, 12, 0.96);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  padding: 0.45rem 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .site-nav__menu[hidden] {
   display: none;
+}
+
+.site-nav__menu-panel {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  background: rgba(8, 14, 12, 0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
 .site-nav__item {

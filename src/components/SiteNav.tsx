@@ -59,17 +59,43 @@ const GROUPS: NavGroup[] = [
 function NavDropdown({ group }: { group: NavGroup }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuId = useId();
+
+  function clearCloseTimer() {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function openMenu() {
+    clearCloseTimer();
+    setOpen(true);
+  }
+
+  function scheduleClose() {
+    clearCloseTimer();
+    closeTimer.current = setTimeout(() => setOpen(false), 160);
+  }
+
+  useEffect(() => {
+    return () => clearCloseTimer();
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
+        clearCloseTimer();
         setOpen(false);
       }
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        clearCloseTimer();
+        setOpen(false);
+      }
     }
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKey);
@@ -83,8 +109,8 @@ function NavDropdown({ group }: { group: NavGroup }) {
     <div
       ref={rootRef}
       className={`site-nav__dropdown${open ? " is-open" : ""}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleClose}
     >
       <button
         type="button"
@@ -92,7 +118,11 @@ function NavDropdown({ group }: { group: NavGroup }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={menuId}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          clearCloseTimer();
+          setOpen((v) => !v);
+        }}
+        onFocus={openMenu}
       >
         {group.label}
         <span className="site-nav__caret" aria-hidden>
@@ -104,18 +134,24 @@ function NavDropdown({ group }: { group: NavGroup }) {
         role="menu"
         className="site-nav__menu"
         hidden={!open}
+        onMouseEnter={openMenu}
       >
-        {group.items.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            role="menuitem"
-            className="site-nav__item"
-            onClick={() => setOpen(false)}
-          >
-            {item.label}
-          </Link>
-        ))}
+        <div className="site-nav__menu-panel">
+          {group.items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              role="menuitem"
+              className="site-nav__item"
+              onClick={() => {
+                clearCloseTimer();
+                setOpen(false);
+              }}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
