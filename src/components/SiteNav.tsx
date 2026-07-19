@@ -57,45 +57,19 @@ const GROUPS: NavGroup[] = [
 ];
 
 function NavDropdown({ group }: { group: NavGroup }) {
-  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuId = useId();
 
-  function clearCloseTimer() {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  }
-
-  function openMenu() {
-    clearCloseTimer();
-    setOpen(true);
-  }
-
-  function scheduleClose() {
-    clearCloseTimer();
-    closeTimer.current = setTimeout(() => setOpen(false), 160);
-  }
-
   useEffect(() => {
-    return () => clearCloseTimer();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
+    if (!pinned) return;
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
-        clearCloseTimer();
-        setOpen(false);
+        setPinned(false);
       }
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        clearCloseTimer();
-        setOpen(false);
-      }
+      if (event.key === "Escape") setPinned(false);
     }
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKey);
@@ -103,39 +77,27 @@ function NavDropdown({ group }: { group: NavGroup }) {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [pinned]);
 
   return (
     <div
       ref={rootRef}
-      className={`site-nav__dropdown${open ? " is-open" : ""}`}
-      onMouseEnter={openMenu}
-      onMouseLeave={scheduleClose}
+      className={`site-nav__dropdown${pinned ? " is-open" : ""}`}
     >
       <button
         type="button"
         className="site-nav__trigger"
-        aria-expanded={open}
+        aria-expanded={pinned}
         aria-haspopup="menu"
         aria-controls={menuId}
-        onClick={() => {
-          clearCloseTimer();
-          setOpen((v) => !v);
-        }}
-        onFocus={openMenu}
+        onClick={() => setPinned((v) => !v)}
       >
         {group.label}
         <span className="site-nav__caret" aria-hidden>
           ▾
         </span>
       </button>
-      <div
-        id={menuId}
-        role="menu"
-        className="site-nav__menu"
-        hidden={!open}
-        onMouseEnter={openMenu}
-      >
+      <div id={menuId} role="menu" className="site-nav__menu">
         <div className="site-nav__menu-panel">
           {group.items.map((item) => (
             <Link
@@ -143,10 +105,7 @@ function NavDropdown({ group }: { group: NavGroup }) {
               href={item.href}
               role="menuitem"
               className="site-nav__item"
-              onClick={() => {
-                clearCloseTimer();
-                setOpen(false);
-              }}
+              onClick={() => setPinned(false)}
             >
               {item.label}
             </Link>
