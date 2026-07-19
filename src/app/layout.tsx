@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
-import { EngraveBackground } from "@/components/EngraveBackground";
 import { BrandMark } from "@/components/MintLeaf";
+import { PageEngraveBackground } from "@/components/PageEngraveBackground";
 import { SiteNav } from "@/components/SiteNav";
 import { WalletBar } from "@/components/WalletBar";
 import "./globals.css";
@@ -34,7 +34,7 @@ export default function RootLayout({
     <html lang="en" className={`${syne.variable} ${literata.variable} h-full`}>
       <body className="min-h-full">
         <div className="site-shell">
-          <EngraveBackground />
+          <PageEngraveBackground />
           <header
             className="site-header"
             style={{

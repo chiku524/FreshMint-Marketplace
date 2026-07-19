@@ -209,6 +209,19 @@ body {
   opacity: 0.55;
 }
 
+.fm-engrave-vein--swap {
+  animation: fm-engrave-swap 0.7s ease-out;
+}
+
+@keyframes fm-engrave-swap {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
 .fm-engrave-vein__live {
   animation: fm-vein-breathe 14s ease-in-out infinite;
   transform-origin: 50% 40%;
