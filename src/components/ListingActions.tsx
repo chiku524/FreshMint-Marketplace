@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  PLATFORM_FEE_PERCENT,
+  describePlatformFee,
+  splitSaleProceeds,
+} from "@/lib/fees/platform";
 import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -29,6 +34,8 @@ export function ListingActions({
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
+  const feePreview =
+    priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
 
   async function post(url: string, body: Record<string, unknown>) {
     setMsg(null);
@@ -95,39 +102,61 @@ export function ListingActions({
         Nominate
       </button>
       {priceUsd != null ? (
-        <button
-          type="button"
-          className="badge featured"
-          style={{ cursor: "pointer", background: "transparent" }}
-          onClick={() =>
-            void (async () => {
-              const data = await post("/api/purchase", {
-                listingId,
-                amountUsd: priceUsd,
-              });
-              if (!data) return;
-              let note = `Purchase · ${String(data.txHash).slice(0, 14)}…`;
-              try {
-                const hash = await maybeSendWalletTx({
-                  walletTx: data.walletTx,
+        <span
+          style={{
+            display: "inline-flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: "0.2rem",
+          }}
+        >
+          <button
+            type="button"
+            className="badge featured"
+            style={{ cursor: "pointer", background: "transparent" }}
+            onClick={() =>
+              void (async () => {
+                const data = await post("/api/purchase", {
                   listingId,
-                  action: "buy",
                   amountUsd: priceUsd,
                 });
-                if (hash) {
-                  await confirmTx(listingId, "buy", hash);
-                  note = `On-chain buy · ${hash.slice(0, 14)}…`;
+                if (!data) return;
+                const feeNote =
+                  data.fees &&
+                  typeof data.fees === "object" &&
+                  data.fees !== null &&
+                  "sellerNetUsd" in data.fees
+                    ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
+                    : "";
+                let note = `Purchase · ${String(data.txHash).slice(0, 14)}…${feeNote}`;
+                try {
+                  const hash = await maybeSendWalletTx({
+                    walletTx: data.walletTx,
+                    listingId,
+                    action: "buy",
+                    amountUsd: priceUsd,
+                  });
+                  if (hash) {
+                    await confirmTx(listingId, "buy", hash);
+                    note = `On-chain buy · ${hash.slice(0, 14)}…${feeNote}`;
+                  }
+                } catch (e) {
+                  note += ` · wallet: ${e instanceof Error ? e.message : "skipped"}`;
                 }
-              } catch (e) {
-                note += ` · wallet: ${e instanceof Error ? e.message : "skipped"}`;
-              }
-              setMsg(note);
-              router.refresh();
-            })()
-          }
-        >
-          Buy ${priceUsd}
-        </button>
+                setMsg(note);
+                router.refresh();
+              })()
+            }
+          >
+            Buy ${priceUsd}
+          </button>
+          <span style={{ color: "var(--ink-muted)", fontSize: "0.72rem" }}>
+            {describePlatformFee(priceUsd)}
+            {feePreview
+              ? ` · treasury $${feePreview.feeTreasuryUsd.toFixed(2)} · operator $${feePreview.feeOperatorUsd.toFixed(2)}`
+              : ""}
+          </span>
+        </span>
       ) : null}
       {stage === "soft_launch" ? (
         <button

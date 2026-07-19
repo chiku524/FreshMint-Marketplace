@@ -4,14 +4,19 @@
 
 Minimal ERC-721 used for primary mints on Ethereum, Base, Arbitrum, and Optimism (testnets first).
 
+Primary `buy()` takes a **2.5%** platform fee (1.5% treasury + 1% operator); the seller receives **97.5%**. Fee recipients are set in the constructor and can be updated later via `setFeeRecipients` (contract owner only).
+
 ```bash
 # Requires Foundry (forge)
+# Prefer the Safe + operator addresses from `npm run wallets:create` (.wallets/env.snippet)
 forge create contracts/FreshMintERC721.sol:FreshMintERC721 \
-  --constructor-args "FreshMint" "FMINT" \
+  --constructor-args "FreshMint" "FMINT" $NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS $NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS \
   --rpc-url $EVM_RPC_URL_ETHEREUM \
   --private-key $EVM_MINTER_PRIVATE_KEY \
   --chain sepolia
 ```
+
+Also set `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA` / `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA` for Solana fee legs.
 
 Repeat per network with the matching RPC:
 

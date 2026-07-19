@@ -58,6 +58,42 @@ export const freshMintErc721Abi = [
       { name: "price", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "FeesDistributed",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "treasury", type: "address", indexed: true },
+      { name: "operatorWallet", type: "address", indexed: true },
+      { name: "treasuryFee", type: "uint256", indexed: false },
+      { name: "operatorFee", type: "uint256", indexed: false },
+      { name: "sellerAmount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "function",
+    name: "treasury",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "operatorWallet",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "setFeeRecipients",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "treasury_", type: "address" },
+      { name: "operatorWallet_", type: "address" },
+    ],
+    outputs: [],
+  },
 ] as const;
 
 /** @deprecated alias — prefer freshMintErc721Abi */

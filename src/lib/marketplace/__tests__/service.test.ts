@@ -85,6 +85,10 @@ describe("marketplace service (memory mode)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.txHash).toBeTruthy();
+    expect(result.fees.feeTotalUsd).toBeCloseTo(listing.priceUsd * 0.025, 5);
+    expect(result.fees.feeTreasuryUsd).toBeCloseTo(listing.priceUsd * 0.015, 5);
+    expect(result.fees.feeOperatorUsd).toBeCloseTo(listing.priceUsd * 0.01, 5);
+    expect(result.fees.sellerNetUsd).toBeCloseTo(listing.priceUsd * 0.975, 5);
     expect(
       engine.state.creators.get(listing.creatorId)?.completedSales,
     ).toBe(beforeSales + 1);

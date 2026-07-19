@@ -112,12 +112,14 @@ export function buildSolanaPurchaseIntent(input: {
     mode: "memo_fallback";
   };
 } {
+  const feeBps = { treasury: 150, operator: 100, total: 250 };
   const memo = JSON.stringify({
     kind: "freshmint_buy",
     listingId: input.listingId,
     buyer: input.buyerAddress,
     mint: input.mintAddress,
     lamports: input.priceLamports,
+    platformFeeBps: feeBps,
   });
 
   return {

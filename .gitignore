@@ -37,3 +37,6 @@ next-env.d.ts
 /public/uploads/*
 !/public/uploads/.gitkeep
 .env.vercel
+
+# Generated platform wallets / private keys — never commit
+.wallets/

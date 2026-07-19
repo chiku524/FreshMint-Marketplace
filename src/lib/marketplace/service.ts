@@ -921,6 +921,12 @@ export async function purchaseListing(input: {
   buyerId: string;
   amountUsd: number;
 }) {
+  const { splitSaleProceeds, platformFeeRecipients } = await import(
+    "@/lib/fees/platform"
+  );
+  const fees = splitSaleProceeds(input.amountUsd);
+  const feeRecipients = platformFeeRecipients();
+
   const memory = await inMemoryMode();
   const engine = await getDiscoveryEngine();
 
@@ -1085,6 +1091,10 @@ export async function purchaseListing(input: {
       listingId: listing.id,
       buyerId: input.buyerId,
       amountUsd: input.amountUsd,
+      feeTotalUsd: fees.feeTotalUsd,
+      feeTreasuryUsd: fees.feeTreasuryUsd,
+      feeOperatorUsd: fees.feeOperatorUsd,
+      sellerNetUsd: fees.sellerNetUsd,
       soldAt: Date.now(),
       txHash,
       chain: listing.chain,
@@ -1095,6 +1105,10 @@ export async function purchaseListing(input: {
         listingId: input.listingId,
         buyerId: input.buyerId,
         amountUsd: input.amountUsd,
+        feeTotalUsd: fees.feeTotalUsd,
+        feeTreasuryUsd: fees.feeTreasuryUsd,
+        feeOperatorUsd: fees.feeOperatorUsd,
+        sellerNetUsd: fees.sellerNetUsd,
         isFirst,
         txHash,
         chain: listing.chain,
@@ -1116,12 +1130,25 @@ export async function purchaseListing(input: {
         creatorId: listing.creatorId,
         viewerId: input.buyerId,
         emerging,
-        metaJson: JSON.stringify({ amountUsd: input.amountUsd, txHash }),
+        metaJson: JSON.stringify({
+          amountUsd: input.amountUsd,
+          txHash,
+          fees,
+          feeRecipients,
+        }),
       },
     });
   }
 
-  return { ok: true as const, txHash, isFirst, emerging, walletTx };
+  return {
+    ok: true as const,
+    txHash,
+    isFirst,
+    emerging,
+    walletTx,
+    fees,
+    feeRecipients,
+  };
 }
 
 export async function getPersistedMetrics() {

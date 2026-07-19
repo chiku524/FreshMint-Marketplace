@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 /// @notice Minimal ERC-721 for FreshMint primary mints across EVM testnets/mainnets.
 /// Compatible with OpenZeppelin-style interfaces without requiring forge install in CI.
+/// Primary `buy` takes a 2.5% platform fee: 1.5% treasury + 1% operator; seller gets 97.5%.
 contract FreshMintERC721 {
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
@@ -10,10 +11,25 @@ contract FreshMintERC721 {
     event Minted(address indexed to, uint256 indexed tokenId, string tokenURI);
     event Listed(uint256 indexed tokenId, uint256 priceWei);
     event Purchased(address indexed buyer, uint256 indexed tokenId, uint256 price);
+    event FeesDistributed(
+        uint256 indexed tokenId,
+        address indexed treasury,
+        address indexed operatorWallet,
+        uint256 treasuryFee,
+        uint256 operatorFee,
+        uint256 sellerAmount
+    );
+    event FeeRecipientsUpdated(address treasury, address operatorWallet);
+
+    uint16 public constant TREASURY_FEE_BPS = 150; // 1.5%
+    uint16 public constant OPERATOR_FEE_BPS = 100; // 1.0%
+    uint16 public constant TOTAL_FEE_BPS = 250; // 2.5%
 
     string public name;
     string public symbol;
     address public owner;
+    address public treasury;
+    address public operatorWallet;
     uint256 public nextId = 1;
 
     mapping(uint256 => address) private _ownerOf;
@@ -23,10 +39,18 @@ contract FreshMintERC721 {
     mapping(uint256 => string) private _tokenURIs;
     mapping(uint256 => uint256) public priceOf;
 
-    constructor(string memory name_, string memory symbol_) {
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        address treasury_,
+        address operatorWallet_
+    ) {
+        require(treasury_ != address(0) && operatorWallet_ != address(0), "fee recipients");
         name = name_;
         symbol = symbol_;
         owner = msg.sender;
+        treasury = treasury_;
+        operatorWallet = operatorWallet_;
     }
 
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
@@ -111,20 +135,56 @@ contract FreshMintERC721 {
         emit Listed(tokenId, priceWei);
     }
 
+    function setFeeRecipients(address treasury_, address operatorWallet_) external {
+        require(msg.sender == owner, "auth");
+        require(treasury_ != address(0) && operatorWallet_ != address(0), "zero");
+        treasury = treasury_;
+        operatorWallet = operatorWallet_;
+        emit FeeRecipientsUpdated(treasury_, operatorWallet_);
+    }
+
     function buy(uint256 tokenId) external payable {
         address seller = ownerOf(tokenId);
         uint256 price = priceOf[tokenId];
         require(price > 0, "not listed");
         require(msg.value >= price, "price");
+        require(seller != msg.sender, "self");
+
+        uint256 treasuryFee = (price * TREASURY_FEE_BPS) / 10_000;
+        uint256 operatorFee = (price * OPERATOR_FEE_BPS) / 10_000;
+        uint256 sellerAmount = price - treasuryFee - operatorFee;
+
         priceOf[tokenId] = 0;
         delete _tokenApprovals[tokenId];
         _balances[seller] -= 1;
         _balances[msg.sender] += 1;
         _ownerOf[tokenId] = msg.sender;
         emit Transfer(seller, msg.sender, tokenId);
-        (bool ok, ) = seller.call{value: msg.value}("");
+
+        _pay(treasury, treasuryFee);
+        _pay(operatorWallet, operatorFee);
+        _pay(seller, sellerAmount);
+
+        uint256 excess = msg.value - price;
+        if (excess > 0) {
+            _pay(msg.sender, excess);
+        }
+
+        emit Purchased(msg.sender, tokenId, price);
+        emit FeesDistributed(
+            tokenId,
+            treasury,
+            operatorWallet,
+            treasuryFee,
+            operatorFee,
+            sellerAmount
+        );
+    }
+
+    function _pay(address to, uint256 amount) internal {
+        if (amount == 0) return;
+        (bool ok, ) = to.call{value: amount}("");
         require(ok, "pay");
-        emit Purchased(msg.sender, tokenId, msg.value);
     }
 
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {

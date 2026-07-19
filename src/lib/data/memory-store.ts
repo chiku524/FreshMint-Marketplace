@@ -15,6 +15,10 @@ export type MemoryPurchase = {
   listingId: string;
   buyerId: string;
   amountUsd: number;
+  feeTotalUsd?: number;
+  feeTreasuryUsd?: number;
+  feeOperatorUsd?: number;
+  sellerNetUsd?: number;
   soldAt: number;
   txHash: string | null;
   chain: string;
@@ -104,6 +108,10 @@ export function recordMemoryPurchase(
     listingId: purchase.listingId,
     buyerId: purchase.buyerId,
     amountUsd: purchase.amountUsd,
+    feeTotalUsd: purchase.feeTotalUsd,
+    feeTreasuryUsd: purchase.feeTreasuryUsd,
+    feeOperatorUsd: purchase.feeOperatorUsd,
+    sellerNetUsd: purchase.sellerNetUsd,
     soldAt: purchase.soldAt,
     txHash: purchase.txHash,
     chain: purchase.chain,

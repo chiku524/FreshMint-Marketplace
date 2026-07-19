@@ -13,6 +13,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
+    "wallets:create": "node scripts/create-platform-wallets.mjs",
+    "wallets:deploy-safe": "node scripts/deploy-treasury-safe.mjs",
+    "wallets:deploy-squads": "node scripts/deploy-treasury-squads.mjs",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -42,6 +45,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@safe-global/protocol-kit": "^8.0.4",
+    "@sqds/multisig": "^2.1.4",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",

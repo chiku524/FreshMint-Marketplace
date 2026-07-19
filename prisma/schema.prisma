@@ -300,7 +300,13 @@ model Purchase {
   id        String   @id @default(cuid())
   listingId String
   buyerId   String
+  /// Gross sale price paid by the buyer (listed price).
   amountUsd Float
+  /// Platform fee split (2.5% total: 1.5% treasury + 1% operator).
+  feeTotalUsd    Float @default(0)
+  feeTreasuryUsd Float @default(0)
+  feeOperatorUsd Float @default(0)
+  sellerNetUsd   Float @default(0)
   isFirst   Boolean  @default(false)
   txHash    String?
   chain     String
