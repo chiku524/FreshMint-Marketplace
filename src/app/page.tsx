@@ -1,4 +1,3 @@
-import { EngravedMintHero } from "@/components/EngravedMintHero";
 import { BrandMark } from "@/components/MintLeaf";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
@@ -28,24 +27,8 @@ export default async function HomePage() {
           alignContent: "end",
           padding: "clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem) 3rem",
           position: "relative",
-          overflow: "hidden",
         }}
       >
-        <div
-          className="hero-engraving"
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: "2% 0 auto auto",
-            width: "min(58vw, 460px)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 0,
-            pointerEvents: "none",
-          }}
-        >
-          <EngravedMintHero size={440} />
-        </div>
         <div style={{ position: "relative", zIndex: 1, maxWidth: "40rem" }}>
           <div
             className="anim-rise"
