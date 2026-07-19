@@ -4,7 +4,7 @@ import type {
   Shelf as DbShelf,
   User as DbUser,
   Wallet as DbWallet,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 import { resolveNetwork } from "@/lib/chains/registry";
 import type {
   Collection,

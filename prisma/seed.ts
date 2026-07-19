@@ -1,6 +1,22 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../src/generated/prisma/client";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is required to seed");
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("prisma.io")
+        ? { rejectUnauthorized: false }
+        : undefined,
+  }),
+});
 const day = 24 * 60 * 60 * 1000;
 const now = Date.now();
 
