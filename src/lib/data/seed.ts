@@ -32,7 +32,8 @@ function creator(
 ): CreatorProfile {
   return {
     wallets: partial.wallets ?? [
-      { chain: "evm", address: `0x${partial.id.padStart(40, "0")}` },
+      { chain: "evm",
+      network: "ethereum", address: `0x${partial.id.padStart(40, "0")}` },
     ],
     ...partial,
   };
@@ -61,8 +62,10 @@ export function buildSeedState(): MarketplaceState {
       curatorScore: 40,
       establishedBadge: false,
       wallets: [
-        { chain: "evm", address: "0xnova0000000000000000000000000000000001" },
-        { chain: "solana", address: "NovaSol1111111111111111111111111111111" },
+        { chain: "evm",
+      network: "ethereum", address: "0xnova0000000000000000000000000000000001" },
+        { chain: "solana",
+      network: "solana", address: "NovaSol1111111111111111111111111111111" },
       ],
     }),
     creator({
@@ -80,7 +83,8 @@ export function buildSeedState(): MarketplaceState {
       curatorScore: 25,
       establishedBadge: false,
       wallets: [
-        { chain: "solana", address: "GlitchPetal222222222222222222222222222" },
+        { chain: "solana",
+      network: "solana", address: "GlitchPetal222222222222222222222222222" },
       ],
     }),
     creator({
@@ -98,7 +102,8 @@ export function buildSeedState(): MarketplaceState {
       curatorScore: 120,
       establishedBadge: true,
       wallets: [
-        { chain: "evm", address: "0xwhale00000000000000000000000000000001" },
+        { chain: "evm",
+      network: "ethereum", address: "0xwhale00000000000000000000000000000001" },
       ],
     }),
     creator({
@@ -143,6 +148,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-nova",
       type: "single",
       chain: "evm",
+      network: "ethereum",
       stage: "rising_eligible",
       priceUsd: 120,
       medium: "digital_ink",
@@ -179,6 +185,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-glitch",
       type: "open_edition",
       chain: "solana",
+      network: "solana",
       stage: "rising_eligible",
       priceUsd: 25,
       medium: "generative",
@@ -212,6 +219,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-whale",
       type: "single",
       chain: "evm",
+      network: "ethereum",
       stage: "featured",
       priceUsd: 4200,
       medium: "3d",
@@ -248,6 +256,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-fresh",
       type: "single",
       chain: "evm",
+      network: "ethereum",
       stage: "rising_eligible",
       priceUsd: 45,
       medium: "collage",
@@ -282,6 +291,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-nova",
       type: "auction",
       chain: "solana",
+      network: "solana",
       stage: "rising_eligible",
       priceUsd: null,
       medium: "digital_ink",
@@ -315,6 +325,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-fresh",
       type: "auction",
       chain: "evm",
+      network: "ethereum",
       stage: "featured",
       priceUsd: 180,
       medium: "digital_ink",
@@ -349,6 +360,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-glitch",
       type: "auction",
       chain: "solana",
+      network: "solana",
       stage: "rising_eligible",
       priceUsd: 95,
       medium: "generative",
@@ -381,6 +393,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-glitch",
       type: "collection",
       chain: "solana",
+      network: "solana",
       stage: "soft_launch",
       priceUsd: 60,
       medium: "generative",
@@ -409,6 +422,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-glitch",
       type: "collection",
       chain: "solana",
+      network: "solana",
       stage: "soft_launch",
       priceUsd: 60,
       medium: "generative",
@@ -437,6 +451,7 @@ export function buildSeedState(): MarketplaceState {
       creatorId: "artist-glitch",
       type: "collection",
       chain: "solana",
+      network: "solana",
       stage: "soft_launch",
       priceUsd: 60,
       medium: "generative",

@@ -1,9 +1,12 @@
 import { getSessionUser } from "@/lib/auth/session";
+import { resolveNetwork } from "@/lib/chains/registry";
 import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
+import type { Chain } from "@/lib/discovery/types";
 import { buildEvmMintIntent, buildEvmPurchaseIntent } from "@/lib/onchain/evm";
 import {
   buildSolanaMintIntent,
+  buildSolanaMintTransactionBase64,
   buildSolanaPurchaseIntent,
   buildSolanaMemoTransactionBase64,
 } from "@/lib/onchain/solana";
@@ -35,6 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const network = resolveNetwork(listing.network, listing.chain as Chain);
   const wallet =
     user.wallets.find((w) => w.chain === listing.chain)?.address ??
     user.wallets[0]?.address;
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "wallet_required" }, { status: 400 });
   }
 
-  const tokenUri = listing.mediaUrl ?? `freshmint://${listing.id}`;
+  const tokenUri = listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
 
   if (body.data.action === "mint") {
     if (listing.chain === "evm") {
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest) {
         creatorAddress: wallet,
         tokenUri,
         listingId: listing.id,
+        network,
         priceUsd: listing.priceUsd,
       });
       return NextResponse.json({ ok: true, intent: mint });
@@ -58,26 +63,50 @@ export async function POST(req: NextRequest) {
       creatorAddress: wallet,
       metadataUri: tokenUri,
       listingId: listing.id,
+      title: listing.title,
     });
     let serialized: string | null = null;
+    let assetAddress: string | undefined;
+    let mode = "memo_fallback";
     try {
-      serialized = await buildSolanaMemoTransactionBase64({
+      const built = await buildSolanaMintTransactionBase64({
         feePayer: wallet,
-        memo: String(mint.calldata),
+        metadataUri: tokenUri,
+        name: listing.title,
+        listingId: listing.id,
       });
+      serialized = built.serialized;
+      assetAddress = built.assetAddress;
+      mode = built.mode;
+      if (assetAddress) {
+        await prisma.listing.update({
+          where: { id: listing.id },
+          data: {
+            contractAddress: assetAddress,
+            tokenId: assetAddress,
+          },
+        });
+      }
     } catch {
       serialized = null;
     }
-    return NextResponse.json({ ok: true, intent: mint, serialized });
+    return NextResponse.json({
+      ok: true,
+      intent: mint,
+      serialized,
+      assetAddress,
+      mode,
+    });
   }
 
   // buy
   if (listing.chain === "evm") {
     const buy = buildEvmPurchaseIntent({
       buyerAddress: wallet,
-      contractAddress: listing.contractAddress ?? "0x0",
+      contractAddress: listing.contractAddress,
       tokenId: listing.tokenId ?? "0",
-      priceWei: String(Math.round((body.data.amountUsd ?? listing.priceUsd ?? 0) * 1e15)),
+      network,
+      amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
     });
     return NextResponse.json({ ok: true, intent: buy });
   }
@@ -85,7 +114,9 @@ export async function POST(req: NextRequest) {
   const buy = buildSolanaPurchaseIntent({
     buyerAddress: wallet,
     mintAddress: listing.contractAddress ?? "unknown",
-    priceLamports: Math.round((body.data.amountUsd ?? listing.priceUsd ?? 0) * 1_000_000),
+    priceLamports: Math.round(
+      (body.data.amountUsd ?? listing.priceUsd ?? 0) * 1_000_000,
+    ),
     listingId: listing.id,
   });
   let serialized: string | null = null;

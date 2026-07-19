@@ -1,7 +1,8 @@
 import { getSessionUser } from "@/lib/auth/session";
+import { isNetworkId, resolveNetwork, vmFromNetwork } from "@/lib/chains/registry";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { createListingForUser } from "@/lib/marketplace/service";
-import type { Chain, ListingType } from "@/lib/discovery/types";
+import type { ListingType, NetworkId } from "@/lib/discovery/types";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -20,7 +21,10 @@ const createSchema = z
     title: z.string().min(1).max(120),
     description: z.string().max(2000).default(""),
     type: z.enum(["single", "collection", "open_edition", "auction"]),
-    chain: z.enum(["evm", "solana"]),
+    chain: z.enum(["evm", "solana"]).optional(),
+    network: z
+      .enum(["ethereum", "base", "arbitrum", "optimism", "solana"])
+      .optional(),
     priceUsd: z.number().nonnegative().nullable().optional(),
     medium: z.string().min(1).max(64),
     styleTags: z.array(z.string()).default([]),
@@ -36,6 +40,10 @@ const createSchema = z
   .refine((v) => Boolean(v.mediaHash || v.mediaContent), {
     message: "media_required",
     path: ["mediaContent"],
+  })
+  .refine((v) => Boolean(v.network || v.chain), {
+    message: "network_required",
+    path: ["network"],
   });
 
 export async function POST(req: NextRequest) {
@@ -52,12 +60,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const network = resolveNetwork(
+    body.data.network,
+    body.data.chain,
+  ) as NetworkId;
+  if (!isNetworkId(network)) {
+    return NextResponse.json({ error: "invalid_network" }, { status: 400 });
+  }
+
   const result = await createListingForUser({
     creatorId: user.id,
     title: body.data.title,
     description: body.data.description,
     type: body.data.type as ListingType,
-    chain: body.data.chain as Chain,
+    network,
+    chain: vmFromNetwork(network),
     priceUsd: body.data.priceUsd,
     medium: body.data.medium,
     styleTags: body.data.styleTags,

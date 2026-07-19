@@ -1,7 +1,7 @@
-export const freshMintMarketAbi = [
+export const freshMintErc721Abi = [
   {
     type: "function",
-    name: "mint",
+    name: "safeMint",
     stateMutability: "nonpayable",
     inputs: [
       { name: "to", type: "address" },
@@ -25,6 +25,22 @@ export const freshMintMarketAbi = [
     outputs: [{ name: "", type: "address" }],
   },
   {
+    type: "function",
+    name: "tokenURI",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "event",
+    name: "Transfer",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "tokenId", type: "uint256", indexed: true },
+    ],
+  },
+  {
     type: "event",
     name: "Minted",
     inputs: [
@@ -43,3 +59,6 @@ export const freshMintMarketAbi = [
     ],
   },
 ] as const;
+
+/** @deprecated alias — prefer freshMintErc721Abi */
+export const freshMintMarketAbi = freshMintErc721Abi;

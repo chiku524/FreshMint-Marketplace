@@ -272,6 +272,7 @@ export function filterOpenLane(
   listings: Listing[],
   filters: {
     chain?: "evm" | "solana";
+    network?: Listing["network"];
     medium?: string;
     style?: string;
     maxPriceUsd?: number;
@@ -284,6 +285,7 @@ export function filterOpenLane(
     const vis = visibilityForStage(l.stage);
     if (!vis.openLane || l.delisted) return false;
     if (filters.chain && l.chain !== filters.chain) return false;
+    if (filters.network && l.network !== filters.network) return false;
     if (filters.medium && l.medium !== filters.medium) return false;
     if (filters.type && l.type !== filters.type) return false;
     if (filters.style && !l.styleTags.includes(filters.style)) return false;

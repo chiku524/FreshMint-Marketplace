@@ -2,6 +2,14 @@
 
 export type Chain = "evm" | "solana";
 
+/** Settlement network (mint + native bridge). */
+export type NetworkId =
+  | "ethereum"
+  | "base"
+  | "arbitrum"
+  | "optimism"
+  | "solana";
+
 export type ListingType = "single" | "collection" | "open_edition" | "auction";
 
 /** Lifecycle stages from the plan: Draft → Soft launch → Rising → Featured. */
@@ -25,7 +33,7 @@ export interface CreatorProfile {
   id: string;
   displayName: string;
   /** Linked wallets across EVM + Solana (unified identity). */
-  wallets: { chain: Chain; address: string }[];
+  wallets: { chain: Chain; address: string; network?: NetworkId | null }[];
   firstListingAt: number | null;
   lifetimePrimaryVolumeUsd: number;
   completedSales: number;
@@ -56,7 +64,10 @@ export interface Listing {
   description: string;
   creatorId: string;
   type: ListingType;
+  /** Coarse VM for discovery filters. */
   chain: Chain;
+  /** Settlement network for mint / buy. */
+  network: NetworkId;
   stage: LaunchStage;
   priceUsd: number | null;
   medium: string;
@@ -82,6 +93,9 @@ export interface Listing {
   signals: ListingSignals;
   delisted: boolean;
   appealStatus: AppealStatus;
+  mintTxHash?: string | null;
+  contractAddress?: string | null;
+  tokenId?: string | null;
 }
 
 export interface Collection {

@@ -5,11 +5,13 @@ import type {
   User as DbUser,
   Wallet as DbWallet,
 } from "@prisma/client";
+import { resolveNetwork } from "@/lib/chains/registry";
 import type {
   Collection,
   CreatorProfile,
   Listing,
   ListingSignals,
+  NetworkId,
   Shelf,
 } from "@/lib/discovery/types";
 
@@ -22,6 +24,7 @@ export function toCreatorProfile(user: UserWithWallets): CreatorProfile {
     wallets: user.wallets.map((w) => ({
       chain: w.chain as "evm" | "solana",
       address: w.address,
+      network: (w.network as NetworkId | null) ?? null,
     })),
     firstListingAt: user.firstListingAt?.getTime() ?? null,
     lifetimePrimaryVolumeUsd: user.lifetimePrimaryVolumeUsd,
@@ -58,6 +61,10 @@ export function toListing(listing: DbListing): Listing {
     creatorId: listing.creatorId,
     type: listing.type as Listing["type"],
     chain: listing.chain as Listing["chain"],
+    network: resolveNetwork(
+      listing.network,
+      listing.chain as Listing["chain"],
+    ),
     stage: listing.stage as Listing["stage"],
     priceUsd: listing.priceUsd,
     medium: listing.medium,
@@ -79,6 +86,9 @@ export function toListing(listing: DbListing): Listing {
     signals: signalsFromListing(listing),
     delisted: listing.delisted,
     appealStatus: listing.appealStatus as Listing["appealStatus"],
+    mintTxHash: listing.mintTxHash,
+    contractAddress: listing.contractAddress,
+    tokenId: listing.tokenId,
   };
 }
 

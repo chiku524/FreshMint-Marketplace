@@ -40,6 +40,7 @@ model User {
   signalEvents SignalEvent[]
   purchases    Purchase[]
   moderationActions ModerationAction[]
+  bridgeTransfers BridgeTransfer[]
 }
 
 model ModerationAction {
@@ -60,6 +61,8 @@ model Wallet {
   id        String   @id @default(cuid())
   userId    String
   chain     String // evm | solana
+  /// ethereum | base | arbitrum | optimism | solana
+  network   String?
   address   String
   createdAt DateTime @default(now())
 
@@ -99,6 +102,8 @@ model Listing {
   creatorId        String
   type             String // single | collection | open_edition | auction
   chain            String // evm | solana
+  /// ethereum | base | arbitrum | optimism | solana
+  network          String   @default("ethereum")
   stage            String   @default("draft")
   priceUsd         Float?
   medium           String   @default("digital")
@@ -145,7 +150,28 @@ model Listing {
   @@index([creatorId])
   @@index([stage])
   @@index([chain])
+  @@index([network])
   @@index([mediaHash])
+}
+
+model BridgeTransfer {
+  id           String   @id @default(cuid())
+  userId       String
+  fromNetwork  String
+  toNetwork    String
+  amount       String
+  amountUsd    Float?
+  requestId    String?
+  txHashesJson String   @default("[]")
+  status       String   @default("quoted") // quoted | prepared | submitted | completed | failed
+  quoteJson    String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([requestId])
 }
 
 model Collection {

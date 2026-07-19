@@ -1,29 +1,37 @@
-# FreshMintMarket (Sepolia)
+# FreshMint on-chain contracts
 
-Minimal mint/buy contract used by FreshMint settlement intents.
+## FreshMintERC721
 
-## Deploy with Foundry
+Minimal ERC-721 used for primary mints on Ethereum, Base, Arbitrum, and Optimism (testnets first).
 
 ```bash
-forge init --no-commit --force tmp-forge 2>/dev/null || true
-# from repo root, with Foundry installed:
-forge create contracts/FreshMintMarket.sol:FreshMintMarket \
-  --rpc-url $EVM_RPC_URL \
+# Requires Foundry (forge)
+forge create contracts/FreshMintERC721.sol:FreshMintERC721 \
+  --constructor-args "FreshMint" "FMINT" \
+  --rpc-url $EVM_RPC_URL_ETHEREUM \
   --private-key $EVM_MINTER_PRIVATE_KEY \
   --chain sepolia
 ```
 
-Then set:
+Repeat per network with the matching RPC:
 
-```bash
-NEXT_PUBLIC_EVM_MARKET_ADDRESS=0xYourDeployedAddress
-EVM_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
-# optional server-side sender:
-EVM_MINTER_PRIVATE_KEY=0x...
-```
+| Network   | Testnet RPC env            | App env for address                          |
+|-----------|----------------------------|----------------------------------------------|
+| Ethereum  | `EVM_RPC_URL_ETHEREUM`     | `NEXT_PUBLIC_EVM_MARKET_ADDRESS_ETHEREUM`    |
+| Base      | `EVM_RPC_URL_BASE`         | `NEXT_PUBLIC_EVM_MARKET_ADDRESS_BASE`        |
+| Arbitrum  | `EVM_RPC_URL_ARBITRUM`     | `NEXT_PUBLIC_EVM_MARKET_ADDRESS_ARBITRUM`    |
+| Optimism  | `EVM_RPC_URL_OPTIMISM`     | `NEXT_PUBLIC_EVM_MARKET_ADDRESS_OPTIMISM`    |
 
-Without a market address, EVM flows stay in **simulated** mode. With an address, the API returns wallet-ready calldata (`pending_wallet`) or submits via the server key.
+Without a market address for a network, EVM mint/buy intents stay **simulated** for that network.
 
-## Solana Devnet
+`FreshMintMarket.sol` remains as a legacy skeleton; new deploys should use `FreshMintERC721.sol`.
 
-Settlement attestations use the Memo program on Devnet. Set `SOLANA_MINTER_SECRET_KEY` as a JSON byte array for server-sponsored memos, or sign from a Phantom wallet using `/api/onchain/prepare`.
+## Solana
+
+Primary mints use **Metaplex Core** on Devnet (`createV1`). Set `SOLANA_MINTER_SECRET_KEY` to sponsor Devnet mints, or let creators sign via Phantom.
+
+Fallback: `SOLANA_MINT_MODE=memo` uses Memo program attestations only.
+
+## Bridge
+
+Native gas bridging (ETH on each EVM chain + SOL) goes through **Relay** (`TESTNET_RELAY_API` when `NEXT_PUBLIC_CHAIN_MODE=testnet`). See `/bridge` in the app.

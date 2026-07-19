@@ -1,9 +1,13 @@
 "use client";
 
+import type { NetworkId } from "@/lib/discovery/types";
+
 /** Browser helpers for sending prepared FreshMint txs. */
 
 export type EvmWalletTx = {
   chain: "evm";
+  network?: NetworkId;
+  chainId?: number;
   to: string;
   data: string;
   value?: string;
@@ -14,7 +18,91 @@ export type SolanaWalletTx = {
   chain: "solana";
   memo?: string;
   network?: string;
+  serialized?: string;
 };
+
+const CHAIN_PARAMS: Record<
+  number,
+  { chainId: string; chainName: string; rpcUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number }; blockExplorerUrls: string[] }
+> = {
+  11155111: {
+    chainId: "0xaa36a7",
+    chainName: "Sepolia",
+    rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.etherscan.io"],
+  },
+  84532: {
+    chainId: "0x14a34",
+    chainName: "Base Sepolia",
+    rpcUrls: ["https://sepolia.base.org"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.basescan.org"],
+  },
+  421614: {
+    chainId: "0x66eee",
+    chainName: "Arbitrum Sepolia",
+    rpcUrls: ["https://sepolia-rollup.arbitrum.io/rpc"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.arbiscan.io"],
+  },
+  11155420: {
+    chainId: "0xaa37dc",
+    chainName: "Optimism Sepolia",
+    rpcUrls: ["https://sepolia.optimism.io"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia-optimism.etherscan.io"],
+  },
+  1: {
+    chainId: "0x1",
+    chainName: "Ethereum",
+    rpcUrls: ["https://ethereum-rpc.publicnode.com"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://etherscan.io"],
+  },
+  8453: {
+    chainId: "0x2105",
+    chainName: "Base",
+    rpcUrls: ["https://mainnet.base.org"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://basescan.org"],
+  },
+  42161: {
+    chainId: "0xa4b1",
+    chainName: "Arbitrum One",
+    rpcUrls: ["https://arb1.arbitrum.io/rpc"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://arbiscan.io"],
+  },
+  10: {
+    chainId: "0xa",
+    chainName: "Optimism",
+    rpcUrls: ["https://mainnet.optimism.io"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://optimistic.etherscan.io"],
+  },
+};
+
+async function ensureEvmChain(
+  eth: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> },
+  chainId: number,
+) {
+  const hex = `0x${chainId.toString(16)}`;
+  try {
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: hex }],
+    });
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code === 4902 && CHAIN_PARAMS[chainId]) {
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [CHAIN_PARAMS[chainId]],
+      });
+    }
+  }
+}
 
 export async function sendEvmWalletTx(tx: EvmWalletTx): Promise<string> {
   const eth = (
@@ -35,14 +123,8 @@ export async function sendEvmWalletTx(tx: EvmWalletTx): Promise<string> {
   const from = tx.from ?? accounts[0];
   if (!from) throw new Error("no_account");
 
-  try {
-    await eth.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0xaa36a7" }], // Sepolia
-    });
-  } catch {
-    // user may reject switch; continue
-  }
+  const chainId = tx.chainId ?? 11155111;
+  await ensureEvmChain(eth, chainId);
 
   const hash = (await eth.request({
     method: "eth_sendTransaction",
@@ -80,8 +162,12 @@ export async function sendSolanaWalletTx(
   return result.signature;
 }
 
-/** If create/buy returned a Solana memo intent, prepare + send via wallet. */
-export async function sendSolanaMemoFromWallet(listingId: string, action: "mint" | "buy", amountUsd?: number): Promise<string> {
+/** Prepare + send Solana mint/buy via wallet. */
+export async function sendSolanaMintFromWallet(
+  listingId: string,
+  action: "mint" | "buy",
+  amountUsd?: number,
+): Promise<{ signature: string; assetAddress?: string }> {
   const res = await fetch("/api/onchain/prepare", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -92,7 +178,11 @@ export async function sendSolanaMemoFromWallet(listingId: string, action: "mint"
   if (!data.serialized) {
     throw new Error("solana_tx_unavailable");
   }
-  return sendSolanaWalletTx(data.serialized as string);
+  const signature = await sendSolanaWalletTx(data.serialized as string);
+  return {
+    signature,
+    assetAddress: data.assetAddress as string | undefined,
+  };
 }
 
 export async function maybeSendWalletTx(input: {
@@ -112,11 +202,15 @@ export async function maybeSendWalletTx(input: {
     return sendEvmWalletTx(wt as EvmWalletTx);
   }
   if (wt.chain === "solana") {
-    return sendSolanaMemoFromWallet(
+    if ("serialized" in wt && typeof wt.serialized === "string") {
+      return sendSolanaWalletTx(wt.serialized);
+    }
+    const result = await sendSolanaMintFromWallet(
       input.listingId,
       input.action,
       input.amountUsd,
     );
+    return result.signature;
   }
   return null;
 }

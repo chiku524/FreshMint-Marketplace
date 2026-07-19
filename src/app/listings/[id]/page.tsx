@@ -1,5 +1,6 @@
 import { FollowButton } from "@/components/FollowButton";
 import { ListingActions } from "@/components/ListingActions";
+import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
 import { getSessionUser } from "@/lib/auth/session";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -32,6 +33,18 @@ export default async function ListingDetailPage({
 
   const hue = [...listing.id].reduce((h, c) => (h + c.charCodeAt(0) * 17) % 360, 0);
   const media = listing.mediaUrl;
+  const network = resolveNetwork(listing.network, listing.chain);
+  const net = getNetwork(network);
+  const minted = Boolean(listing.mintTxHash);
+  const explorerTx = listing.mintTxHash
+    ? net.explorerTx(listing.mintTxHash)
+    : null;
+  const explorerToken =
+    listing.contractAddress && listing.tokenId && net.explorerToken
+      ? net.explorerToken(listing.contractAddress, listing.tokenId)
+      : listing.contractAddress
+        ? net.explorerAddress(listing.contractAddress)
+        : null;
 
   return (
     <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
@@ -76,7 +89,8 @@ export default async function ListingDetailPage({
         <div>
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
             {emerging ? <span className="badge emerging">Emerging</span> : null}
-            <span className="badge">{listing.chain}</span>
+            {minted ? <span className="badge emerging">Minted</span> : null}
+            <span className="badge">{net.label}</span>
             <span className="badge">{listing.type.replace("_", " ")}</span>
             <span className="badge">{listing.stage.replace("_", " ")}</span>
           </div>
@@ -95,6 +109,33 @@ export default async function ListingDetailPage({
           <p style={{ maxWidth: "48ch", lineHeight: 1.55 }}>
             {listing.description || "No description yet."}
           </p>
+          {minted || listing.tokenId ? (
+            <p style={{ color: "var(--ink-muted)", fontSize: "0.9rem", marginTop: "0.75rem" }}>
+              {listing.tokenId ? (
+                <span>
+                  Token {listing.tokenId}
+                  {listing.contractAddress
+                    ? ` · ${listing.contractAddress.slice(0, 8)}…`
+                    : ""}
+                </span>
+              ) : null}
+              {explorerTx || explorerToken ? (
+                <span style={{ display: "block", marginTop: "0.35rem" }}>
+                  {explorerTx ? (
+                    <a href={explorerTx} target="_blank" rel="noreferrer">
+                      View mint tx ↗
+                    </a>
+                  ) : null}
+                  {explorerTx && explorerToken ? " · " : null}
+                  {explorerToken ? (
+                    <a href={explorerToken} target="_blank" rel="noreferrer">
+                      Explorer ↗
+                    </a>
+                  ) : null}
+                </span>
+              ) : null}
+            </p>
+          ) : null}
           {listing.styleTags.length > 0 ? (
             <p style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "1rem" }}>
               {listing.styleTags.map((t) => (

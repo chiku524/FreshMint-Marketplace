@@ -46,7 +46,7 @@ export function CreateListingForm() {
       title: String(fd.get("title")),
       description: String(fd.get("description") ?? ""),
       type,
-      chain: String(fd.get("chain")),
+      network: String(fd.get("network")),
       priceUsd: fd.get("priceUsd") ? Number(fd.get("priceUsd")) : null,
       medium: String(fd.get("medium")),
       styleTags: String(fd.get("styleTags") ?? "")
@@ -168,9 +168,12 @@ export function CreateListingForm() {
           </select>
         </label>
         <label>
-          Chain
-          <select name="chain" defaultValue="evm" style={fieldStyle}>
-            <option value="evm">EVM (Sepolia)</option>
+          Network
+          <select name="network" defaultValue="ethereum" style={fieldStyle}>
+            <option value="ethereum">Ethereum (Sepolia)</option>
+            <option value="base">Base (Sepolia)</option>
+            <option value="arbitrum">Arbitrum (Sepolia)</option>
+            <option value="optimism">Optimism (Sepolia)</option>
             <option value="solana">Solana (Devnet)</option>
           </select>
         </label>

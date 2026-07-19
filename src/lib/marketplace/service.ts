@@ -3,7 +3,18 @@ import { prisma } from "@/lib/db";
 import { DiscoveryEngine } from "@/lib/discovery";
 import { loadMarketplaceState, persistCreatorStats, persistListingSignals } from "@/lib/data/repository";
 import { toListing } from "@/lib/data/mappers";
-import type { Chain, LaunchStage, ListingType, ReportReason } from "@/lib/discovery/types";
+import {
+  marketAddressFor,
+  resolveNetwork,
+  vmFromNetwork,
+} from "@/lib/chains/registry";
+import type {
+  Chain,
+  LaunchStage,
+  ListingType,
+  NetworkId,
+  ReportReason,
+} from "@/lib/discovery/types";
 import { isEmergingListing } from "@/lib/discovery";
 import { settleNominationOutcome } from "@/lib/discovery/anti-spam";
 import { validateDropWindow } from "@/lib/marketplace/calendar";
@@ -17,11 +28,14 @@ import {
   buildEvmPurchaseIntent,
   sendEvmMintWithServerKey,
   sendEvmBuyWithServerKey,
+  verifyEvmTx,
 } from "@/lib/onchain/evm";
 import {
   buildSolanaMintIntent,
   buildSolanaPurchaseIntent,
   sendSolanaMemoWithServerKey,
+  sendSolanaMetaplexMintWithServerKey,
+  verifySolanaTx,
 } from "@/lib/onchain/solana";
 import { hashTextMedia } from "@/lib/media/upload";
 import { parseEther } from "viem";
@@ -56,7 +70,8 @@ export async function createListingForUser(input: {
   title: string;
   description: string;
   type: ListingType;
-  chain: Chain;
+  chain?: Chain;
+  network?: NetworkId | string;
   priceUsd?: number | null;
   medium: string;
   styleTags: string[];
@@ -73,6 +88,8 @@ export async function createListingForUser(input: {
   publishSoftLaunch?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
+  const network = resolveNetwork(input.network, input.chain);
+  const chain = vmFromNetwork(network);
   const mediaHash =
     input.mediaHash ??
     (input.mediaContent ? hashMedia(input.mediaContent) : "");
@@ -115,7 +132,8 @@ export async function createListingForUser(input: {
     description: input.description,
     creatorId: input.creatorId,
     type: input.type,
-    chain: input.chain,
+    chain,
+    network,
     stage: "draft" as const,
     priceUsd: input.priceUsd ?? null,
     medium: input.medium,
@@ -170,7 +188,7 @@ export async function createListingForUser(input: {
       mem.state.creators.set(input.creatorId, {
         id: input.creatorId,
         displayName: "Guest Creator",
-        wallets: [{ chain: input.chain, address: `mem-${input.creatorId}` }],
+        wallets: [{ chain, address: `mem-${input.creatorId}`, network }],
         firstListingAt: now,
         lifetimePrimaryVolumeUsd: 0,
         completedSales: 0,
@@ -205,7 +223,8 @@ export async function createListingForUser(input: {
       description: input.description,
       creatorId: input.creatorId,
       type: input.type,
-      chain: input.chain,
+      chain,
+      network,
       stage: "draft",
       priceUsd: input.priceUsd ?? null,
       medium: input.medium,
@@ -286,30 +305,34 @@ export async function transitionListingStage(
   let walletTx: unknown;
   if (target === "soft_launch") {
     const creatorProfile = engine.state.creators.get(listing.creatorId);
+    const network = resolveNetwork(listing.network, listing.chain);
     const creatorAddress =
       creatorProfile?.wallets.find((w) => w.chain === listing.chain)?.address ??
       creatorProfile?.wallets[0]?.address ??
       "unknown";
-    const tokenUri = listing.id.startsWith("listing")
-      ? `freshmint://${listingId}`
-      : `freshmint://${listingId}`;
+    const tokenUri =
+      listing.mediaUrl ??
+      `https://freshmint.local/metadata/${listingId}`;
 
     if (listing.chain === "evm") {
       const mint = buildEvmMintIntent({
         creatorAddress,
         tokenUri,
         listingId,
+        network,
         priceUsd: listing.priceUsd,
       });
       walletTx = mint.walletTx;
       const server = await sendEvmMintWithServerKey({
         creatorAddress,
         tokenUri,
+        network,
         priceWei: parseEther("0"),
       });
       if (server) {
         mint.txHash = server.txHash;
         mint.status = "submitted";
+        if (server.tokenId) mint.tokenId = server.tokenId;
         walletTx = undefined;
       }
       if (!memory) {
@@ -319,6 +342,7 @@ export async function transitionListingStage(
             mintTxHash: mint.txHash || null,
             contractAddress: mint.contractAddress,
             tokenId: mint.tokenId,
+            network,
           },
         });
       } else {
@@ -326,7 +350,10 @@ export async function transitionListingStage(
         if (row) {
           engine.state.listings.set(listingId, {
             ...row,
-            // mint fields live in DB only; keep stage advance in memory
+            mintTxHash: mint.txHash || null,
+            contractAddress: mint.contractAddress,
+            tokenId: mint.tokenId,
+            network,
           });
         }
       }
@@ -335,13 +362,27 @@ export async function transitionListingStage(
         creatorAddress,
         metadataUri: tokenUri,
         listingId,
+        title: listing.title,
       });
       walletTx = mint.walletTx;
-      const server = await sendSolanaMemoWithServerKey(String(mint.calldata));
-      if (server) {
-        mint.txHash = server.txHash;
+      const mx = await sendSolanaMetaplexMintWithServerKey({
+        metadataUri: tokenUri,
+        name: listing.title,
+        ownerAddress: creatorAddress,
+      });
+      if (mx) {
+        mint.txHash = mx.txHash;
         mint.status = "submitted";
+        mint.contractAddress = mx.assetAddress;
+        mint.tokenId = mx.assetAddress;
         walletTx = undefined;
+      } else {
+        const server = await sendSolanaMemoWithServerKey(String(mint.calldata));
+        if (server) {
+          mint.txHash = server.txHash;
+          mint.status = "submitted";
+          walletTx = undefined;
+        }
       }
       if (!memory) {
         await prisma.listing.update({
@@ -350,8 +391,20 @@ export async function transitionListingStage(
             mintTxHash: mint.txHash || null,
             contractAddress: mint.contractAddress,
             tokenId: mint.tokenId,
+            network: "solana",
           },
         });
+      } else {
+        const row = engine.state.listings.get(listingId);
+        if (row) {
+          engine.state.listings.set(listingId, {
+            ...row,
+            mintTxHash: mint.txHash || null,
+            contractAddress: mint.contractAddress,
+            tokenId: mint.tokenId,
+            network: "solana",
+          });
+        }
       }
     }
   }
@@ -588,6 +641,8 @@ export async function confirmOnchainTx(input: {
   action: "mint" | "buy";
   txHash: string;
   buyerId?: string;
+  tokenId?: string;
+  contractAddress?: string;
 }) {
   if (!input.txHash || input.txHash.length < 8) {
     return { ok: false as const, error: "invalid_tx" };
@@ -597,15 +652,61 @@ export async function confirmOnchainTx(input: {
     const engine = await getDiscoveryEngine();
     const listing = engine.state.listings.get(input.listingId);
     if (!listing) return { ok: false as const, error: "not_found" };
+    engine.state.listings.set(input.listingId, {
+      ...listing,
+      mintTxHash: input.action === "mint" ? input.txHash : listing.mintTxHash,
+      tokenId: input.tokenId ?? listing.tokenId,
+      contractAddress: input.contractAddress ?? listing.contractAddress,
+    });
     return { ok: true as const, txHash: input.txHash, mode: "memory" as const };
+  }
+
+  const listing = await prisma.listing.findUnique({
+    where: { id: input.listingId },
+  });
+  if (!listing) return { ok: false as const, error: "not_found" };
+
+  const network = resolveNetwork(listing.network, listing.chain as Chain);
+  let verifiedTokenId = input.tokenId ?? null;
+
+  if (listing.chain === "evm") {
+    const live = Boolean(marketAddressFor(network));
+    const verified = await verifyEvmTx({
+      network,
+      txHash: input.txHash,
+      expectContract: listing.contractAddress,
+    });
+    if (!verified.ok && live && !input.txHash.startsWith("pending:")) {
+      return { ok: false as const, error: verified.error ?? "verify_failed" };
+    }
+    if (verified.tokenId) verifiedTokenId = verified.tokenId;
+  } else {
+    const verified = await verifySolanaTx(input.txHash);
+    if (
+      !verified.ok &&
+      !input.txHash.startsWith("pending:") &&
+      process.env.SOLANA_REQUIRE_CONFIRM === "true"
+    ) {
+      return { ok: false as const, error: verified.error ?? "verify_failed" };
+    }
   }
 
   if (input.action === "mint") {
     await prisma.listing.update({
       where: { id: input.listingId },
-      data: { mintTxHash: input.txHash },
+      data: {
+        mintTxHash: input.txHash,
+        ...(verifiedTokenId ? { tokenId: verifiedTokenId } : {}),
+        ...(input.contractAddress
+          ? { contractAddress: input.contractAddress }
+          : {}),
+      },
     });
-    return { ok: true as const, txHash: input.txHash };
+    return {
+      ok: true as const,
+      txHash: input.txHash,
+      tokenId: verifiedTokenId,
+    };
   }
 
   const purchase = await prisma.purchase.findFirst({
@@ -828,6 +929,7 @@ export async function purchaseListing(input: {
     creatorId: string;
     delisted: boolean;
     chain: Chain;
+    network: NetworkId;
     contractAddress: string | null;
     tokenId: string | null;
     priceUsd: number | null;
@@ -841,8 +943,9 @@ export async function purchaseListing(input: {
       creatorId: l.creatorId,
       delisted: l.delisted,
       chain: l.chain,
-      contractAddress: null,
-      tokenId: null,
+      network: resolveNetwork(l.network, l.chain),
+      contractAddress: l.contractAddress ?? null,
+      tokenId: l.tokenId ?? null,
       priceUsd: l.priceUsd,
     };
   } else {
@@ -857,6 +960,7 @@ export async function purchaseListing(input: {
       creatorId: listing.creatorId,
       delisted: listing.delisted,
       chain: listing.chain as Chain,
+      network: resolveNetwork(listing.network, listing.chain as Chain),
       contractAddress: listing.contractAddress,
       tokenId: listing.tokenId,
       priceUsd: listing.priceUsd,
@@ -911,14 +1015,14 @@ export async function purchaseListing(input: {
       "unknown";
   }
 
-  const priceWei = String(Math.round(input.amountUsd * 1e15));
   const purchaseIntent =
     listing.chain === "evm"
       ? buildEvmPurchaseIntent({
           buyerAddress,
-          contractAddress: listing.contractAddress ?? "0x0",
+          contractAddress: listing.contractAddress,
           tokenId: listing.tokenId ?? "0",
-          priceWei,
+          network: listing.network,
+          amountUsd: input.amountUsd,
         })
       : buildSolanaPurchaseIntent({
           buyerAddress,
@@ -934,7 +1038,9 @@ export async function purchaseListing(input: {
   if (!memory && listing.chain === "evm") {
     const server = await sendEvmBuyWithServerKey({
       tokenId: listing.tokenId ?? "0",
-      valueWei: BigInt(priceWei || "0"),
+      network: listing.network,
+      contractAddress: listing.contractAddress,
+      valueWei: BigInt(Math.max(1, Math.floor(input.amountUsd * 1e15))),
     });
     if (server) {
       txHash = server.txHash;

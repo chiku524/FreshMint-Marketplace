@@ -2,6 +2,7 @@ import Link from "next/link";
 
 export function OpenLaneFilters({
   chain,
+  network,
   q,
   type,
   medium,
@@ -9,6 +10,7 @@ export function OpenLaneFilters({
   maxPrice,
 }: {
   chain?: string;
+  network?: string;
   q?: string;
   type?: string;
   medium?: string;
@@ -18,7 +20,16 @@ export function OpenLaneFilters({
   const base = "/open";
   const link = (params: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
-    const merged = { chain, q, type, medium, minPrice, maxPrice, ...params };
+    const merged = {
+      chain,
+      network,
+      q,
+      type,
+      medium,
+      minPrice,
+      maxPrice,
+      ...params,
+    };
     for (const [k, v] of Object.entries(merged)) {
       if (v) sp.set(k, v);
     }
@@ -29,14 +40,26 @@ export function OpenLaneFilters({
   return (
     <div style={{ display: "grid", gap: "0.75rem" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        <Link className="badge" href={link({ chain: undefined })}>
+        <Link className="badge" href={link({ chain: undefined, network: undefined })}>
           All chains
         </Link>
-        <Link className="badge" href={link({ chain: "evm" })}>
+        <Link className="badge" href={link({ chain: "evm", network: undefined })}>
           EVM
         </Link>
-        <Link className="badge" href={link({ chain: "solana" })}>
+        <Link className="badge" href={link({ chain: "solana", network: "solana" })}>
           Solana
+        </Link>
+        <Link className="badge" href={link({ network: "ethereum", chain: "evm" })}>
+          Ethereum
+        </Link>
+        <Link className="badge" href={link({ network: "base", chain: "evm" })}>
+          Base
+        </Link>
+        <Link className="badge" href={link({ network: "arbitrum", chain: "evm" })}>
+          Arbitrum
+        </Link>
+        <Link className="badge" href={link({ network: "optimism", chain: "evm" })}>
+          Optimism
         </Link>
         <Link className="badge" href={link({ type: undefined })}>
           All types

@@ -55,8 +55,11 @@ export function WorkCard({
         ) : bucket && bucket !== "featured" ? (
           <span className="badge">{bucket.replace("_", " ")}</span>
         ) : null}
-        <span className="badge">{listing.chain}</span>
-        <span className="badge">{listing.type.replace("_", " ")}</span>
+          <span className="badge">{listing.network ?? listing.chain}</span>
+          {listing.mintTxHash ? (
+            <span className="badge emerging">Minted</span>
+          ) : null}
+          <span className="badge">{listing.type.replace("_", " ")}</span>
         {bucket !== "sold" && !featured ? (
           <span className="badge">{listing.stage.replace("_", " ")}</span>
         ) : null}
