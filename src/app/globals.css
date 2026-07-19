@@ -29,6 +29,93 @@
   --font-sans: var(--font-body);
 }
 
+/* Logo icon field — forest depth behind unchanged mint leaves */
+.fm-brand-field {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 28%;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      120% 90% at 28% 18%,
+      rgba(126, 217, 168, 0.22) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      90% 80% at 78% 88%,
+      rgba(47, 138, 94, 0.35) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      70% 70% at 50% 50%,
+      #163528 0%,
+      #0c1a14 58%,
+      #07110d 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(126, 217, 168, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(77, 184, 132, 0.14),
+    0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.fm-brand-field__wash {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(110, 207, 154, 0.2) 0%,
+    rgba(77, 184, 132, 0.06) 45%,
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: 0;
+  animation: fm-brand-breathe 7s ease-in-out infinite;
+}
+
+.fm-brand-field__rim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(126, 217, 168, 0.28) 0%,
+    transparent 38%,
+    transparent 62%,
+    rgba(61, 107, 82, 0.35) 100%
+  );
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+}
+
+.fm-brand-field > svg {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fm-brand-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-brand-field__wash {
+    animation: none;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

@@ -115,15 +115,24 @@ export function BrandMark({
   size?: number;
   showWordmark?: boolean;
 }) {
+  const field = Math.round(size * 1.22);
   return (
     <span
+      className="fm-brand-mark"
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: "0.55rem",
       }}
     >
-      <MintLeaf size={size} gradientId={`brand-${size}`} />
+      <span
+        className="fm-brand-field"
+        style={{ width: field, height: field }}
+      >
+        <span className="fm-brand-field__wash" aria-hidden />
+        <span className="fm-brand-field__rim" aria-hidden />
+        <MintLeaf size={size} gradientId={`brand-${size}`} />
+      </span>
       {showWordmark ? (
         <span className="display" style={{ fontWeight: 700, lineHeight: 1 }}>
           FreshMint
