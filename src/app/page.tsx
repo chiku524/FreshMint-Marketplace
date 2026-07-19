@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/MintLeaf";
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
@@ -110,7 +111,7 @@ export default async function HomePage() {
             Feed is empty — soft-launch a work or follow an emerging artist.
           </p>
         ) : (
-          <div className="lane-rail">
+          <PuzzleRail>
             {home.feed.map((item) => (
               <RankedWorkCard
                 key={item.listing.id}
@@ -120,7 +121,7 @@ export default async function HomePage() {
                 }
               />
             ))}
-          </div>
+          </PuzzleRail>
         )}
       </section>
 
@@ -143,7 +144,7 @@ export default async function HomePage() {
               All auctions →
             </Link>
           </div>
-          <div className="lane-rail">
+          <PuzzleRail>
             {home.liveAuctions.map((listing) => (
               <WorkCard
                 key={listing.id}
@@ -155,7 +156,7 @@ export default async function HomePage() {
                 }
               />
             ))}
-          </div>
+          </PuzzleRail>
         </section>
       ) : null}
 
@@ -185,7 +186,7 @@ export default async function HomePage() {
             No cleared auctions yet. Wins will appear here after hammer.
           </p>
         ) : (
-          <div className="lane-rail">
+          <PuzzleRail>
             {soldAuctions.map((item) => (
               <SoldAuctionCard
                 key={`${item.listing.id}-${item.soldAt}`}
@@ -195,7 +196,7 @@ export default async function HomePage() {
                 }
               />
             ))}
-          </div>
+          </PuzzleRail>
         )}
       </section>
     </div>

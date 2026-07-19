@@ -2,7 +2,7 @@
 
 import type { RankedListing, Listing } from "@/lib/discovery/types";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
 
@@ -20,6 +20,7 @@ export function WorkCard({
   showActions = false,
   creatorName,
   trackImpression = true,
+  footer,
 }: {
   listing: Listing;
   emerging?: boolean;
@@ -28,6 +29,7 @@ export function WorkCard({
   showActions?: boolean;
   creatorName?: string;
   trackImpression?: boolean;
+  footer?: ReactNode;
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
@@ -43,9 +45,56 @@ export function WorkCard({
     .filter(Boolean)
     .join(" ");
 
+  const meta = (
+    <>
+      <div className="work-tile__badges">
+        {emerging ? <span className="badge emerging">Emerging</span> : null}
+        {featured ? <span className="badge featured">Featured</span> : null}
+        {bucket === "sold" ? (
+          <span className="badge featured">Sold</span>
+        ) : bucket && bucket !== "featured" ? (
+          <span className="badge">{bucket.replace("_", " ")}</span>
+        ) : null}
+        <span className="badge">{listing.chain}</span>
+        <span className="badge">{listing.type.replace("_", " ")}</span>
+        {bucket !== "sold" && !featured ? (
+          <span className="badge">{listing.stage.replace("_", " ")}</span>
+        ) : null}
+      </div>
+      <h3 className="display work-tile__title">
+        <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
+      </h3>
+      <p className="work-tile__meta">
+        {creatorName ? (
+          <>
+            <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
+            {" · "}
+          </>
+        ) : null}
+        {listing.medium}
+        {bucket === "sold" && listing.priceUsd != null
+          ? ` · sold $${listing.priceUsd}`
+          : listing.priceUsd != null
+            ? ` · $${listing.priceUsd}`
+            : " · auction"}
+        {score != null ? ` · score ${score.toFixed(1)}` : ""}
+      </p>
+      {showActions ? (
+        <ListingActions
+          listingId={listing.id}
+          creatorId={listing.creatorId}
+          priceUsd={listing.priceUsd}
+          stage={listing.stage}
+        />
+      ) : null}
+      {footer ? <div className="work-tile__footer">{footer}</div> : null}
+    </>
+  );
+
   return (
     <article
       className={tileClass}
+      data-tile={featured ? "featured" : "compact"}
       onMouseEnter={() => {
         if (!featured && !spinning) setSpinning(true);
       }}
@@ -62,7 +111,12 @@ export function WorkCard({
       {trackImpression ? (
         <ImpressionTracker listingId={listing.id} bucket={bucket} />
       ) : null}
-      <Link href={`/listings/${listing.id}`} style={{ display: "block" }}>
+      <Link
+        href={`/listings/${listing.id}`}
+        className="work-tile__media-link"
+        tabIndex={-1}
+        aria-hidden
+      >
         <div
           className="work-media"
           style={
@@ -81,48 +135,7 @@ export function WorkCard({
           }
         />
       </Link>
-      <div className="work-tile__body">
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.55rem" }}>
-          {emerging ? <span className="badge emerging">Emerging</span> : null}
-          {featured ? <span className="badge featured">Featured</span> : null}
-          {bucket === "sold" ? (
-            <span className="badge featured">Sold</span>
-          ) : bucket && bucket !== "featured" ? (
-            <span className="badge">{bucket.replace("_", " ")}</span>
-          ) : null}
-          <span className="badge">{listing.chain}</span>
-          <span className="badge">{listing.type.replace("_", " ")}</span>
-          {bucket !== "sold" && !featured ? (
-            <span className="badge">{listing.stage.replace("_", " ")}</span>
-          ) : null}
-        </div>
-        <h3 className="display work-tile__title">
-          <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
-        </h3>
-        <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem" }}>
-          {creatorName ? (
-            <>
-              <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
-              {" · "}
-            </>
-          ) : null}
-          {listing.medium}
-          {bucket === "sold" && listing.priceUsd != null
-            ? ` · sold $${listing.priceUsd}`
-            : listing.priceUsd != null
-              ? ` · $${listing.priceUsd}`
-              : " · auction"}
-          {score != null ? ` · score ${score.toFixed(1)}` : ""}
-        </p>
-        {showActions ? (
-          <ListingActions
-            listingId={listing.id}
-            creatorId={listing.creatorId}
-            priceUsd={listing.priceUsd}
-            stage={listing.stage}
-          />
-        ) : null}
-      </div>
+      <div className="work-tile__body">{meta}</div>
     </article>
   );
 }

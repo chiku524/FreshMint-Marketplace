@@ -1,3 +1,4 @@
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { getDropCalendar } from "@/lib/marketplace/calendar";
 
@@ -60,38 +61,44 @@ export default async function CalendarPage() {
       <h2 className="display" style={{ fontSize: "1.5rem" }}>
         Open editions
       </h2>
-      <div className="lane-rail" style={{ margin: "1rem 0 2.5rem" }}>
+      <PuzzleRail style={{ margin: "1rem 0 2.5rem" }}>
         {cal.openEditions
           .filter((e) => e.status !== "ended")
           .map((e) => (
-            <div key={e.listing.id}>
-              <WorkCard
-                listing={e.listing}
-                bucket={e.status}
-                showActions
-              />
-              <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
-                {fmt(e.startsAt)} → {fmt(e.endsAt)}
-              </p>
-            </div>
+            <WorkCard
+              key={e.listing.id}
+              listing={e.listing}
+              bucket={e.status}
+              showActions
+              footer={
+                <>
+                  {fmt(e.startsAt)} → {fmt(e.endsAt)}
+                </>
+              }
+            />
           ))}
-      </div>
+      </PuzzleRail>
 
       <h2 className="display" style={{ fontSize: "1.5rem" }}>
         Auctions
       </h2>
-      <div className="lane-rail" style={{ marginTop: "1rem" }}>
+      <PuzzleRail style={{ marginTop: "1rem" }}>
         {cal.auctions
           .filter((e) => e.status !== "ended")
           .map((e) => (
-            <div key={e.listing.id}>
-              <WorkCard listing={e.listing} bucket={e.status} showActions />
-              <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
-                {fmt(e.startsAt)} → {fmt(e.endsAt)}
-              </p>
-            </div>
+            <WorkCard
+              key={e.listing.id}
+              listing={e.listing}
+              bucket={e.status}
+              showActions
+              footer={
+                <>
+                  {fmt(e.startsAt)} → {fmt(e.endsAt)}
+                </>
+              }
+            />
           ))}
-      </div>
+      </PuzzleRail>
     </div>
   );
 }

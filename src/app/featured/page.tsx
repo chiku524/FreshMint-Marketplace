@@ -1,3 +1,4 @@
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { RankedWorkCard } from "@/components/WorkCard";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
@@ -18,11 +19,11 @@ export default async function FeaturedPage() {
         Featured dominance does not buy Rising monopoly — Emerging Rising stays
         algorithmically reserved.
       </p>
-      <div className="lane-rail">
+      <PuzzleRail>
         {featured.map((item) => (
           <RankedWorkCard key={item.listing.id} item={item} />
         ))}
-      </div>
+      </PuzzleRail>
     </div>
   );
 }

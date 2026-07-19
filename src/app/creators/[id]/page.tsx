@@ -1,4 +1,5 @@
 import { FollowButton } from "@/components/FollowButton";
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
@@ -82,7 +83,7 @@ export default async function CreatorProfilePage({
       {works.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>No public listings yet.</p>
       ) : (
-        <div className="lane-rail">
+        <PuzzleRail>
           {works.map((listing) => (
             <WorkCard
               key={listing.id}
@@ -92,7 +93,7 @@ export default async function CreatorProfilePage({
               showActions
             />
           ))}
-        </div>
+        </PuzzleRail>
       )}
     </div>
   );

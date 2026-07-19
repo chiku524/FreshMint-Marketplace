@@ -1,5 +1,6 @@
-import { WorkCard } from "@/components/WorkCard";
 import { OpenLaneFilters } from "@/components/OpenLaneFilters";
+import { PuzzleRail } from "@/components/PuzzleRail";
+import { WorkCard } from "@/components/WorkCard";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ export default async function OpenLanePage({
           No works match these filters. Clear filters or soft-launch something new.
         </p>
       ) : (
-        <div className="lane-rail">
+        <PuzzleRail>
           {items.map((listing) => (
             <WorkCard
               key={listing.id}
@@ -69,7 +70,7 @@ export default async function OpenLanePage({
               }
             />
           ))}
-        </div>
+        </PuzzleRail>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { RankedWorkCard } from "@/components/WorkCard";
 import { emergingShare } from "@/lib/discovery";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -30,7 +31,7 @@ export default async function RisingPage() {
           eligibility.
         </p>
       ) : (
-        <div className="lane-rail">
+        <PuzzleRail>
           {rising.map((item) => (
             <RankedWorkCard
               key={item.listing.id}
@@ -40,7 +41,7 @@ export default async function RisingPage() {
               }
             />
           ))}
-        </div>
+        </PuzzleRail>
       )}
     </div>
   );

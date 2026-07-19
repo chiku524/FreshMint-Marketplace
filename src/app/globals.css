@@ -197,28 +197,28 @@ a {
   text-shadow: 0 0 28px rgba(110, 207, 154, 0.08);
 }
 
+/* Puzzle mosaic: unit cells fill the rail; featured = 2×2, compact = 1×1 */
 .lane-rail {
+  --rail-cols: 4;
+  --rail-rows: 2;
+  --rail-gap: 0.45rem;
   display: grid;
-  gap: 0.85rem;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  width: 100%;
+  gap: var(--rail-gap);
+  grid-template-columns: repeat(var(--rail-cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rail-rows), minmax(0, 1fr));
+  grid-auto-flow: dense;
+  aspect-ratio: var(--rail-cols) / var(--rail-rows);
   perspective: 1200px;
-}
-
-@media (min-width: 700px) {
-  .lane-rail {
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 1rem;
-  }
-}
-
-@media (min-width: 1100px) {
-  .lane-rail {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  }
 }
 
 .work-tile {
   position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line);
   background:
@@ -230,23 +230,53 @@ a {
   transform-style: preserve-3d;
 }
 
+.work-tile__media-link {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
 .work-tile__body {
-  padding: 0.9rem 1rem 1.1rem;
+  padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.work-tile__badges {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
 }
 
 .work-tile__title {
-  margin: 0 0 0.25rem;
-  font-size: 1.15rem;
+  margin: 0 0 0.2rem;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.work-tile__meta {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+}
+
+.work-tile__footer {
+  margin-top: 0.35rem;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .work-tile--featured {
+  grid-column: span 2;
+  grid-row: span 2;
   overflow: hidden;
 }
 
-@media (min-width: 700px) {
-  .work-tile--featured {
-    grid-column: span 2;
-  }
+.work-tile--featured .work-media {
+  min-height: 0;
+  height: 100%;
+  aspect-ratio: auto;
 }
 
 .work-tile--featured:hover {
@@ -259,30 +289,69 @@ a {
 }
 
 .work-tile--compact {
-  overflow: visible;
-  font-size: 0.9rem;
+  grid-column: span 1;
+  grid-row: span 1;
+  overflow: hidden;
+  font-size: 0.85rem;
 }
 
-.work-tile--compact .work-tile__body {
-  padding: 0.65rem 0.75rem 0.85rem;
-}
-
-.work-tile--compact .work-tile__title {
-  font-size: 0.95rem;
+.work-tile--compact .work-tile__media-link {
+  position: absolute;
+  inset: 0;
 }
 
 .work-tile--compact .work-media {
-  aspect-ratio: 1 / 1;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.work-tile--compact .work-tile__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 0.55rem 0.6rem 0.6rem;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(5, 8, 7, 0.55) 28%,
+    rgba(5, 8, 7, 0.92) 100%
+  );
+  pointer-events: none;
+}
+
+.work-tile--compact .work-tile__body a,
+.work-tile--compact .work-tile__body button {
+  pointer-events: auto;
+}
+
+.work-tile--compact .work-tile__title {
+  font-size: 0.86rem;
+}
+
+.work-tile--compact .work-tile__meta {
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-tile--compact .work-tile__badges {
+  margin-bottom: 0.25rem;
+  gap: 0.25rem;
 }
 
 .work-tile--compact .badge {
-  font-size: 0.64rem;
-  padding: 0.12rem 0.4rem;
+  font-size: 0.58rem;
+  padding: 0.08rem 0.32rem;
 }
 
 .work-tile--compact:hover,
 .work-tile--compact.is-spinning {
   z-index: 3;
+  overflow: visible;
   border-color: rgba(110, 207, 154, 0.4);
   box-shadow:
     0 0 0 1px rgba(110, 207, 154, 0.12),
@@ -304,11 +373,19 @@ a {
 }
 
 .work-media {
-  aspect-ratio: 4 / 5;
+  width: 100%;
+  height: 100%;
   background:
     linear-gradient(135deg, rgba(77, 184, 132, 0.22), transparent 42%),
     linear-gradient(320deg, rgba(201, 149, 58, 0.12), transparent 48%),
     #0a100e;
+}
+
+@media (max-width: 519px) {
+  .work-tile--featured {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
 }
 
 .badge {

@@ -1,3 +1,4 @@
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
@@ -30,11 +31,11 @@ export default async function ShelvesPage() {
               Curated by {curator?.displayName ?? shelf.curatorId} ·{" "}
               {shelf.followerIds.length} followers
             </p>
-            <div className="lane-rail">
+            <PuzzleRail>
               {listings.map((listing) => (
                 <WorkCard key={listing.id} listing={listing} showActions />
               ))}
-            </div>
+            </PuzzleRail>
           </section>
         );
       })}

@@ -18,25 +18,18 @@ export function SoldAuctionCard({
   creatorName?: string;
 }) {
   return (
-    <div style={{ display: "grid", gap: "0.35rem" }}>
-      <WorkCard
-        listing={{ ...item.listing, priceUsd: item.amountUsd }}
-        bucket="sold"
-        showActions={false}
-        creatorName={creatorName}
-        trackImpression={false}
-      />
-      <p
-        style={{
-          margin: 0,
-          padding: "0 0.15rem",
-          color: "var(--ink-muted)",
-          fontSize: "0.85rem",
-        }}
-      >
-        Cleared {formatSoldAt(item.soldAt)} · hammer ${item.amountUsd} · collected by{" "}
-        <Link href={`/creators/${item.buyerId}`}>{item.buyerName}</Link>
-      </p>
-    </div>
+    <WorkCard
+      listing={{ ...item.listing, priceUsd: item.amountUsd }}
+      bucket="sold"
+      showActions={false}
+      creatorName={creatorName}
+      trackImpression={false}
+      footer={
+        <>
+          Cleared {formatSoldAt(item.soldAt)} · hammer ${item.amountUsd} · collected
+          by <Link href={`/creators/${item.buyerId}`}>{item.buyerName}</Link>
+        </>
+      }
+    />
   );
 }

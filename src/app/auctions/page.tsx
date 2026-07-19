@@ -1,8 +1,9 @@
+import { PuzzleRail } from "@/components/PuzzleRail";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { WorkCard } from "@/components/WorkCard";
+import { selectLiveAuctionStrip } from "@/lib/discovery";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { listSoldAuctions } from "@/lib/marketplace/sold-auctions";
-import { selectLiveAuctionStrip } from "@/lib/discovery";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function AuctionsPage() {
             for upcoming starts.
           </p>
         ) : (
-          <div className="lane-rail">
+          <PuzzleRail>
             {live.map((listing) => (
               <WorkCard
                 key={listing.id}
@@ -52,7 +53,7 @@ export default async function AuctionsPage() {
                 }
               />
             ))}
-          </div>
+          </PuzzleRail>
         )}
       </section>
 
@@ -70,7 +71,7 @@ export default async function AuctionsPage() {
             here.
           </p>
         ) : (
-          <div className="lane-rail">
+          <PuzzleRail>
             {sold.map((item) => (
               <SoldAuctionCard
                 key={`${item.listing.id}-${item.soldAt}`}
@@ -80,7 +81,7 @@ export default async function AuctionsPage() {
                 }
               />
             ))}
-          </div>
+          </PuzzleRail>
         )}
       </section>
     </div>
