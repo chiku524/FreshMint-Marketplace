@@ -63,6 +63,7 @@ export default function RootLayout({
               <Link href="/studio">Studio</Link>
               <Link href="/moderate">Moderate</Link>
               <Link href="/metrics">Metrics</Link>
+              <Link href="/docs">Docs</Link>
             </nav>
           </div>
           <WalletBar />

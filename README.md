@@ -29,6 +29,8 @@ For hosted previews, set `DATABASE_URL` to a managed Postgres URL (Neon, Supabas
 
 Step-by-step Vercel Blob + Neon/Prisma Postgres setup: [`docs/vercel-hosting.md`](docs/vercel-hosting.md).
 
+Discovery system reference: [`docs/discovery.md`](docs/discovery.md) · live in-app: [`/docs`](https://fresh-mint-marketplace.vercel.app/docs).
+
 ### Object storage
 
 - With `BLOB_READ_WRITE_TOKEN` (Vercel Blob) → uploads go to Blob CDN URLs.
