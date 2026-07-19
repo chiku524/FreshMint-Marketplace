@@ -7,6 +7,13 @@ export interface SybilCheckResult {
   trustWeight: number;
 }
 
+async function usingMemory(): Promise<boolean> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  return mode === "memory" || isMemoryMode();
+}
+
 /**
  * Soft sybil resistance for engagement signals.
  * Does not block browsing; reduces or rejects farmable actions.
@@ -17,11 +24,32 @@ export async function checkSignalSybil(input: {
   type: string;
 }): Promise<SybilCheckResult> {
   if (!input.viewerId) {
-    // Anonymous: allow low-trust impressions/dwell only.
     if (input.type === "save" || input.type === "follow") {
       return { allowed: false, reason: "login_required", trustWeight: 0 };
     }
     return { allowed: true, trustWeight: 0.35 };
+  }
+
+  if (await usingMemory()) {
+    const { getMemoryEngine } = await import("@/lib/data/memory-store");
+    const engine = getMemoryEngine();
+    const listing = engine.state.listings.get(input.listingId);
+    const viewer = engine.state.creators.get(input.viewerId);
+    if (!listing || !viewer) {
+      return { allowed: false, reason: "viewer_missing", trustWeight: 0 };
+    }
+    if (viewer.flagged || viewer.washCluster) {
+      return { allowed: false, reason: "viewer_flagged", trustWeight: 0 };
+    }
+    if (listing.creatorId === input.viewerId) {
+      if (input.type === "save" || input.type === "follow") {
+        return { allowed: false, reason: "self_engagement", trustWeight: 0 };
+      }
+      return { allowed: true, trustWeight: 0.1 };
+    }
+    const accountAge = Date.now() - viewer.walletCreatedAt;
+    let trustWeight = accountAge < DISCOVERY_CONFIG.sybil.newAccountAgeMs ? 0.4 : 1;
+    return { allowed: true, trustWeight };
   }
 
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -79,7 +107,6 @@ export async function checkSignalSybil(input: {
     return { allowed: false, reason: "viewer_flagged", trustWeight: 0 };
   }
 
-  // Self-engagement on own listing is ignored for ranking weight.
   const listing = await prisma.listing.findUnique({
     where: { id: input.listingId },
     select: { creatorId: true, uniqueViewers: true },
@@ -114,6 +141,10 @@ export async function detectWashRisk(input: {
     return { wash: true, reason: "self_purchase" };
   }
 
+  if (await usingMemory()) {
+    return { wash: false };
+  }
+
   const recentBuys = await prisma.purchase.count({
     where: {
       buyerId: input.buyerId,
@@ -139,6 +170,15 @@ export async function detectWashRisk(input: {
 }
 
 export async function maybeFlagWashCluster(userId: string): Promise<void> {
+  if (await usingMemory()) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const creator = getMemoryState().creators.get(userId);
+    if (creator) {
+      creator.washCluster = true;
+      creator.flagged = true;
+    }
+    return;
+  }
   await prisma.user.update({
     where: { id: userId },
     data: { washCluster: true, flagged: true },

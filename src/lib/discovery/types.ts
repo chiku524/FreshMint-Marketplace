@@ -63,6 +63,8 @@ export interface Listing {
   styleTags: string[];
   /** Perceptual / content hash for duplicate detection. */
   mediaHash: string;
+  /** Public media URL (Blob or /uploads/…); optional for seed/text listings. */
+  mediaUrl?: string | null;
   metadataComplete: boolean;
   originalMedia: boolean;
   createdAt: number;

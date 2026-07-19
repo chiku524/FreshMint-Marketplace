@@ -13,11 +13,17 @@ export default async function OpenLanePage({
   const chain = typeof sp.chain === "string" ? sp.chain : undefined;
   const q = typeof sp.q === "string" ? sp.q : undefined;
   const type = typeof sp.type === "string" ? sp.type : undefined;
+  const medium = typeof sp.medium === "string" ? sp.medium : undefined;
+  const minPrice = typeof sp.minPrice === "string" ? sp.minPrice : undefined;
+  const maxPrice = typeof sp.maxPrice === "string" ? sp.maxPrice : undefined;
 
   const engine = await getDiscoveryEngine();
   const items = engine.buildOpenLane({
     chain: chain === "evm" || chain === "solana" ? chain : undefined,
     query: q,
+    medium,
+    minPriceUsd: minPrice ? Number(minPrice) : undefined,
+    maxPriceUsd: maxPrice ? Number(maxPrice) : undefined,
     type:
       type === "single" ||
       type === "collection" ||
@@ -36,15 +42,35 @@ export default async function OpenLanePage({
         Permissionless browse across EVM and Solana. Soft-launched works appear
         here — not dumped onto the homepage firehose.
       </p>
-      <OpenLaneFilters chain={chain} q={q} type={type} />
+      <OpenLaneFilters
+        chain={chain}
+        q={q}
+        type={type}
+        medium={medium}
+        minPrice={minPrice}
+        maxPrice={maxPrice}
+      />
       <p style={{ color: "var(--ink-muted)", margin: "1rem 0 1.5rem" }}>
         {items.length} works
       </p>
-      <div className="lane-rail">
-        {items.map((listing) => (
-          <WorkCard key={listing.id} listing={listing} showActions />
-        ))}
-      </div>
+      {items.length === 0 ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          No works match these filters. Clear filters or soft-launch something new.
+        </p>
+      ) : (
+        <div className="lane-rail">
+          {items.map((listing) => (
+            <WorkCard
+              key={listing.id}
+              listing={listing}
+              showActions
+              creatorName={
+                engine.state.creators.get(listing.creatorId)?.displayName
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

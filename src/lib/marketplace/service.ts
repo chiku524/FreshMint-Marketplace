@@ -121,6 +121,7 @@ export async function createListingForUser(input: {
     medium: input.medium,
     styleTags: input.styleTags,
     mediaHash,
+    mediaUrl,
     metadataComplete: input.metadataComplete ?? true,
     originalMedia: input.originalMedia ?? true,
     createdAt: now,
@@ -375,6 +376,13 @@ export async function transitionListingStage(
   };
 }
 
+async function inMemoryMode(): Promise<boolean> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  return mode === "memory" || isMemoryMode();
+}
+
 export async function recordSignal(input: {
   listingId: string;
   viewerId?: string | null;
@@ -382,12 +390,6 @@ export async function recordSignal(input: {
   dwellMs?: number;
   bucket?: string;
 }) {
-  const listing = await prisma.listing.findUnique({
-    where: { id: input.listingId },
-    include: { creator: { include: { wallets: true } } },
-  });
-  if (!listing) return { ok: false as const, error: "not_found" };
-
   const sybil = await checkSignalSybil({
     viewerId: input.viewerId,
     listingId: input.listingId,
@@ -396,6 +398,54 @@ export async function recordSignal(input: {
   if (!sybil.allowed) {
     return { ok: false as const, error: sybil.reason ?? "sybil_blocked" };
   }
+  const w = sybil.trustWeight;
+
+  if (await inMemoryMode()) {
+    const engine = await getDiscoveryEngine();
+    const listing = engine.state.listings.get(input.listingId);
+    const creator = listing
+      ? engine.state.creators.get(listing.creatorId)
+      : null;
+    if (!listing || !creator) return { ok: false as const, error: "not_found" };
+    const emerging = isEmergingListing(listing, creator).emerging;
+    const s = { ...listing.signals };
+    if (
+      input.type === "impression" ||
+      input.type === "dwell" ||
+      input.type === "meaningful_view"
+    ) {
+      s.impressionsToday += 1;
+      s.impressionsThisWeek += 1;
+      if (w >= 0.5) s.uniqueViewers += 1;
+    }
+    if (input.dwellMs) s.dwellMsTotal += Math.round(input.dwellMs * w);
+    if (input.type === "save" && w >= 0.4) s.saves += 1;
+    if (input.type === "follow" && w >= 0.4) s.follows += 1;
+    engine.state.listings.set(listing.id, { ...listing, signals: s });
+    if (
+      input.type === "impression" ||
+      input.type === "dwell" ||
+      input.type === "meaningful_view"
+    ) {
+      engine.metrics.record({
+        type:
+          input.type === "meaningful_view" ? "meaningful_view" : "impression",
+        listingId: listing.id,
+        creatorId: listing.creatorId,
+        viewerId: input.viewerId ?? undefined,
+        emerging,
+        bucket: input.bucket,
+        timestamp: Date.now(),
+      });
+    }
+    return { ok: true as const, emerging, trustWeight: w };
+  }
+
+  const listing = await prisma.listing.findUnique({
+    where: { id: input.listingId },
+    include: { creator: { include: { wallets: true } } },
+  });
+  if (!listing) return { ok: false as const, error: "not_found" };
 
   const engineListing = toListing(listing);
   const creatorProfile = {
@@ -419,8 +469,6 @@ export async function recordSignal(input: {
   };
   const emerging = isEmergingListing(engineListing, creatorProfile).emerging;
 
-  // Trust-weighted increments — low-trust sybil accounts move ranking less.
-  const w = sybil.trustWeight;
   const data: Record<string, number> = {};
   if (input.type === "impression" || input.type === "dwell" || input.type === "meaningful_view") {
     data.impressionsToday = listing.impressionsToday + 1;
@@ -457,6 +505,125 @@ export async function recordSignal(input: {
   return { ok: true as const, emerging, trustWeight: w };
 }
 
+/** Persist Follow graph edge (artist) — powers homepage Following mix. */
+export async function followArtist(input: {
+  followerId: string;
+  artistId: string;
+}) {
+  if (input.followerId === input.artistId) {
+    return { ok: false as const, error: "self_follow" };
+  }
+
+  const engine = await getDiscoveryEngine();
+  if (!engine.state.creators.has(input.artistId)) {
+    return { ok: false as const, error: "artist_not_found" };
+  }
+
+  const existing = engine.state.follows.get(input.followerId) ?? {
+    collectorId: input.followerId,
+    followedArtistIds: [],
+    followedCollectorIds: [],
+    followedShelfIds: [],
+  };
+  if (!existing.followedArtistIds.includes(input.artistId)) {
+    existing.followedArtistIds = [...existing.followedArtistIds, input.artistId];
+  }
+  engine.state.follows.set(input.followerId, existing);
+
+  if (!(await inMemoryMode())) {
+    await prisma.follow.upsert({
+      where: {
+        followerId_followeeId_kind: {
+          followerId: input.followerId,
+          followeeId: input.artistId,
+          kind: "artist",
+        },
+      },
+      create: {
+        followerId: input.followerId,
+        followeeId: input.artistId,
+        kind: "artist",
+      },
+      update: {},
+    });
+  }
+
+  return {
+    ok: true as const,
+    followedArtistIds: existing.followedArtistIds,
+  };
+}
+
+export async function unfollowArtist(input: {
+  followerId: string;
+  artistId: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.follows.get(input.followerId);
+  if (existing) {
+    existing.followedArtistIds = existing.followedArtistIds.filter(
+      (id) => id !== input.artistId,
+    );
+    engine.state.follows.set(input.followerId, existing);
+  }
+
+  if (!(await inMemoryMode())) {
+    await prisma.follow.deleteMany({
+      where: {
+        followerId: input.followerId,
+        followeeId: input.artistId,
+        kind: "artist",
+      },
+    });
+  }
+
+  return {
+    ok: true as const,
+    followedArtistIds: existing?.followedArtistIds ?? [],
+  };
+}
+
+export async function confirmOnchainTx(input: {
+  listingId: string;
+  action: "mint" | "buy";
+  txHash: string;
+  buyerId?: string;
+}) {
+  if (!input.txHash || input.txHash.length < 8) {
+    return { ok: false as const, error: "invalid_tx" };
+  }
+
+  if (await inMemoryMode()) {
+    const engine = await getDiscoveryEngine();
+    const listing = engine.state.listings.get(input.listingId);
+    if (!listing) return { ok: false as const, error: "not_found" };
+    return { ok: true as const, txHash: input.txHash, mode: "memory" as const };
+  }
+
+  if (input.action === "mint") {
+    await prisma.listing.update({
+      where: { id: input.listingId },
+      data: { mintTxHash: input.txHash },
+    });
+    return { ok: true as const, txHash: input.txHash };
+  }
+
+  const purchase = await prisma.purchase.findFirst({
+    where: {
+      listingId: input.listingId,
+      ...(input.buyerId ? { buyerId: input.buyerId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (purchase) {
+    await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { txHash: input.txHash },
+    });
+  }
+  return { ok: true as const, txHash: input.txHash };
+}
+
 export async function nominateListingForUser(input: {
   listingId: string;
   nominatorId: string;
@@ -465,6 +632,10 @@ export async function nominateListingForUser(input: {
   const result = engine.nominate(input.listingId, input.nominatorId);
   if (!result.ok || !result.listing || !result.curator) {
     return { ok: false as const, error: result.error ?? "failed" };
+  }
+
+  if (await inMemoryMode()) {
+    return { ok: true as const, listing: result.listing };
   }
 
   await persistListingSignals(input.listingId, {
@@ -543,6 +714,10 @@ export async function reportListingForUser(input: {
   });
   if (!result.ok) return { ok: false as const, error: result.error };
 
+  if (await inMemoryMode()) {
+    return result;
+  }
+
   await prisma.report.create({
     data: {
       listingId: input.listingId,
@@ -574,10 +749,50 @@ export async function purchaseListing(input: {
   buyerId: string;
   amountUsd: number;
 }) {
-  const listing = await prisma.listing.findUnique({ where: { id: input.listingId } });
-  if (!listing || listing.delisted) {
-    return { ok: false as const, error: "unavailable" };
+  const memory = await inMemoryMode();
+  const engine = await getDiscoveryEngine();
+
+  let listingRow: {
+    id: string;
+    creatorId: string;
+    delisted: boolean;
+    chain: Chain;
+    contractAddress: string | null;
+    tokenId: string | null;
+    priceUsd: number | null;
+  } | null = null;
+
+  if (memory) {
+    const l = engine.state.listings.get(input.listingId);
+    if (!l || l.delisted) return { ok: false as const, error: "unavailable" };
+    listingRow = {
+      id: l.id,
+      creatorId: l.creatorId,
+      delisted: l.delisted,
+      chain: l.chain,
+      contractAddress: null,
+      tokenId: null,
+      priceUsd: l.priceUsd,
+    };
+  } else {
+    const listing = await prisma.listing.findUnique({
+      where: { id: input.listingId },
+    });
+    if (!listing || listing.delisted) {
+      return { ok: false as const, error: "unavailable" };
+    }
+    listingRow = {
+      id: listing.id,
+      creatorId: listing.creatorId,
+      delisted: listing.delisted,
+      chain: listing.chain as Chain,
+      contractAddress: listing.contractAddress,
+      tokenId: listing.tokenId,
+      priceUsd: listing.priceUsd,
+    };
   }
+
+  const listing = listingRow;
 
   const wash = await detectWashRisk({
     buyerId: input.buyerId,
@@ -585,31 +800,45 @@ export async function purchaseListing(input: {
   });
   if (wash.wash) {
     await maybeFlagWashCluster(input.buyerId);
-    await prisma.signalEvent.create({
-      data: {
-        type: "rising_abuse",
-        listingId: listing.id,
-        creatorId: listing.creatorId,
-        viewerId: input.buyerId,
-        metaJson: JSON.stringify({ reason: wash.reason, kind: "wash_purchase" }),
-      },
-    });
+    if (!memory) {
+      await prisma.signalEvent.create({
+        data: {
+          type: "rising_abuse",
+          listingId: listing.id,
+          creatorId: listing.creatorId,
+          viewerId: input.buyerId,
+          metaJson: JSON.stringify({
+            reason: wash.reason,
+            kind: "wash_purchase",
+          }),
+        },
+      });
+    }
     return { ok: false as const, error: wash.reason ?? "wash_blocked" };
   }
 
-  const prior = await prisma.purchase.count({
-    where: { buyerId: input.buyerId, listingId: input.listingId },
-  });
-  const isFirst = prior === 0;
-
-  const buyer = await prisma.user.findUnique({
-    where: { id: input.buyerId },
-    include: { wallets: true },
-  });
-  const buyerAddress =
-    buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
-    buyer?.wallets[0]?.address ??
-    "unknown";
+  let isFirst = true;
+  let buyerAddress = "unknown";
+  if (memory) {
+    const buyer = engine.state.creators.get(input.buyerId);
+    buyerAddress =
+      buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
+      buyer?.wallets[0]?.address ??
+      "unknown";
+  } else {
+    const prior = await prisma.purchase.count({
+      where: { buyerId: input.buyerId, listingId: input.listingId },
+    });
+    isFirst = prior === 0;
+    const buyer = await prisma.user.findUnique({
+      where: { id: input.buyerId },
+      include: { wallets: true },
+    });
+    buyerAddress =
+      buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
+      buyer?.wallets[0]?.address ??
+      "unknown";
+  }
 
   const priceWei = String(Math.round(input.amountUsd * 1e15));
   const purchaseIntent =
@@ -631,7 +860,7 @@ export async function purchaseListing(input: {
   let walletTx =
     "walletTx" in purchaseIntent ? purchaseIntent.walletTx : undefined;
 
-  if (listing.chain === "evm") {
+  if (!memory && listing.chain === "evm") {
     const server = await sendEvmBuyWithServerKey({
       tokenId: listing.tokenId ?? "0",
       valueWei: BigInt(priceWei || "0"),
@@ -640,7 +869,7 @@ export async function purchaseListing(input: {
       txHash = server.txHash;
       walletTx = undefined;
     }
-  } else if ("message" in purchaseIntent) {
+  } else if (!memory && "message" in purchaseIntent) {
     const server = await sendSolanaMemoWithServerKey(purchaseIntent.message);
     if (server) {
       txHash = server.txHash;
@@ -652,26 +881,6 @@ export async function purchaseListing(input: {
     txHash = `pending:${listing.id}:${Date.now()}`;
   }
 
-  await prisma.purchase.create({
-    data: {
-      listingId: input.listingId,
-      buyerId: input.buyerId,
-      amountUsd: input.amountUsd,
-      isFirst,
-      txHash,
-      chain: listing.chain,
-    },
-  });
-
-  await prisma.user.update({
-    where: { id: listing.creatorId },
-    data: {
-      completedSales: { increment: 1 },
-      lifetimePrimaryVolumeUsd: { increment: input.amountUsd },
-    },
-  });
-
-  const engine = await getDiscoveryEngine();
   engine.recordPurchase({
     listingId: input.listingId,
     buyerId: input.buyerId,
@@ -680,20 +889,54 @@ export async function purchaseListing(input: {
   });
 
   const creator = engine.state.creators.get(listing.creatorId);
-  const emerging = creator
-    ? isEmergingListing(toListing(listing), creator).emerging
-    : false;
+  if (creator && memory) {
+    creator.completedSales += 1;
+    creator.lifetimePrimaryVolumeUsd += input.amountUsd;
+  }
 
-  await prisma.signalEvent.create({
-    data: {
-      type: isFirst ? "first_purchase" : "purchase",
-      listingId: listing.id,
-      creatorId: listing.creatorId,
-      viewerId: input.buyerId,
-      emerging,
-      metaJson: JSON.stringify({ amountUsd: input.amountUsd, txHash }),
-    },
-  });
+  const domainListing =
+    engine.state.listings.get(listing.id) ??
+    (!memory
+      ? toListing(
+          await prisma.listing.findUniqueOrThrow({ where: { id: listing.id } }),
+        )
+      : null);
+  const emerging =
+    creator && domainListing
+      ? isEmergingListing(domainListing, creator).emerging
+      : false;
+
+  if (!memory) {
+    await prisma.purchase.create({
+      data: {
+        listingId: input.listingId,
+        buyerId: input.buyerId,
+        amountUsd: input.amountUsd,
+        isFirst,
+        txHash,
+        chain: listing.chain,
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: listing.creatorId },
+      data: {
+        completedSales: { increment: 1 },
+        lifetimePrimaryVolumeUsd: { increment: input.amountUsd },
+      },
+    });
+
+    await prisma.signalEvent.create({
+      data: {
+        type: isFirst ? "first_purchase" : "purchase",
+        listingId: listing.id,
+        creatorId: listing.creatorId,
+        viewerId: input.buyerId,
+        emerging,
+        metaJson: JSON.stringify({ amountUsd: input.amountUsd, txHash }),
+      },
+    });
+  }
 
   return { ok: true as const, txHash, isFirst, emerging, walletTx };
 }

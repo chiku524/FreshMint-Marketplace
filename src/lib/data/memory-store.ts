@@ -10,7 +10,7 @@ const globalMemory = globalThis as unknown as {
 export function enableMemoryMode(reason: string): void {
   if (!globalMemory.__freshmintUseMemory) {
     console.warn(
-      `[freshmint] SQLite unavailable (${reason}) — serving in-memory catalog`,
+      `[freshmint] Postgres unavailable (${reason}) — serving in-memory catalog`,
     );
   }
   globalMemory.__freshmintUseMemory = true;

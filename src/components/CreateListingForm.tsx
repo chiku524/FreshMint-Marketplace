@@ -97,6 +97,15 @@ export function CreateListingForm() {
           amountUsd: data.listing.priceUsd ?? undefined,
         });
         if (hash) {
+          await fetch("/api/onchain/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              listingId: data.listing.id,
+              action: "mint",
+              txHash: hash,
+            }),
+          });
           note += ` · on-chain mint ${hash.slice(0, 14)}…`;
         } else {
           note += " · mint intent recorded";

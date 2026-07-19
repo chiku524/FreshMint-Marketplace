@@ -24,11 +24,24 @@ export default async function RisingPage() {
         </strong>
         .
       </p>
-      <div className="lane-rail">
-        {rising.map((item) => (
-          <RankedWorkCard key={item.listing.id} item={item} />
-        ))}
-      </div>
+      {rising.length === 0 ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          Rising is empty right now — soft-launch works and push them to Rising
+          eligibility.
+        </p>
+      ) : (
+        <div className="lane-rail">
+          {rising.map((item) => (
+            <RankedWorkCard
+              key={item.listing.id}
+              item={item}
+              creatorName={
+                engine.state.creators.get(item.listing.creatorId)?.displayName
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -82,7 +82,8 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 - `POST /api/auth/nonce` · `POST /api/auth/verify` · `POST /api/auth/demo`
 - `POST /api/listings` · `POST /api/listings/:id/stage`
 - `POST /api/signals` · `POST /api/nominate` · `POST /api/purchase`
-- `POST /api/media/upload` · `POST /api/onchain/prepare`
+- `POST /api/media/upload` · `POST /api/onchain/prepare` · `POST /api/onchain/confirm`
+- `POST /api/follow` · listing detail `/listings/:id` · creator `/creators/:id`
 - `GET /api/feed` · `/api/rising` · `/api/open` · `/api/metrics` · `/api/health`
 
 ## Principles (enforced in code)

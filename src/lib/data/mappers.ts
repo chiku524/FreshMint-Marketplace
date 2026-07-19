@@ -63,6 +63,7 @@ export function toListing(listing: DbListing): Listing {
     medium: listing.medium,
     styleTags: JSON.parse(listing.styleTagsJson || "[]") as string[],
     mediaHash: listing.mediaHash,
+    mediaUrl: listing.mediaUrl,
     metadataComplete: listing.metadataComplete,
     originalMedia: listing.originalMedia,
     createdAt: listing.createdAt.getTime(),

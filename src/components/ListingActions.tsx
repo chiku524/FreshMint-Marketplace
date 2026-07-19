@@ -4,12 +4,26 @@ import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+async function confirmTx(
+  listingId: string,
+  action: "mint" | "buy",
+  txHash: string,
+) {
+  await fetch("/api/onchain/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ listingId, action, txHash }),
+  });
+}
+
 export function ListingActions({
   listingId,
+  creatorId,
   priceUsd,
   stage,
 }: {
   listingId: string;
+  creatorId?: string;
   priceUsd: number | null;
   stage: string;
 }) {
@@ -33,25 +47,23 @@ export function ListingActions({
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.6rem" }}>
-      <button
-        type="button"
-        className="badge"
-        style={{ cursor: "pointer", background: "transparent" }}
-        onClick={() =>
-          void post("/api/signals", {
-            listingId,
-            type: "meaningful_view",
-            dwellMs: 4000,
-          }).then((d) => {
-            if (d) {
-              setMsg("Done");
-              router.refresh();
-            }
-          })
-        }
-      >
-        Record view
-      </button>
+      {creatorId ? (
+        <button
+          type="button"
+          className="badge emerging"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() =>
+            void post("/api/follow", { artistId: creatorId }).then((d) => {
+              if (d) {
+                setMsg("Following");
+                router.refresh();
+              }
+            })
+          }
+        >
+          Follow
+        </button>
+      ) : null}
       <button
         type="button"
         className="badge"
@@ -59,7 +71,7 @@ export function ListingActions({
         onClick={() =>
           void post("/api/signals", { listingId, type: "save" }).then((d) => {
             if (d) {
-              setMsg("Done");
+              setMsg("Saved");
               router.refresh();
             }
           })
@@ -74,7 +86,7 @@ export function ListingActions({
         onClick={() =>
           void post("/api/nominate", { listingId }).then((d) => {
             if (d) {
-              setMsg("Done");
+              setMsg("Nominated (−10 curator pts)");
               router.refresh();
             }
           })
@@ -102,7 +114,10 @@ export function ListingActions({
                   action: "buy",
                   amountUsd: priceUsd,
                 });
-                if (hash) note = `On-chain buy · ${hash.slice(0, 14)}…`;
+                if (hash) {
+                  await confirmTx(listingId, "buy", hash);
+                  note = `On-chain buy · ${hash.slice(0, 14)}…`;
+                }
               } catch (e) {
                 note += ` · wallet: ${e instanceof Error ? e.message : "skipped"}`;
               }
@@ -124,7 +139,7 @@ export function ListingActions({
               target: "rising_eligible",
             }).then((d) => {
               if (d) {
-                setMsg("Done");
+                setMsg("Pushed to Rising");
                 router.refresh();
               }
             })
@@ -136,11 +151,15 @@ export function ListingActions({
       <button
         type="button"
         className="badge"
-        style={{ cursor: "pointer", background: "transparent", color: "var(--danger)" }}
+        style={{
+          cursor: "pointer",
+          background: "transparent",
+          color: "var(--danger)",
+        }}
         onClick={() =>
           void post("/api/report", { listingId, reason: "spam" }).then((d) => {
             if (d) {
-              setMsg("Done");
+              setMsg("Reported");
               router.refresh();
             }
           })

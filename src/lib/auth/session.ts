@@ -3,8 +3,27 @@ import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import type { CreatorProfile } from "@/lib/discovery/types";
 
 const COOKIE = "freshmint_session";
+
+export type SessionUser = {
+  id: string;
+  displayName: string;
+  wallets: { chain: string; address: string }[];
+  curatorScore: number;
+  verifiedCreator: boolean;
+  role: string;
+  flagged: boolean;
+  washCluster: boolean;
+  firstListingAt: Date | null;
+  lifetimePrimaryVolumeUsd: number;
+  completedSales: number;
+  walletCreatedAt: Date;
+  risingEntriesThisWeek: number;
+  openLaneListingsToday: number;
+  establishedBadge: boolean;
+};
 
 function secretKey() {
   const secret = process.env.AUTH_SECRET;
@@ -18,18 +37,58 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+function creatorToSession(creator: CreatorProfile): SessionUser {
+  return {
+    id: creator.id,
+    displayName: creator.displayName,
+    wallets: creator.wallets,
+    curatorScore: creator.curatorScore,
+    verifiedCreator: creator.verifiedCreator,
+    role: creator.id.startsWith("mod-")
+      ? "moderator"
+      : creator.id.startsWith("curator-")
+        ? "editor"
+        : "member",
+    flagged: creator.flagged,
+    washCluster: creator.washCluster,
+    firstListingAt: creator.firstListingAt
+      ? new Date(creator.firstListingAt)
+      : null,
+    lifetimePrimaryVolumeUsd: creator.lifetimePrimaryVolumeUsd,
+    completedSales: creator.completedSales,
+    walletCreatedAt: new Date(creator.walletCreatedAt),
+    risingEntriesThisWeek: creator.risingEntriesThisWeek,
+    openLaneListingsToday: creator.openLaneListingsToday,
+    establishedBadge: creator.establishedBadge,
+  };
+}
+
+/** Persist session cookie. In memory mode, JWT-only (no Session table). */
 export async function createSession(userId: string): Promise<string> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  await prisma.session.create({
-    data: {
-      userId,
-      tokenHash: hashToken(token),
-      expiresAt,
-    },
-  });
+  const tokenHash = hashToken(token);
 
-  const jwt = await new SignJWT({ uid: userId, t: hashToken(token) })
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+
+  if (!memory) {
+    await prisma.session.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+      },
+    });
+  }
+
+  const jwt = await new SignJWT({
+    uid: userId,
+    t: tokenHash,
+    mem: memory ? 1 : 0,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("7d")
     .setIssuedAt()
@@ -54,7 +113,8 @@ export async function destroySession(): Promise<void> {
     try {
       const { payload } = await jwtVerify(jwt, secretKey());
       const tokenHash = String(payload.t ?? "");
-      if (tokenHash) {
+      const { isMemoryMode } = await import("@/lib/data/memory-store");
+      if (tokenHash && !isMemoryMode() && !payload.mem) {
         await prisma.session.deleteMany({ where: { tokenHash } });
       }
     } catch {
@@ -64,7 +124,7 @@ export async function destroySession(): Promise<void> {
   jar.set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
-export async function getSessionUser() {
+export async function getSessionUser(): Promise<SessionUser | null> {
   const jar = await cookies();
   const jwt = jar.get(COOKIE)?.value;
   if (!jwt) return null;
@@ -74,6 +134,19 @@ export async function getSessionUser() {
     const tokenHash = String(payload.t ?? "");
     if (!userId || !tokenHash) return null;
 
+    const { ensureDatabaseReady } = await import("@/lib/db-ready");
+    const { getMemoryState, isMemoryMode } = await import(
+      "@/lib/data/memory-store"
+    );
+    const mode = await ensureDatabaseReady();
+    const memory = mode === "memory" || isMemoryMode() || payload.mem === 1;
+
+    if (memory) {
+      const creator = getMemoryState().creators.get(userId);
+      if (!creator) return null;
+      return creatorToSession(creator);
+    }
+
     const session = await prisma.session.findUnique({
       where: { tokenHash },
       include: { user: { include: { wallets: true } } },
@@ -82,7 +155,24 @@ export async function getSessionUser() {
       return null;
     }
     if (session.userId !== userId) return null;
-    return session.user;
+    const u = session.user;
+    return {
+      id: u.id,
+      displayName: u.displayName,
+      wallets: u.wallets,
+      curatorScore: u.curatorScore,
+      verifiedCreator: u.verifiedCreator,
+      role: u.role,
+      flagged: u.flagged,
+      washCluster: u.washCluster,
+      firstListingAt: u.firstListingAt,
+      lifetimePrimaryVolumeUsd: u.lifetimePrimaryVolumeUsd,
+      completedSales: u.completedSales,
+      walletCreatedAt: u.walletCreatedAt,
+      risingEntriesThisWeek: u.risingEntriesThisWeek,
+      openLaneListingsToday: u.openLaneListingsToday,
+      establishedBadge: u.establishedBadge,
+    };
   } catch {
     return null;
   }

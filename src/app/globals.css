@@ -169,3 +169,9 @@ a {
 .hero-orb {
   animation: aperture-breathe 6s ease-in-out infinite;
 }
+
+@media (max-width: 800px) {
+  .listing-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

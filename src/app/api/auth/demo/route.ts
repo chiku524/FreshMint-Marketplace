@@ -35,12 +35,7 @@ export async function POST(req: NextRequest) {
     if (!creator) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    // Best-effort session; ignore prisma failures in memory mode.
-    try {
-      await createSession(creator.id);
-    } catch {
-      // Cookie session may still fail without DB — client can use demo id locally.
-    }
+    await createSession(creator.id);
     return NextResponse.json({
       ok: true,
       mode: "memory",
