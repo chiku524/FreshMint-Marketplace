@@ -973,7 +973,17 @@ export async function purchaseListing(input: {
       ? isEmergingListing(domainListing, creator).emerging
       : false;
 
-  if (!memory) {
+  if (memory) {
+    const { recordMemoryPurchase } = await import("@/lib/data/memory-store");
+    recordMemoryPurchase({
+      listingId: listing.id,
+      buyerId: input.buyerId,
+      amountUsd: input.amountUsd,
+      soldAt: Date.now(),
+      txHash,
+      chain: listing.chain,
+    });
+  } else {
     await prisma.purchase.create({
       data: {
         listingId: input.listingId,

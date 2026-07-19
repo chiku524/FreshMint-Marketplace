@@ -56,10 +56,16 @@ export function WorkCard({
       <div style={{ padding: "0.9rem 1rem 1.1rem" }}>
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.55rem" }}>
           {emerging ? <span className="badge emerging">Emerging</span> : null}
-          {bucket ? <span className="badge">{bucket.replace("_", " ")}</span> : null}
+          {bucket === "sold" ? (
+            <span className="badge featured">Sold</span>
+          ) : bucket ? (
+            <span className="badge">{bucket.replace("_", " ")}</span>
+          ) : null}
           <span className="badge">{listing.chain}</span>
           <span className="badge">{listing.type.replace("_", " ")}</span>
-          <span className="badge">{listing.stage.replace("_", " ")}</span>
+          {bucket !== "sold" ? (
+            <span className="badge">{listing.stage.replace("_", " ")}</span>
+          ) : null}
         </div>
         <h3 className="display" style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>
           <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
@@ -72,7 +78,11 @@ export function WorkCard({
             </>
           ) : null}
           {listing.medium}
-          {listing.priceUsd != null ? ` · $${listing.priceUsd}` : " · auction"}
+          {bucket === "sold" && listing.priceUsd != null
+            ? ` · sold $${listing.priceUsd}`
+            : listing.priceUsd != null
+              ? ` · $${listing.priceUsd}`
+              : " · auction"}
           {score != null ? ` · score ${score.toFixed(1)}` : ""}
         </p>
         {showActions ? (

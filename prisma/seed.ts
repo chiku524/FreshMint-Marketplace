@@ -303,6 +303,52 @@ async function main() {
         impressionsThisWeek: 200,
       },
     }),
+    prisma.listing.create({
+      data: {
+        id: "listing-fresh-sold-auction",
+        title: "First Frost Plate",
+        description: "Successfully cleared auction — early paper study.",
+        creatorId: fresh.id,
+        type: "auction",
+        chain: "evm",
+        stage: "featured",
+        priceUsd: 180,
+        medium: "digital_ink",
+        styleTagsJson: JSON.stringify(["paper", "frost"]),
+        mediaHash: "soldfreshauction001hash0123456789ab",
+        softLaunchedAt: new Date(now - 11 * day),
+        risingEligibleAt: new Date(now - 10 * day),
+        featuredAt: new Date(now - 3 * day),
+        auctionStartsAt: new Date(now - 5 * day),
+        auctionEndsAt: new Date(now - 2 * day),
+        saves: 11,
+        uniqueViewers: 48,
+        impressionsThisWeek: 160,
+        nominationScore: 2,
+      },
+    }),
+    prisma.listing.create({
+      data: {
+        id: "listing-glitch-sold-auction",
+        title: "Petal Static #7",
+        description: "Cleared auction from the Static Garden series.",
+        creatorId: glitch.id,
+        type: "auction",
+        chain: "solana",
+        stage: "rising_eligible",
+        priceUsd: 95,
+        medium: "generative",
+        styleTagsJson: JSON.stringify(["glitch", "petal"]),
+        mediaHash: "soldglitchauction002hash0123456789",
+        softLaunchedAt: new Date(now - 13 * day),
+        risingEligibleAt: new Date(now - 12 * day),
+        auctionStartsAt: new Date(now - 9 * day),
+        auctionEndsAt: new Date(now - 6 * day),
+        saves: 8,
+        uniqueViewers: 36,
+        impressionsThisWeek: 120,
+      },
+    }),
   ]);
 
   const hero = await prisma.listing.create({
@@ -404,6 +450,29 @@ async function main() {
     data: [
       { followerId: mira.id, followeeId: nova.id, kind: "artist" },
       { followerId: mira.id, followeeId: fresh.id, kind: "artist" },
+    ],
+  });
+
+  await prisma.purchase.createMany({
+    data: [
+      {
+        listingId: "listing-fresh-sold-auction",
+        buyerId: mira.id,
+        amountUsd: 180,
+        isFirst: true,
+        txHash: "0xsoldfresh001",
+        chain: "evm",
+        createdAt: new Date(now - 2 * day),
+      },
+      {
+        listingId: "listing-glitch-sold-auction",
+        buyerId: mira.id,
+        amountUsd: 95,
+        isFirst: true,
+        txHash: "soldglitch002",
+        chain: "solana",
+        createdAt: new Date(now - 6 * day),
+      },
     ],
   });
 

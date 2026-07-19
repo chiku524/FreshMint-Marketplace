@@ -1,8 +1,10 @@
 import { BrandMark, MintLeaf } from "@/components/MintLeaf";
+import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { DISCOVERY_CONFIG } from "@/lib/discovery";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { listSoldAuctions } from "@/lib/marketplace/sold-auctions";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +14,7 @@ export default async function HomePage() {
   const user = await getSessionUser();
   const viewerId = user?.id ?? "collector-mira";
   const home = engine.buildHomepage(viewerId, 12);
+  const soldAuctions = await listSoldAuctions(6);
   const mix = DISCOVERY_CONFIG.feedMix;
   const personalized = Boolean(user);
 
@@ -149,10 +152,24 @@ export default async function HomePage() {
       </section>
 
       {home.liveAuctions.length > 0 ? (
-        <section style={{ padding: "0 clamp(1rem, 4vw, 3rem) 4rem" }}>
-          <h2 className="display" style={{ margin: "0 0 1.25rem", fontSize: "1.6rem" }}>
-            Live auction strip
-          </h2>
+        <section style={{ padding: "0 clamp(1rem, 4vw, 3rem) 3rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              gap: "1rem",
+              marginBottom: "1.25rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
+              Live auction strip
+            </h2>
+            <Link href="/auctions" style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+              All auctions →
+            </Link>
+          </div>
           <div className="lane-rail">
             {home.liveAuctions.map((listing) => (
               <WorkCard
@@ -168,6 +185,46 @@ export default async function HomePage() {
           </div>
         </section>
       ) : null}
+
+      <section style={{ padding: "0 clamp(1rem, 4vw, 3rem) 4rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: "1rem",
+            marginBottom: "0.5rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
+            Cleared auctions
+          </h2>
+          <Link href="/auctions" style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+            View archive →
+          </Link>
+        </div>
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "46ch" }}>
+          Past artwork that sold successfully — discovery that converted.
+        </p>
+        {soldAuctions.length === 0 ? (
+          <p style={{ color: "var(--ink-muted)" }}>
+            No cleared auctions yet. Wins will appear here after hammer.
+          </p>
+        ) : (
+          <div className="lane-rail">
+            {soldAuctions.map((item) => (
+              <SoldAuctionCard
+                key={`${item.listing.id}-${item.soldAt}`}
+                item={item}
+                creatorName={
+                  engine.state.creators.get(item.listing.creatorId)?.displayName
+                }
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

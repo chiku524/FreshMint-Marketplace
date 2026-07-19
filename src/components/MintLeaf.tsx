@@ -1,4 +1,4 @@
-/** Mint leaf brand mark used in header, hero, and favicon. */
+/** Mint sprig brand mark — stem joins both leaves at a shared node. */
 export function MintLeaf({
   size = 28,
   className,
@@ -24,57 +24,74 @@ export function MintLeaf({
       aria-label={title}
     >
       <title>{title}</title>
+      {/* Central stem → junction at leaf bases */}
       <path
-        d="M32 54c0-10 1.5-18 4-26"
+        d="M32 58V34"
         stroke="var(--mint-stem)"
-        strokeWidth="2.2"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+      {/* Junction notch tying both petioles to the stem */}
+      <circle cx="32" cy="34" r="1.6" fill="var(--mint-stem)" />
+      {/* Left leaf + petiole from junction */}
+      <path
+        d="M32 34c-2.5-1-6-2-9-2.2"
+        stroke="var(--mint-stem)"
+        strokeWidth="1.8"
         strokeLinecap="round"
       />
       <path
-        d="M36 28c8-2 16-8 18-18-12 1-22 7-26 16 2 1 5 2 8 2Z"
+        d="M23 31.8C14 30 7 24 5 15c9 1.5 16 7 19.5 15.2-0.5.5-1 .9-1.5 1.6Z"
         fill={`url(#${gid}-a)`}
       />
+      {/* Right leaf + petiole from junction */}
       <path
-        d="M28 30c-8-1-16-6-20-14 11 0 20 5 24 13-1.5.5-2.8.8-4 1Z"
+        d="M32 34c2.5-1 6-2 9-2.2"
+        stroke="var(--mint-stem)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M41 31.8C50 30 57 24 59 15c-9 1.5-16 7-19.5 15.2 0.5.5 1 .9 1.5 1.6Z"
         fill={`url(#${gid}-b)`}
-        opacity="0.92"
+      />
+      {/* Midribs from junction into each blade */}
+      <path
+        d="M31 33.5C24 30 16 24 10 18"
+        stroke="var(--mint-vein)"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+        opacity="0.55"
       />
       <path
-        d="M34 30c2-6 6-12 12-16"
+        d="M33 33.5C40 30 48 24 54 18"
         stroke="var(--mint-vein)"
-        strokeWidth="1.4"
+        strokeWidth="1.15"
         strokeLinecap="round"
-        opacity="0.75"
-      />
-      <path
-        d="M30 31c-3-5-8-9-14-12"
-        stroke="var(--mint-vein)"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        opacity="0.65"
+        opacity="0.55"
       />
       <defs>
         <linearGradient
           id={`${gid}-a`}
-          x1="34"
-          y1="10"
-          x2="50"
-          y2="30"
+          x1="8"
+          y1="14"
+          x2="28"
+          y2="34"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--mint-leaf-hi)" />
+          <stop offset="1" stopColor="var(--mint-leaf-lo)" />
+        </linearGradient>
+        <linearGradient
+          id={`${gid}-b`}
+          x1="56"
+          y1="14"
+          x2="36"
+          y2="34"
           gradientUnits="userSpaceOnUse"
         >
           <stop stopColor="var(--mint-leaf-hi)" />
           <stop offset="1" stopColor="var(--mint-leaf)" />
-        </linearGradient>
-        <linearGradient
-          id={`${gid}-b`}
-          x1="18"
-          y1="14"
-          x2="32"
-          y2="32"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="var(--mint-leaf)" />
-          <stop offset="1" stopColor="var(--mint-leaf-lo)" />
         </linearGradient>
       </defs>
     </svg>
