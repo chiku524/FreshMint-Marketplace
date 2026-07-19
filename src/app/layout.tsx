@@ -32,8 +32,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${syne.variable} ${literata.variable} h-full`}>
       <body className="min-h-full">
-        <EngraveBackground />
         <div className="site-shell">
+          <EngraveBackground />
           <header
             className="site-header"
             style={{

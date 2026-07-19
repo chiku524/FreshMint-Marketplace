@@ -46,8 +46,8 @@ export function EngraveBackground() {
       <svg
         className="fm-engrave-vein"
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 1200 800"
-        preserveAspectRatio="xMidYMid slice"
+        viewBox="0 0 1200 2400"
+        preserveAspectRatio="none"
       >
         <defs>
           <linearGradient id={`${gid}-line`} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -199,7 +199,110 @@ export function EngraveBackground() {
           />
         </g>
 
-        {/* —— Spanning arcs: ties the composition together —— */}
+        {/* —— Mid-page: second contour well —— */}
+        <g>
+          <Etch
+            d="M640 820C760 760 920 780 1020 860C1120 940 1100 1080 980 1160C860 1240 680 1220 580 1120C480 1020 520 880 640 820Z"
+            stroke={`url(#${gid}-line)`}
+            width={1.1}
+            opacity={0.65}
+          />
+          <Etch
+            d="M700 880C790 840 900 860 970 920C1040 980 1025 1080 940 1135C855 1190 730 1175 665 1105C600 1035 630 920 700 880Z"
+            stroke={`url(#${gid}-gold)`}
+            width={0.85}
+            opacity={0.55}
+          />
+          <Etch
+            d="M760 940C820 915 890 930 935 975C980 1020 970 1085 920 1120C870 1155 795 1145 755 1095C715 1045 720 965 760 940Z"
+            stroke={`url(#${gid}-soft)`}
+            width={0.7}
+            opacity={0.45}
+          />
+        </g>
+
+        {/* —— Lower-left: crescent arcs —— */}
+        <g>
+          <Etch
+            d="M40 1280C120 1180 260 1140 400 1180C520 1215 580 1320 540 1430"
+            stroke={`url(#${gid}-line)`}
+            width={1.15}
+            opacity={0.6}
+          />
+          <Etch
+            d="M80 1320C150 1240 260 1210 380 1245C480 1275 530 1360 500 1450"
+            stroke={`url(#${gid}-gold)`}
+            width={0.9}
+            opacity={0.55}
+          />
+          <Etch
+            d="M130 1360C190 1300 280 1280 370 1310C440 1335 480 1400 460 1470"
+            stroke={`url(#${gid}-line)`}
+            width={0.7}
+            opacity={0.45}
+            dash="4 7"
+          />
+        </g>
+
+        {/* —— Lower facet shard —— */}
+        <g>
+          <Etch
+            d="M780 1480L960 1420L1120 1520L1060 1680L880 1720L780 1480Z"
+            stroke={`url(#${gid}-line)`}
+            width={1}
+            opacity={0.55}
+          />
+          <Etch
+            d="M960 1420L980 1580L880 1720"
+            stroke={`url(#${gid}-gold)`}
+            width={0.7}
+            opacity={0.5}
+          />
+          <Etch
+            d="M1120 1520L980 1580L780 1480"
+            stroke={`url(#${gid}-line)`}
+            width={0.6}
+            opacity={0.4}
+            dash="5 5"
+          />
+        </g>
+
+        {/* —— Bottom: nested rings + closing bloom —— */}
+        <g transform="translate(280 2050)">
+          <Etch
+            d="M0 -100A100 100 0 1 1 0 100A100 100 0 1 1 0 -100"
+            stroke={`url(#${gid}-line)`}
+            width={1}
+            opacity={0.55}
+          />
+          <Etch
+            d="M0 -62A62 62 0 1 1 0 62A62 62 0 1 1 0 -62"
+            stroke={`url(#${gid}-gold)`}
+            width={0.8}
+            opacity={0.5}
+          />
+          <Etch
+            d="M0 -28A28 28 0 1 1 0 28A28 28 0 1 1 0 -28"
+            stroke={`url(#${gid}-line)`}
+            width={0.6}
+            opacity={0.4}
+            dash="3 6"
+          />
+        </g>
+        <Etch
+          d="M520 1980C640 1920 820 1940 960 2040C1060 2110 1080 2240 980 2320C860 2420 620 2400 500 2280C400 2180 420 2040 520 1980Z"
+          stroke={`url(#${gid}-line)`}
+          width={1.05}
+          opacity={0.5}
+        />
+        <Etch
+          d="M580 2040C670 2000 800 2020 900 2095C970 2150 985 2240 915 2300C830 2375 660 2360 575 2270C510 2200 515 2080 580 2040Z"
+          stroke={`url(#${gid}-gold)`}
+          width={0.8}
+          opacity={0.42}
+        />
+
+        {/* —— Spanning arcs: spine that runs the full page —— */}
         <Etch
           d="M380 210C520 80 700 60 860 140"
           stroke={`url(#${gid}-gold)`}
@@ -213,17 +316,60 @@ export function EngraveBackground() {
           opacity={0.5}
         />
         <Etch
-          d="M220 520C300 620 480 700 720 680"
+          d="M220 520C300 620 480 720 640 820"
           stroke={`url(#${gid}-gold)`}
+          width={0.75}
+          opacity={0.45}
+          dash="6 8"
+        />
+        <Etch
+          d="M980 640C1040 720 1060 800 1020 860"
+          stroke={`url(#${gid}-line)`}
+          width={0.7}
+          opacity={0.45}
+        />
+        <Etch
+          d="M580 1120C420 1180 280 1220 160 1320"
+          stroke={`url(#${gid}-gold)`}
+          width={0.8}
+          opacity={0.45}
+        />
+        <Etch
+          d="M540 1430C640 1480 720 1500 780 1480"
+          stroke={`url(#${gid}-line)`}
+          width={0.75}
+          opacity={0.42}
+        />
+        <Etch
+          d="M880 1720C700 1820 480 1900 280 2050"
+          stroke={`url(#${gid}-gold)`}
+          width={0.85}
+          opacity={0.45}
+        />
+        <Etch
+          d="M380 2150C480 2100 560 2050 640 2020"
+          stroke={`url(#${gid}-line)`}
           width={0.7}
           opacity={0.4}
-          dash="6 8"
+          dash="5 7"
         />
         <Etch
           d="M80 320C40 200 120 80 280 40C420 5 600 20 740 70"
           stroke={`url(#${gid}-line)`}
           width={0.75}
           opacity={0.4}
+        />
+        <Etch
+          d="M40 1280C20 1500 60 1800 180 2050C240 2160 360 2260 520 2320"
+          stroke={`url(#${gid}-line)`}
+          width={0.65}
+          opacity={0.35}
+        />
+        <Etch
+          d="M1120 1520C1160 1700 1140 1950 1040 2150C960 2280 800 2360 640 2340"
+          stroke={`url(#${gid}-gold)`}
+          width={0.6}
+          opacity={0.35}
         />
 
         {/* —— Constellation nodes at junctions —— */}
@@ -236,6 +382,13 @@ export function EngraveBackground() {
             [980, 640, 2.2, "rgba(212,174,102,0.18)"],
             [220, 520, 2.4, "rgba(110,207,154,0.18)"],
             [330, 330, 2, "rgba(197,212,200,0.16)"],
+            [640, 820, 2.8, "rgba(197,212,200,0.22)"],
+            [980, 1160, 2.4, "rgba(212,174,102,0.18)"],
+            [160, 1320, 2.6, "rgba(110,207,154,0.2)"],
+            [540, 1430, 2.3, "rgba(197,212,200,0.18)"],
+            [880, 1720, 2.5, "rgba(212,174,102,0.18)"],
+            [280, 2050, 3, "rgba(110,207,154,0.22)"],
+            [720, 2140, 2.2, "rgba(197,212,200,0.16)"],
           ].map(([x, y, r, stroke], i) => (
             <g key={i}>
               <circle
@@ -264,7 +417,7 @@ export function EngraveBackground() {
             width={0.5}
           />
           <Etch
-            d="M60 560C140 640 260 720 420 740"
+            d="M60 560C140 640 260 720 400 780"
             stroke={`url(#${gid}-gold)`}
             width={0.5}
           />
@@ -273,6 +426,17 @@ export function EngraveBackground() {
             stroke={`url(#${gid}-line)`}
             width={0.45}
             dash="2 5"
+          />
+          <Etch
+            d="M1100 900C1140 1050 1130 1250 1080 1400"
+            stroke={`url(#${gid}-line)`}
+            width={0.45}
+          />
+          <Etch
+            d="M100 1600C180 1750 280 1900 420 2050"
+            stroke={`url(#${gid}-gold)`}
+            width={0.45}
+            dash="3 6"
           />
         </g>
       </svg>

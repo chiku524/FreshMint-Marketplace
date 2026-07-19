@@ -47,7 +47,7 @@ body {
 
 /* Boing-style engraved field: stone · hatch · grain · veins */
 .fm-engrave-bg {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
@@ -116,10 +116,14 @@ a {
 
 .site-shell {
   position: relative;
-  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.site-shell > *:not(.fm-engrave-bg) {
+  position: relative;
+  z-index: 1;
 }
 
 .site-header {
