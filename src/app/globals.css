@@ -332,7 +332,7 @@ a {
   transform: translateY(1px);
 }
 
-/* Hover/focus-within driven — avoids JS mouseleave fighting stacking */
+/* Open state is JS-driven (is-open) so menus close cleanly on mouseleave */
 .site-nav__menu {
   position: absolute;
   top: 100%;
@@ -346,8 +346,6 @@ a {
   display: none;
 }
 
-.site-nav__dropdown:hover .site-nav__menu,
-.site-nav__dropdown:focus-within .site-nav__menu,
 .site-nav__dropdown.is-open .site-nav__menu {
   display: block;
 }

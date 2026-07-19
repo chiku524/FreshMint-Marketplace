@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 type NavItem = { href: string; label: string };
@@ -56,20 +57,41 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-function NavDropdown({ group }: { group: NavGroup }) {
-  const [pinned, setPinned] = useState(false);
+function NavDropdown({
+  group,
+  closeSignal,
+}: {
+  group: NavGroup;
+  /** Increments on route change — forces every menu shut. */
+  closeSignal: number;
+}) {
+  const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const ignoreHoverUntilLeave = useRef(false);
   const menuId = useId();
 
+  function closeMenu() {
+    setOpen(false);
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && rootRef.current?.contains(active)) {
+      active.blur();
+    }
+  }
+
   useEffect(() => {
-    if (!pinned) return;
+    ignoreHoverUntilLeave.current = true;
+    closeMenu();
+  }, [closeSignal]);
+
+  useEffect(() => {
+    if (!open) return;
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setPinned(false);
+        closeMenu();
       }
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setPinned(false);
+      if (event.key === "Escape") closeMenu();
     }
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKey);
@@ -77,20 +99,40 @@ function NavDropdown({ group }: { group: NavGroup }) {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [pinned]);
+  }, [open]);
 
   return (
     <div
       ref={rootRef}
-      className={`site-nav__dropdown${pinned ? " is-open" : ""}`}
+      className={`site-nav__dropdown${open ? " is-open" : ""}`}
+      onMouseEnter={() => {
+        if (ignoreHoverUntilLeave.current) return;
+        setOpen(true);
+      }}
+      onMouseLeave={() => {
+        ignoreHoverUntilLeave.current = false;
+        closeMenu();
+      }}
+      onBlur={(event) => {
+        if (!rootRef.current?.contains(event.relatedTarget as Node)) {
+          setOpen(false);
+        }
+      }}
     >
       <button
         type="button"
         className="site-nav__trigger"
-        aria-expanded={pinned}
+        aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={menuId}
-        onClick={() => setPinned((v) => !v)}
+        onClick={() => {
+          ignoreHoverUntilLeave.current = false;
+          setOpen((v) => !v);
+        }}
+        onFocus={() => {
+          if (ignoreHoverUntilLeave.current) return;
+          setOpen(true);
+        }}
       >
         {group.label}
         <span className="site-nav__caret" aria-hidden>
@@ -105,7 +147,10 @@ function NavDropdown({ group }: { group: NavGroup }) {
               href={item.href}
               role="menuitem"
               className="site-nav__item"
-              onClick={() => setPinned(false)}
+              onClick={() => {
+                ignoreHoverUntilLeave.current = true;
+                closeMenu();
+              }}
             >
               {item.label}
             </Link>
@@ -117,10 +162,21 @@ function NavDropdown({ group }: { group: NavGroup }) {
 }
 
 export function SiteNav() {
+  const pathname = usePathname() || "/";
+  const [closeSignal, setCloseSignal] = useState(0);
+
+  useEffect(() => {
+    setCloseSignal((n) => n + 1);
+  }, [pathname]);
+
   return (
     <nav className="site-nav" aria-label="Primary">
       {GROUPS.map((group) => (
-        <NavDropdown key={group.id} group={group} />
+        <NavDropdown
+          key={group.id}
+          group={group}
+          closeSignal={closeSignal}
+        />
       ))}
     </nav>
   );
