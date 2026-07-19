@@ -1,4 +1,5 @@
-import { BrandMark, MintLeaf } from "@/components/MintLeaf";
+import { EngravedMintHero } from "@/components/EngravedMintHero";
+import { BrandMark } from "@/components/MintLeaf";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
@@ -31,30 +32,19 @@ export default async function HomePage() {
         }}
       >
         <div
-          className="hero-orb"
+          className="hero-engraving"
           aria-hidden
           style={{
             position: "absolute",
-            inset: "4% 2% auto auto",
-            width: "min(52vw, 440px)",
-            aspectRatio: "1",
+            inset: "2% 0 auto auto",
+            width: "min(58vw, 460px)",
             display: "grid",
             placeItems: "center",
             zIndex: 0,
-            opacity: 0.55,
+            pointerEvents: "none",
           }}
         >
-          <div
-            style={{
-              position: "absolute",
-              inset: "12%",
-              borderRadius: "50%",
-              background:
-                "radial-gradient(circle at 40% 35%, rgba(77,184,132,0.28), transparent 55%), radial-gradient(circle at 70% 65%, rgba(201,149,58,0.12), transparent 50%)",
-              filter: "blur(8px)",
-            }}
-          />
-          <MintLeaf size={220} gradientId="hero-leaf" />
+          <EngravedMintHero size={440} />
         </div>
         <div style={{ position: "relative", zIndex: 1, maxWidth: "40rem" }}>
           <div
