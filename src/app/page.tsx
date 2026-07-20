@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/MintLeaf";
+import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
@@ -21,16 +22,8 @@ export default async function HomePage() {
 
   return (
     <div>
-      <section
-        style={{
-          minHeight: "72vh",
-          display: "grid",
-          alignContent: "end",
-          padding: "clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem) 3rem",
-          position: "relative",
-        }}
-      >
-        <div style={{ position: "relative", zIndex: 1, maxWidth: "40rem" }}>
+      <section className="fm-home-hero">
+        <div className="fm-home-hero__copy">
           <div
             className="anim-rise"
             style={{
@@ -81,6 +74,9 @@ export default async function HomePage() {
               Soft-launch a work
             </Link>
           </div>
+        </div>
+        <div className="fm-home-hero__feature">
+          <FeaturedOfTheWeek />
         </div>
       </section>
 

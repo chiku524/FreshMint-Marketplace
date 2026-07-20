@@ -296,34 +296,55 @@ a {
   box-shadow: 0 0 40px rgba(110, 207, 154, 0.04);
 }
 
-/*
- * Compact weekly spotlight — top-right under the header.
- * Must beat `.site-shell > *:not(.fm-engrave-bg) { position: relative }` or it
- * lands in normal flow and gets pushed into the hero.
- */
-.site-shell > .fm-featured-week {
-  position: absolute;
-  top: 5.5rem;
-  right: clamp(1rem, 4vw, 3rem);
-  left: auto;
-  z-index: 35;
-  width: min(13.75rem, 32vw);
-  margin: 0;
-  pointer-events: none;
+/* Home hero: copy left · featured-of-the-week right */
+.fm-home-hero {
+  min-height: 72vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(1.75rem, 4vw, 3.5rem) clamp(1rem, 4vw, 3rem) 3rem;
+  position: relative;
+}
+
+.fm-home-hero__copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-width: 40rem;
+  padding-bottom: 0.35rem;
+}
+
+.fm-home-hero__feature {
+  position: relative;
+  z-index: 1;
+  min-height: min(62vh, 36rem);
+  display: flex;
+}
+
+.fm-featured-week {
+  width: 100%;
+  height: 100%;
+  display: flex;
 }
 
 .fm-featured-week__link {
-  pointer-events: auto;
   display: grid;
-  gap: 0.55rem;
+  grid-template-rows: 1fr auto;
+  gap: 0.7rem;
+  width: 100%;
+  height: 100%;
   text-decoration: none;
   color: inherit;
   animation: fm-featured-week-in 0.85s ease-out both;
 }
 
 .fm-featured-week__media {
-  aspect-ratio: 4 / 5;
   width: 100%;
+  min-height: 0;
+  height: 100%;
   border: 1px solid rgba(232, 235, 230, 0.12);
   box-shadow:
     0 0 0 1px rgba(110, 207, 154, 0.08),
@@ -357,14 +378,14 @@ a {
 }
 
 .fm-featured-week__title {
-  font-size: 1.05rem;
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
   font-weight: 700;
   line-height: 1.15;
 }
 
 .fm-featured-week__by,
 .fm-featured-week__week {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--ink-muted);
   line-height: 1.3;
 }
@@ -381,8 +402,14 @@ a {
 }
 
 @media (max-width: 900px) {
-  .site-shell > .fm-featured-week {
-    display: none;
+  .fm-home-hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    align-content: start;
+  }
+
+  .fm-home-hero__feature {
+    min-height: 22rem;
   }
 }
 
