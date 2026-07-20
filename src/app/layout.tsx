@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
 import { BrandMark } from "@/components/MintLeaf";
+import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
 import { PageEngraveBackground } from "@/components/PageEngraveBackground";
 import { SiteNav } from "@/components/SiteNav";
 import { WalletBar } from "@/components/WalletBar";
@@ -54,6 +55,7 @@ export default function RootLayout({
             </div>
             <WalletBar />
           </header>
+          <FeaturedOfTheWeek />
           <main style={{ flex: 1 }}>{children}</main>
           <footer
             style={{
