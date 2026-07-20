@@ -296,13 +296,19 @@ a {
   box-shadow: 0 0 40px rgba(110, 207, 154, 0.04);
 }
 
-/* Compact weekly spotlight — top-right under the header */
-.fm-featured-week {
+/*
+ * Compact weekly spotlight — top-right under the header.
+ * Must beat `.site-shell > *:not(.fm-engrave-bg) { position: relative }` or it
+ * lands in normal flow and gets pushed into the hero.
+ */
+.site-shell > .fm-featured-week {
   position: absolute;
-  top: 5.35rem;
+  top: 5.5rem;
   right: clamp(1rem, 4vw, 3rem);
+  left: auto;
   z-index: 35;
   width: min(13.75rem, 32vw);
+  margin: 0;
   pointer-events: none;
 }
 
@@ -375,7 +381,7 @@ a {
 }
 
 @media (max-width: 900px) {
-  .fm-featured-week {
+  .site-shell > .fm-featured-week {
     display: none;
   }
 }
