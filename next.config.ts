@@ -5,6 +5,7 @@ if (!process.env.AUTH_SECRET) {
 }
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   transpilePackages: [
     "remotion",
     "@remotion/player",

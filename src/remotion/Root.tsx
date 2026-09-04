@@ -1,4 +1,5 @@
 import { Composition } from "remotion";
+import "./fonts";
 import { LogoIntro } from "./LogoIntro";
 import { LOGO_INTRO } from "./meta";
 

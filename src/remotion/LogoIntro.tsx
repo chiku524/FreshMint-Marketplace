@@ -7,7 +7,10 @@ import {
   useVideoConfig,
 } from "remotion";
 import { FreshMintMark } from "./FreshMintMark";
-import { literata, syne } from "./fonts";
+
+const display =
+  'var(--font-syne), "Syne", ui-sans-serif, system-ui, sans-serif';
+const serif = 'var(--font-literata), "Literata", ui-serif, Georgia, serif';
 
 export const LogoIntro: React.FC = () => {
   const frame = useCurrentFrame();
@@ -87,7 +90,7 @@ export const LogoIntro: React.FC = () => {
           name="Wordmark"
           style={{
             marginTop: 36,
-            fontFamily: syne,
+            fontFamily: display,
             fontWeight: 800,
             fontSize: 92,
             letterSpacing: "-0.035em",
@@ -133,7 +136,7 @@ export const LogoIntro: React.FC = () => {
             marginTop: 22,
             maxWidth: 820,
             textAlign: "center",
-            fontFamily: literata,
+            fontFamily: serif,
             fontWeight: 400,
             fontSize: 28,
             lineHeight: 1.35,
@@ -157,7 +160,7 @@ export const LogoIntro: React.FC = () => {
           name="Lanes"
           style={{
             marginTop: 18,
-            fontFamily: syne,
+            fontFamily: display,
             fontWeight: 600,
             fontSize: 15,
             letterSpacing: "0.22em",

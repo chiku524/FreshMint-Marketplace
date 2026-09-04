@@ -351,6 +351,7 @@ a {
 
 .fm-intro-skip {
   position: absolute;
+  z-index: 2;
   right: var(--page-x);
   bottom: 1.35rem;
   appearance: none;
