@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import { isMemoryMode, getMemoryPurchases, getMemoryState } from "@/lib/data/memory-store";
 import type { Listing, NetworkId } from "@/lib/discovery/types";
+import { nftAssetKey, type WalletNft } from "@/lib/wallet/inventory";
 
 export type ProfileWallet = {
   chain: string;
@@ -187,4 +188,41 @@ export async function getUserAssetProfile(
       createdAt: b.createdAt.getTime(),
     })),
   };
+}
+
+/** Marketplace listings that match on-chain tokens held in linked wallets. */
+export async function findListingsByWalletNfts(
+  nfts: WalletNft[],
+): Promise<Listing[]> {
+  if (nfts.length === 0) return [];
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+  const wanted = new Set(
+    nfts.map((nft) => nftAssetKey(nft.chain, nft.contractAddress, nft.tokenId)),
+  );
+
+  if (memory) {
+    return [...getMemoryState().listings.values()].filter((listing) => {
+      if (!listing.contractAddress || listing.tokenId == null) return false;
+      return wanted.has(
+        nftAssetKey(listing.chain, listing.contractAddress, listing.tokenId),
+      );
+    });
+  }
+
+  const listings = await prisma.listing.findMany({
+    where: {
+      contractAddress: { not: null },
+      tokenId: { not: null },
+    },
+    take: 400,
+  });
+  return listings
+    .map(toListing)
+    .filter((listing) => {
+      if (!listing.contractAddress || listing.tokenId == null) return false;
+      return wanted.has(
+        nftAssetKey(listing.chain, listing.contractAddress, listing.tokenId),
+      );
+    });
 }

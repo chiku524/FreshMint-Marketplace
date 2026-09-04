@@ -34,7 +34,7 @@ export default async function MeSettingsPage() {
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 0.85rem", maxWidth: "48ch" }}>
           Link a wallet by signing a message. That proves you control the key —
-          no gas is spent. One address can only belong to one profile.
+          no gas is spent. NFTs already in that wallet then appear on Collection.
         </p>
         {profile.wallets.length === 0 ? (
           <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem" }}>

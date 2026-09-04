@@ -1,8 +1,18 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
+import { WalletNftCard } from "@/components/WalletNftCard";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
-import { getUserAssetProfile } from "@/lib/marketplace/profile";
+import {
+  findListingsByWalletNfts,
+  getUserAssetProfile,
+} from "@/lib/marketplace/profile";
+import {
+  fetchLinkedWalletNfts,
+  matchWalletNftsToListings,
+  mergeWalletHeldListings,
+  walletNftsNotOnMarketplace,
+} from "@/lib/wallet/inventory";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -15,10 +25,32 @@ export default async function MeCollectionPage() {
   const profile = await getUserAssetProfile(user.id);
   if (!profile) redirect("/");
 
+  const catalog = [
+    ...profile.created,
+    ...profile.owned.map((item) => item.listing),
+  ];
+  const scanned = await fetchLinkedWalletNfts(profile.wallets, catalog);
+  const extraListings = await findListingsByWalletNfts(scanned);
+  const walletNfts = matchWalletNftsToListings(scanned, [
+    ...catalog,
+    ...extraListings,
+  ]);
+  const collected = mergeWalletHeldListings(
+    profile.owned,
+    profile.created,
+    walletNfts,
+    extraListings,
+  );
+  const inWallet = walletNftsNotOnMarketplace(
+    walletNfts,
+    profile.created,
+    collected,
+  );
+
   return (
     <>
       <p style={{ color: "var(--ink-muted)", margin: "0 0 1.75rem", maxWidth: "52ch" }}>
-        Works you created, collected, curated, and bridged.
+        Works you created, collected, hold in a linked wallet, curated, and bridged.
       </p>
 
       <section style={{ marginBottom: "2.75rem" }}>
@@ -45,15 +77,15 @@ export default async function MeCollectionPage() {
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-          Collected ({profile.owned.length})
+          Collected ({collected.length})
         </h2>
-        {profile.owned.length === 0 ? (
+        {collected.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
             No purchases yet. Browse the <Link href="/open">Open Lane</Link>.
           </p>
         ) : (
           <PuzzleRail>
-            {profile.owned.map((item) => (
+            {collected.map((item) => (
               <WorkCard
                 key={item.purchaseId}
                 listing={item.listing}
@@ -61,13 +93,39 @@ export default async function MeCollectionPage() {
                 showActions={false}
                 trackImpression={false}
                 footer={
-                  <>
-                    Collected {new Date(item.purchasedAt).toLocaleDateString()} · $
-                    {item.amountUsd}
-                    {item.txHash ? ` · ${item.txHash.slice(0, 10)}…` : ""}
-                  </>
+                  "fromWallet" in item && item.fromWallet ? (
+                    <>Held in a linked wallet</>
+                  ) : (
+                    <>
+                      Collected {new Date(item.purchasedAt).toLocaleDateString()} · $
+                      {item.amountUsd}
+                      {item.txHash ? ` · ${item.txHash.slice(0, 10)}…` : ""}
+                    </>
+                  )
                 }
               />
+            ))}
+          </PuzzleRail>
+        )}
+      </section>
+
+      <section style={{ marginBottom: "2.75rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+          In wallet ({inWallet.length})
+        </h2>
+        {profile.wallets.length === 0 ? (
+          <p style={{ color: "var(--ink-muted)" }}>
+            Link a wallet in <Link href="/me/settings">Settings</Link> to pull
+            on-chain NFTs into this collection.
+          </p>
+        ) : inWallet.length === 0 ? (
+          <p style={{ color: "var(--ink-muted)" }}>
+            No other NFTs found in linked wallets yet.
+          </p>
+        ) : (
+          <PuzzleRail>
+            {inWallet.map((nft) => (
+              <WalletNftCard key={`${nft.networkLabel}:${nft.id}`} nft={nft} />
             ))}
           </PuzzleRail>
         )}
