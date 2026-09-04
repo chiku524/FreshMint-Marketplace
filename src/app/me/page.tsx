@@ -1,8 +1,5 @@
-import { ProfileSettings } from "@/components/ProfileSettings";
 import { PuzzleRail } from "@/components/PuzzleRail";
-import { WalletLinkPanel } from "@/components/WalletLinkPanel";
 import { WorkCard } from "@/components/WorkCard";
-import { isGoogleAuthConfigured } from "@/lib/auth/google";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
 import { getUserAssetProfile } from "@/lib/marketplace/profile";
@@ -11,7 +8,7 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function MePage() {
+export default async function MeCollectionPage() {
   const user = await getSessionUser();
   if (!user) redirect("/sign-in?next=/me");
 
@@ -19,72 +16,10 @@ export default async function MePage() {
   if (!profile) redirect("/");
 
   return (
-    <div className="page-wrap">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-          alignItems: "baseline",
-          marginBottom: "0.5rem",
-        }}
-      >
-        <h1 className="display" style={{ margin: 0, fontSize: "2.4rem" }}>
-          {profile.displayName}
-        </h1>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <Link href="/me/security" className="badge featured">
-            Security {profile.totpEnabled ? "· 2FA on" : "· set up 2FA"}
-          </Link>
-          <Link href={`/creators/${profile.userId}`} className="badge">
-            Public profile
-          </Link>
-        </div>
-      </div>
+    <>
       <p style={{ color: "var(--ink-muted)", margin: "0 0 1.75rem", maxWidth: "52ch" }}>
-        Your FreshMint profile — sign-in methods, linked wallets, created works,
-        collected pieces, shelves, and bridges. Role: {profile.role} · curator
-        score {profile.curatorScore}
-        {profile.verifiedCreator ? " · verified" : ""}
-        {profile.establishedBadge ? " · established" : ""}.
+        Works you created, collected, curated, and bridged.
       </p>
-
-      <ProfileSettings
-        displayName={profile.displayName}
-        email={profile.email}
-        hasPassword={profile.hasPassword}
-        googleLinked={profile.googleLinked}
-        googleEnabled={isGoogleAuthConfigured()}
-      />
-
-      <section style={{ marginBottom: "2.75rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-          Wallets
-        </h2>
-        <p style={{ color: "var(--ink-muted)", margin: "0 0 0.85rem", maxWidth: "48ch" }}>
-          Link a wallet by signing a message. That proves you control the key —
-          no gas is spent. One address can only belong to one profile.
-        </p>
-        {profile.wallets.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem" }}>
-            No wallets linked yet.
-          </p>
-        ) : (
-          <ul style={{ margin: "0 0 0.9rem", padding: 0, listStyle: "none", display: "grid", gap: "0.45rem" }}>
-            {profile.wallets.map((w) => (
-              <li
-                key={`${w.chain}-${w.address}`}
-                className="badge"
-                style={{ justifySelf: "start", fontFamily: "monospace" }}
-              >
-                {w.network ?? w.chain}: {w.address}
-              </li>
-            ))}
-          </ul>
-        )}
-        <WalletLinkPanel linkedChains={profile.wallets.map((w) => w.chain)} />
-      </section>
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
@@ -110,7 +45,7 @@ export default async function MePage() {
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-          Owned ({profile.owned.length})
+          Collected ({profile.owned.length})
         </h2>
         {profile.owned.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
@@ -160,7 +95,13 @@ export default async function MePage() {
                 <div className="display" style={{ fontSize: "1.15rem" }}>
                   {shelf.name}
                 </div>
-                <p style={{ margin: "0.25rem 0 0", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    color: "var(--ink-muted)",
+                    fontSize: "0.9rem",
+                  }}
+                >
                   {shelf.listingIds.length} works · {shelf.followerCount} followers ·{" "}
                   <Link href="/shelves">View shelves</Link>
                 </p>
@@ -205,6 +146,6 @@ export default async function MePage() {
           </ul>
         )}
       </section>
-    </div>
+    </>
   );
 }

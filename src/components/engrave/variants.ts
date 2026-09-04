@@ -51,6 +51,7 @@ export function variantFromPathname(pathname: string): EngraveVariant {
   if (pathname.startsWith("/studio")) return "studio";
   if (pathname.startsWith("/bridge")) return "bridge";
   if (pathname.startsWith("/me/security")) return "security";
+  if (pathname.startsWith("/me/settings")) return "me";
   if (pathname.startsWith("/me")) return "me";
   if (pathname.startsWith("/listings/")) return "listing";
   if (pathname.startsWith("/creators/")) return "creator";

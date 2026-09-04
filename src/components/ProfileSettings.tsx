@@ -163,7 +163,7 @@ export function ProfileSettings({
         ) : null}
 
         {!googleLinked && googleEnabled ? (
-          <a href="/api/auth/google?intent=link&next=/me" className="badge featured">
+          <a href="/api/auth/google?intent=link&next=/me/settings" className="badge featured">
             Link Google
           </a>
         ) : null}
