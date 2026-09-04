@@ -5,6 +5,11 @@ if (!process.env.AUTH_SECRET) {
 }
 
 const nextConfig: NextConfig = {
+  transpilePackages: [
+    "remotion",
+    "@remotion/player",
+    "@remotion/google-fonts",
+  ],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },

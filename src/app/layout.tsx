@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
+import Script from "next/script";
 import { BrandMark } from "@/components/MintLeaf";
+import { LogoIntroSplash } from "@/components/LogoIntroSplashLoader";
 import { PageEngraveBackground } from "@/components/PageEngraveBackground";
+import { ReplayIntroButton } from "@/components/ReplayIntroButton";
 import { SiteNav } from "@/components/SiteNav";
 import { WalletBar } from "@/components/WalletBar";
 import "./globals.css";
@@ -33,7 +36,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${syne.variable} ${literata.variable} h-full`}>
       <body className="min-h-full">
+        <Script id="fm-intro-boot" strategy="beforeInteractive">
+          {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(sessionStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending")}}catch(e){}`}
+        </Script>
         <div className="site-shell">
+          <LogoIntroSplash />
           <PageEngraveBackground />
           <header
             className="site-header"
@@ -55,7 +62,11 @@ export default function RootLayout({
           </header>
           <main style={{ flex: 1 }}>{children}</main>
           <footer className="site-footer">
-            Attention is scarce. Emerging artists get a coded quota — not a slogan.
+            <span>
+              Attention is scarce. Emerging artists get a coded quota — not a
+              slogan.
+            </span>
+            <ReplayIntroButton />
           </footer>
         </div>
       </body>
