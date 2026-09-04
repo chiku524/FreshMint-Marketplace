@@ -36,6 +36,7 @@ export function CreateListingForm() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setBusy(true);
     setError(null);
     setOk(null);
@@ -115,7 +116,7 @@ export function CreateListingForm() {
       }
       setOk(note);
       router.refresh();
-      e.currentTarget.reset();
+      form.reset();
       setMedia(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed");

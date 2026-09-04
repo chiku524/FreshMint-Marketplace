@@ -8,7 +8,12 @@ import { relayApiBase } from "@/lib/bridge/relay";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import { isMemoryMode } from "@/lib/data/memory-store";
 import { getDatabaseUrl, isPostgresConfigured } from "@/lib/env";
-import { probeBoingNetwork } from "@/lib/onchain/boing";
+import {
+  probeBoingNetwork,
+  REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID,
+  REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION,
+  resolveBoingNftCollectionBytecode,
+} from "@/lib/onchain/boing";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -38,6 +43,11 @@ export async function GET() {
     boing: {
       collection: marketAddressFor("boing"),
       rpc: boing,
+      nftTemplate: {
+        artifactId: REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID,
+        version: REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION,
+        bytecodeBytes: (resolveBoingNftCollectionBytecode().length - 2) / 2,
+      },
     },
     timestamp: new Date().toISOString(),
   });

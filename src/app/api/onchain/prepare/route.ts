@@ -7,6 +7,7 @@ import { buildEvmMintIntent, buildEvmPurchaseIntent } from "@/lib/onchain/evm";
 import {
   buildBoingMintIntent,
   buildBoingPurchaseIntent,
+  preflightBoingNftDeployQa,
 } from "@/lib/onchain/boing";
 import {
   buildSolanaMintIntent,
@@ -70,7 +71,26 @@ export async function POST(req: NextRequest) {
         listingId: listing.id,
         title: listing.title,
       });
-      return NextResponse.json({ ok: true, intent: mint });
+      const bytecode = mint.walletTx.tx.bytecode;
+      const qa =
+        typeof bytecode === "string"
+          ? await preflightBoingNftDeployQa({
+              bytecode,
+              assetName: String(mint.walletTx.tx.asset_name ?? listing.title),
+              assetSymbol: String(mint.walletTx.tx.asset_symbol ?? "FMINT"),
+              descriptionHash:
+                typeof mint.walletTx.tx.description_hash === "string"
+                  ? mint.walletTx.tx.description_hash
+                  : undefined,
+            })
+          : undefined;
+      if (qa?.result === "reject") {
+        return NextResponse.json(
+          { error: qa.message ?? "boing_qa_rejected", qa, intent: mint },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json({ ok: true, intent: mint, qa });
     }
     const mint = buildSolanaMintIntent({
       creatorAddress: wallet,

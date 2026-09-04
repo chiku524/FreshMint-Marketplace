@@ -7,8 +7,11 @@ import {
 } from "@/lib/chains/registry";
 import {
   buildBoingMintIntent,
+  encodeBoingTransferNft,
   isBoingNativeAccountIdHex,
   normalizeBoingAccountId,
+  resolveBoingNftCollectionBytecode,
+  SELECTOR_TRANSFER_NFT,
 } from "@/lib/onchain/boing";
 
 const ACCOUNT = `0x${"11".repeat(32)}`;
@@ -51,6 +54,10 @@ describe("boing mint intent", () => {
     expect(mint.walletTx.tx.type).toBe("contract_deploy_meta");
     expect(mint.walletTx.tx.purpose_category).toBe("nft");
     expect(mint.walletTx.tx.asset_symbol).toBe("FMINT");
+    const bytecode = String(mint.walletTx.tx.bytecode ?? "");
+    expect(bytecode.startsWith("0x")).toBe(true);
+    expect(bytecode.length).toBeGreaterThan(100);
+    expect(bytecode).toBe(resolveBoingNftCollectionBytecode());
   });
 
   it("uses contract_call when a collection account is configured", () => {
@@ -67,5 +74,16 @@ describe("boing mint intent", () => {
     expect(mint.walletTx.tx.type).toBe("contract_call");
     expect(mint.walletTx.tx.to).toBe(`0x${"22".repeat(32)}`);
     expect(typeof mint.walletTx.tx.calldata).toBe("string");
+    expect(String(mint.walletTx.tx.calldata)).toMatch(
+      new RegExp(`0x${"0".repeat(62)}${SELECTOR_TRANSFER_NFT.toString(16).padStart(2, "0")}`),
+    );
+  });
+
+  it("encodes reference transfer_nft as 96-byte calldata", () => {
+    const to = `0x${"33".repeat(32)}`;
+    const tokenId = "aa".repeat(32);
+    const data = encodeBoingTransferNft(to, tokenId);
+    expect(data.length).toBe(2 + 96 * 2);
+    expect(data.endsWith(tokenId)).toBe(true);
   });
 });

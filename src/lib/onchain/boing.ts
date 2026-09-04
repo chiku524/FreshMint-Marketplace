@@ -1,9 +1,23 @@
 import { createHash, randomBytes } from "node:crypto";
+import { blake3 } from "@noble/hashes/blake3";
 import { marketAddressFor, rpcUrlFor } from "@/lib/chains/registry";
 import type { MintIntent } from "./evm";
+import { DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX } from "./boing-artifacts/defaultReferenceNftCollectionTemplateBytecodeHex";
 
 export const BOING_TESTNET_CHAIN_ID = 6913;
 export const BOING_TESTNET_CHAIN_ID_HEX = "0x1b01";
+
+/** Official pinned NFT collection template (`boing-execution` / `boing-sdk`). */
+export const REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID =
+  "boing.reference_nft_collection.v0";
+export const REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION = "1";
+
+const QA_PLACEHOLDER_DESCRIPTION_HASH = `0x${"00".repeat(32)}`;
+
+/** Reference NFT selectors — last byte of the first 32-byte word. */
+export const SELECTOR_OWNER_OF = 0x03;
+export const SELECTOR_TRANSFER_NFT = 0x04;
+export const SELECTOR_SET_METADATA_HASH = 0x05;
 
 export function isBoingNativeAccountIdHex(value: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(value.trim());
@@ -14,6 +28,19 @@ export function normalizeBoingAccountId(address: string): string {
   const hex = raw.startsWith("0x") ? raw.slice(2) : raw;
   if (!/^[0-9a-fA-F]{64}$/.test(hex)) return raw.toLowerCase();
   return `0x${hex.toLowerCase()}`;
+}
+
+export function ensure0xHex(hex: string): `0x${string}` {
+  const t = hex.trim();
+  if (!t) throw new Error("empty_hex");
+  return (t.startsWith("0x") || t.startsWith("0X") ? t : `0x${t}`) as `0x${string}`;
+}
+
+/** Official template, or `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX` override. */
+export function resolveBoingNftCollectionBytecode(): `0x${string}` {
+  const override = process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX;
+  if (override?.trim()) return ensure0xHex(override);
+  return DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX;
 }
 
 export interface BoingWalletTx {
@@ -29,7 +56,7 @@ async function boingRpc<T>(method: string, params: unknown[] = []): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(8000),
   });
   const body = (await res.json()) as { result?: T; error?: { message?: string } };
   if (body.error) {
@@ -73,39 +100,123 @@ export async function verifyBoingTx(txHash: string): Promise<boolean> {
   }
 }
 
+export type BoingQaResult = "allow" | "reject" | "unsure";
+
+export async function preflightBoingNftDeployQa(input: {
+  bytecode: string;
+  assetName: string;
+  assetSymbol: string;
+  descriptionHash?: string;
+}): Promise<{ result: BoingQaResult; ruleId?: string; message?: string }> {
+  try {
+    const qa = await boingRpc<{
+      result?: BoingQaResult;
+      rule_id?: string;
+      message?: string;
+    }>("boing_qaCheck", [
+      input.bytecode,
+      "nft",
+      input.descriptionHash ?? QA_PLACEHOLDER_DESCRIPTION_HASH,
+      input.assetName,
+      input.assetSymbol,
+    ]);
+    return {
+      result: qa.result ?? "unsure",
+      ruleId: qa.rule_id,
+      message: qa.message,
+    };
+  } catch (e) {
+    return {
+      result: "unsure",
+      message: e instanceof Error ? e.message : "qa_unavailable",
+    };
+  }
+}
+
+function hexWord(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("hex").padStart(64, "0").slice(-64);
+}
+
+function selectorWord(selector: number): string {
+  const w = new Uint8Array(32);
+  w[31] = selector & 0xff;
+  return hexWord(w);
+}
+
+function accountWord(address: string): string {
+  const hex = address.replace(/^0x/, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(hex)) {
+    throw new Error("boing_account_id_required");
+  }
+  return hex;
+}
+
+function tokenIdWordForListing(listingId: string): string {
+  return createHash("sha256").update(`boing:token:${listingId}`).digest("hex");
+}
+
+function metadataHashWord(uri: string): string {
+  return Buffer.from(blake3(new TextEncoder().encode(uri))).toString("hex");
+}
+
+/** 96-byte reference NFT calldata (selector last byte + two argument words). */
+export function encodeBoingTransferNft(
+  toAccount: string,
+  tokenIdHex32: string,
+): `0x${string}` {
+  return `0x${selectorWord(SELECTOR_TRANSFER_NFT)}${accountWord(toAccount)}${tokenIdHex32.replace(/^0x/, "")}`;
+}
+
+export function encodeBoingSetMetadataHash(
+  tokenIdHex32: string,
+  metadataHashHex32: string,
+): `0x${string}` {
+  return `0x${selectorWord(SELECTOR_SET_METADATA_HASH)}${tokenIdHex32.replace(/^0x/, "")}${metadataHashHex32.replace(/^0x/, "")}`;
+}
+
+function descriptionHashFromUri(uri: string): `0x${string}` {
+  return `0x${metadataHashWord(uri)}`;
+}
+
 export function buildBoingMintIntent(input: {
   creatorAddress: string;
   metadataUri: string;
   listingId: string;
   title: string;
 }): MintIntent & { walletTx: BoingWalletTx } {
-  const tokenId = createHash("sha256")
-    .update(`boing:${input.listingId}`)
-    .digest("hex")
-    .slice(0, 16);
+  const tokenId = tokenIdWordForListing(input.listingId);
   const collection = marketAddressFor("boing");
-  const creator = isBoingNativeAccountIdHex(input.creatorAddress)
+  const creatorIsBoing = isBoingNativeAccountIdHex(input.creatorAddress);
+  const creator = creatorIsBoing
     ? normalizeBoingAccountId(input.creatorAddress)
     : input.creatorAddress;
+  const assetName = input.title.trim().slice(0, 32) || "FreshMint";
+  const assetSymbol = "FMINT";
+  const bytecode = resolveBoingNftCollectionBytecode();
+  if (bytecode.length < 10) {
+    throw new Error("boing_nft_bytecode_empty");
+  }
 
   const tx = collection
     ? {
         type: "contract_call",
         to: collection,
         from: creator,
-        calldata: encodeBoingMintCalldata(input.metadataUri, creator),
+        calldata: creatorIsBoing
+          ? encodeBoingTransferNft(creator, tokenId)
+          : encodeBoingSetMetadataHash(tokenId, metadataHashWord(input.metadataUri)),
         purpose_category: "nft",
-        asset_name: input.title.slice(0, 32),
-        asset_symbol: "FMINT",
+        asset_name: assetName,
+        asset_symbol: assetSymbol,
       }
     : {
         type: "contract_deploy_meta",
+        bytecode,
         purpose_category: "nft",
-        asset_name: input.title.slice(0, 32),
-        asset_symbol: "FMINT",
-        metadata_uri: input.metadataUri,
-        description: `FreshMint listing ${input.listingId}`,
-        from: creator,
+        asset_name: assetName,
+        asset_symbol: assetSymbol,
+        description_hash: descriptionHashFromUri(input.metadataUri),
+        ...(creatorIsBoing ? { from: creator } : {}),
       };
 
   return {
@@ -137,9 +248,14 @@ export function buildBoingPurchaseIntent(input: {
   status: "pending_wallet";
   walletTx: BoingWalletTx;
 } {
-  const buyer = isBoingNativeAccountIdHex(input.buyerAddress)
+  const buyerIsBoing = isBoingNativeAccountIdHex(input.buyerAddress);
+  const buyer = buyerIsBoing
     ? normalizeBoingAccountId(input.buyerAddress)
     : input.buyerAddress;
+  const tokenId = (input.tokenId ?? tokenIdWordForListing(input.listingId)).replace(
+    /^0x/,
+    "",
+  );
   return {
     txHash: "",
     status: "pending_wallet",
@@ -152,8 +268,12 @@ export function buildBoingPurchaseIntent(input: {
         type: "contract_call",
         to: input.collection ?? "pending-deploy",
         from: buyer,
+        ...(buyerIsBoing
+          ? { calldata: encodeBoingTransferNft(buyer, tokenId) }
+          : {}),
         purpose_category: "nft",
-        asset_name: `buy:${input.listingId}`,
+        asset_name: `buy:${input.listingId}`.slice(0, 32),
+        asset_symbol: "FMINT",
         metadata: {
           listingId: input.listingId,
           tokenId: input.tokenId,
@@ -162,14 +282,6 @@ export function buildBoingPurchaseIntent(input: {
       },
     },
   };
-}
-
-/** Boing-native call encoding: selector low byte + 32-byte words (not Solidity ABI). */
-function encodeBoingMintCalldata(uri: string, owner: string): string {
-  const selector = "01";
-  const ownerWord = owner.replace(/^0x/, "").padStart(64, "0").slice(0, 64);
-  const uriHash = createHash("sha256").update(uri).digest("hex");
-  return `0x${selector.padStart(64, "0")}${ownerWord}${uriHash}`;
 }
 
 export function simulatedBoingHash(): string {

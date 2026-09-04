@@ -21,7 +21,7 @@ Set `NEXT_PUBLIC_CHAIN_MODE=testnet` (default) or `mainnet`.
 
 - **EVM:** `FreshMintERC721.safeMint` — real ERC-721; token URI should point at media/metadata (Blob URL).
 - **Solana:** Metaplex Core asset; Phantom signs (or server key on Devnet).
-- **Boing:** Boing Express signs a native `contract_deploy_meta` (`purpose_category: "nft"`). If `NEXT_PUBLIC_BOING_NFT_COLLECTION` is set, mint uses `contract_call` against that collection instead. No server-side Boing minter key in this slice.
+- **Boing:** Boing Express signs a native `contract_deploy_meta` with the **pinned reference NFT collection bytecode** (`boing.reference_nft_collection.v0`, purpose `nft`). Empty bytecode is rejected by protocol QA (`MALFORMED_BYTECODE`). If `NEXT_PUBLIC_BOING_NFT_COLLECTION` is set, mint uses `contract_call` with official `transfer_nft` (selector `0x04`) calldata instead. No server-side Boing minter key in this slice.
 - Soft-launch prepares a wallet tx; `/api/onchain/confirm` stores the hash and verifies when a live market/RPC is configured.
 - Listings show **Minted** + explorer links when `mintTxHash` is set.
 
