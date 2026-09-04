@@ -1,17 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  /* Near-black with cool mint undertone */
-  --bg-deep: #050807;
-  --bg-mid: #0a1210;
-  --bg-lift: #101a16;
-  --panel: rgba(8, 16, 13, 0.82);
-  --panel-solid: #0c1411;
-  --ink: #e8ebe6;
-  --ink-muted: #8a968c;
+  /* Quiet gallery charcoal — artwork is the color, not the room */
+  --bg-deep: #09090b;
+  --bg-mid: #121214;
+  --bg-lift: #1a1a1d;
+  --panel: rgba(20, 20, 23, 0.72);
+  --panel-solid: #161618;
+  --ink: #f4f4f5;
+  --ink-muted: #a1a1aa;
   --accent: #c9953a;
   --accent-soft: #d4ae66;
-  --line: rgba(232, 235, 230, 0.08);
+  --line: rgba(244, 244, 245, 0.08);
+  --scrim: rgba(9, 9, 11, 0.72);
   --emergent: #6ecf9a;
   --danger: #d4785c;
   --mint-leaf: #4db884;
@@ -132,7 +133,7 @@ body {
   background: var(--bg-deep);
 }
 
-/* Boing-style engraved field: stone · hatch · grain · veins */
+/* Quiet gallery field: smooth charcoal, faint atmosphere, watermark plate */
 .fm-engrave-bg {
   position: absolute;
   inset: 0;
@@ -145,33 +146,9 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 100% 55% at 15% -5%, rgba(55, 88, 72, 0.18), transparent 52%),
-    radial-gradient(ellipse 80% 50% at 92% 12%, rgba(48, 58, 42, 0.14), transparent 48%),
-    radial-gradient(ellipse 70% 45% at 8% 88%, rgba(35, 54, 42, 0.16), transparent 50%),
-    radial-gradient(ellipse 90% 60% at 78% 96%, rgba(201, 149, 58, 0.05), transparent 55%),
-    linear-gradient(168deg, #030504 0%, var(--bg-deep) 42%, var(--bg-mid) 100%);
-}
-
-.fm-engrave-hatch {
-  position: absolute;
-  inset: 0;
-  opacity: 0.4;
-  background-image: repeating-linear-gradient(
-    -18deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.055) 2px,
-    rgba(0, 0, 0, 0.055) 3px
-  );
-  mix-blend-mode: multiply;
-}
-
-.fm-engrave-grain {
-  position: absolute;
-  inset: 0;
-  opacity: 0.08;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
+    radial-gradient(ellipse 80% 48% at 88% -8%, rgba(110, 207, 154, 0.05), transparent 52%),
+    radial-gradient(ellipse 70% 42% at -4% 104%, rgba(212, 174, 102, 0.04), transparent 50%),
+    linear-gradient(180deg, #0c0c0e 0%, var(--bg-deep) 42%, #0a0a0c 100%);
 }
 
 .fm-engrave-glow {
@@ -187,8 +164,8 @@ body {
   height: min(48vw, 520px);
   top: 8%;
   right: -6%;
-  background: radial-gradient(circle, rgba(110, 207, 154, 0.16), transparent 68%);
-  animation: fm-glow-drift 18s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(110, 207, 154, 0.06), transparent 70%);
+  animation: fm-glow-drift 22s ease-in-out infinite;
 }
 
 .fm-engrave-glow--gold {
@@ -196,8 +173,8 @@ body {
   height: min(42vw, 460px);
   bottom: 12%;
   left: -8%;
-  background: radial-gradient(circle, rgba(212, 174, 102, 0.11), transparent 70%);
-  animation: fm-glow-drift 22s ease-in-out infinite reverse;
+  background: radial-gradient(circle, rgba(212, 174, 102, 0.045), transparent 72%);
+  animation: fm-glow-drift 26s ease-in-out infinite reverse;
   animation-delay: -6s;
 }
 
@@ -206,7 +183,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.55;
+  opacity: 0.14;
 }
 
 .fm-engrave-vein--swap {
@@ -218,7 +195,7 @@ body {
     opacity: 0;
   }
   to {
-    opacity: 0.55;
+    opacity: 0.14;
   }
 }
 
@@ -290,10 +267,9 @@ a {
 }
 
 .site-header {
-  background: rgba(5, 8, 7, 0.78);
-  backdrop-filter: blur(12px);
+  background: rgba(9, 9, 11, 0.68);
+  backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 0 40px rgba(110, 207, 154, 0.04);
 }
 
 /* Home hero: copy left · featured-of-the-week right */
@@ -345,7 +321,7 @@ a {
   width: 100%;
   min-height: 0;
   height: 100%;
-  border: 1px solid rgba(232, 235, 230, 0.12);
+  border: 1px solid var(--line);
   box-shadow:
     0 0 0 1px rgba(110, 207, 154, 0.08),
     0 18px 36px rgba(0, 0, 0, 0.35);
@@ -482,8 +458,8 @@ a {
   gap: 0.15rem;
   padding: 0.4rem;
   border: 1px solid var(--line);
-  background: rgba(8, 14, 12, 0.96);
-  backdrop-filter: blur(12px);
+  background: rgba(20, 20, 23, 0.96);
+  backdrop-filter: blur(16px);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
@@ -502,7 +478,6 @@ a {
 .display {
   font-family: var(--font-display), system-ui, sans-serif;
   letter-spacing: -0.03em;
-  text-shadow: 0 0 28px rgba(110, 207, 154, 0.08);
 }
 
 /* Puzzle mosaic: unit cells fill the rail; featured = 2×2, compact = 1×1 */
@@ -529,8 +504,7 @@ a {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line);
-  background:
-    linear-gradient(155deg, rgba(16, 28, 22, 0.95), rgba(5, 8, 7, 0.98));
+  background: var(--bg-lift);
   transition:
     transform 280ms ease,
     border-color 280ms ease,
@@ -624,8 +598,8 @@ a {
   background: linear-gradient(
     180deg,
     transparent,
-    rgba(5, 8, 7, 0.55) 28%,
-    rgba(5, 8, 7, 0.92) 100%
+    rgba(9, 9, 11, 0.5) 28%,
+    rgba(9, 9, 11, 0.9) 100%
   );
   pointer-events: none;
 }
@@ -684,9 +658,9 @@ a {
   width: 100%;
   height: 100%;
   background:
-    linear-gradient(135deg, rgba(77, 184, 132, 0.22), transparent 42%),
-    linear-gradient(320deg, rgba(201, 149, 58, 0.12), transparent 48%),
-    #0a100e;
+    linear-gradient(135deg, rgba(77, 184, 132, 0.1), transparent 42%),
+    linear-gradient(320deg, rgba(201, 149, 58, 0.07), transparent 48%),
+    var(--bg-mid);
 }
 
 @media (max-width: 519px) {
@@ -762,7 +736,7 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .fm-engrave-vein,
   .fm-engrave-vein__live {
-    opacity: 0.4;
+    opacity: 0.1;
     animation: none !important;
   }
 

@@ -80,7 +80,7 @@ export default async function ListingDetailPage({
                   border: "1px solid var(--line)",
                   background: `
                     linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
-                    linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), #0a100e)
+                    linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
                   `,
                 }
           }

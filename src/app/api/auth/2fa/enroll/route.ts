@@ -25,7 +25,7 @@ export async function POST() {
   const qrDataUrl = await QRCode.toDataURL(otpauthUrl, {
     margin: 1,
     width: 220,
-    color: { dark: "#0a1210", light: "#e8ebe6" },
+    color: { dark: "#09090b", light: "#f4f4f5" },
   });
 
   const mode = await ensureDatabaseReady();

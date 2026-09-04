@@ -162,7 +162,7 @@ export function ListingActions({
             marginTop: "0.15rem",
             padding: "0.75rem 0.85rem",
             border: "1px solid var(--line)",
-            background: "rgba(8, 14, 12, 0.92)",
+            background: "var(--panel-solid)",
           }}
         >
           <p

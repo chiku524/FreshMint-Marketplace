@@ -125,14 +125,14 @@ export function WorkCard({
           style={
             media
               ? {
-                  backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(5,8,7,0.88)), url(${media})`,
+                  backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(9,9,11,0.78)), url(${media})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
               : {
                   background: `
             linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
-            linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), #0a100e)
+            linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
           `,
                 }
           }

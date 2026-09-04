@@ -45,7 +45,7 @@ export function TwoFactorChallenge({
         zIndex: 80,
         display: "grid",
         placeItems: "center",
-        background: "rgba(3, 5, 4, 0.72)",
+        background: "var(--scrim)",
         padding: "1rem",
       }}
     >
