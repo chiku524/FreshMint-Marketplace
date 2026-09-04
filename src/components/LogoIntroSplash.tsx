@@ -26,7 +26,6 @@ export function LogoIntroPlayer({ onEnded }: { onEnded: () => void }) {
         compositionHeight={LOGO_INTRO.height}
         fps={LOGO_INTRO.fps}
         autoPlay
-        muted
         acknowledgeRemotionLicense
         clickToPlay={false}
         spaceKeyToPlayOrPause={false}
