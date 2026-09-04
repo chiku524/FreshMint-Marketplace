@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
+const TABS: { href: string; label: string; exact?: boolean }[] = [
   { href: "/me", label: "Collection", exact: true },
   { href: "/me/settings", label: "Settings" },
   { href: "/me/security", label: "Security" },
-] as const;
+];
 
 export function AccountTabs() {
   const pathname = usePathname() || "/me";
