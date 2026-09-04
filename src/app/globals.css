@@ -11,8 +11,11 @@
   --ink-muted: #a1a1aa;
   --accent: #c9953a;
   --accent-soft: #d4ae66;
-  --line: rgba(244, 244, 245, 0.08);
+  --line: rgba(244, 244, 245, 0.1);
   --scrim: rgba(9, 9, 11, 0.72);
+  --page-x: clamp(1.35rem, 5.5vw, 4rem);
+  --page-y: clamp(2.75rem, 5vw, 4.5rem);
+  --section-y: clamp(2.75rem, 5vw, 4.25rem);
   --emergent: #6ecf9a;
   --danger: #d4785c;
   --mint-leaf: #4db884;
@@ -133,7 +136,7 @@ body {
   background: var(--bg-deep);
 }
 
-/* Quiet gallery field: smooth charcoal, faint atmosphere, watermark plate */
+/* Engraved field: stone · hatch · grain · veins, on gallery charcoal */
 .fm-engrave-bg {
   position: absolute;
   inset: 0;
@@ -146,9 +149,33 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 48% at 88% -8%, rgba(110, 207, 154, 0.05), transparent 52%),
-    radial-gradient(ellipse 70% 42% at -4% 104%, rgba(212, 174, 102, 0.04), transparent 50%),
-    linear-gradient(180deg, #0c0c0e 0%, var(--bg-deep) 42%, #0a0a0c 100%);
+    radial-gradient(ellipse 100% 55% at 15% -5%, rgba(72, 72, 82, 0.18), transparent 52%),
+    radial-gradient(ellipse 80% 50% at 92% 12%, rgba(48, 48, 54, 0.16), transparent 48%),
+    radial-gradient(ellipse 70% 45% at 8% 88%, rgba(36, 36, 42, 0.18), transparent 50%),
+    radial-gradient(ellipse 90% 60% at 78% 96%, rgba(201, 149, 58, 0.05), transparent 55%),
+    linear-gradient(168deg, #070708 0%, var(--bg-deep) 42%, var(--bg-mid) 100%);
+}
+
+.fm-engrave-hatch {
+  position: absolute;
+  inset: 0;
+  opacity: 0.4;
+  background-image: repeating-linear-gradient(
+    -18deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.055) 2px,
+    rgba(0, 0, 0, 0.055) 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+.fm-engrave-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
 }
 
 .fm-engrave-glow {
@@ -164,8 +191,8 @@ body {
   height: min(48vw, 520px);
   top: 8%;
   right: -6%;
-  background: radial-gradient(circle, rgba(110, 207, 154, 0.06), transparent 70%);
-  animation: fm-glow-drift 22s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(110, 207, 154, 0.16), transparent 68%);
+  animation: fm-glow-drift 18s ease-in-out infinite;
 }
 
 .fm-engrave-glow--gold {
@@ -173,8 +200,8 @@ body {
   height: min(42vw, 460px);
   bottom: 12%;
   left: -8%;
-  background: radial-gradient(circle, rgba(212, 174, 102, 0.045), transparent 72%);
-  animation: fm-glow-drift 26s ease-in-out infinite reverse;
+  background: radial-gradient(circle, rgba(212, 174, 102, 0.11), transparent 70%);
+  animation: fm-glow-drift 22s ease-in-out infinite reverse;
   animation-delay: -6s;
 }
 
@@ -183,7 +210,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.14;
+  opacity: 0.55;
 }
 
 .fm-engrave-vein--swap {
@@ -195,7 +222,7 @@ body {
     opacity: 0;
   }
   to {
-    opacity: 0.14;
+    opacity: 0.55;
   }
 }
 
@@ -270,6 +297,33 @@ a {
   background: rgba(9, 9, 11, 0.68);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--line);
+  padding: 1.25rem var(--page-x);
+}
+
+.site-footer {
+  padding: 2.25rem var(--page-x);
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
+.page-wrap {
+  padding: var(--page-y) var(--page-x) calc(var(--page-y) + 0.75rem);
+}
+
+.page-wrap > header + section,
+.page-wrap > section + section {
+  margin-top: 2.75rem;
+  padding-top: 2.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.site-section {
+  padding: var(--section-y) var(--page-x);
+}
+
+.site-section + .site-section {
+  border-top: 1px solid var(--line);
 }
 
 /* Home hero: copy left · featured-of-the-week right */
@@ -279,7 +333,8 @@ a {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: stretch;
   gap: clamp(1.5rem, 4vw, 3rem);
-  padding: clamp(1.75rem, 4vw, 3.5rem) clamp(1rem, 4vw, 3rem) 3rem;
+  padding: clamp(2.25rem, 5vw, 4.25rem) var(--page-x) var(--section-y);
+  border-bottom: 1px solid var(--line);
   position: relative;
 }
 
@@ -484,7 +539,7 @@ a {
 .lane-rail {
   --rail-cols: 4;
   --rail-rows: 2;
-  --rail-gap: 0.45rem;
+  --rail-gap: 0.7rem;
   display: grid;
   width: 100%;
   gap: var(--rail-gap);
@@ -736,7 +791,7 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .fm-engrave-vein,
   .fm-engrave-vein__live {
-    opacity: 0.1;
+    opacity: 0.4;
     animation: none !important;
   }
 

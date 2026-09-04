@@ -94,7 +94,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section style={{ padding: "0 clamp(1rem, 4vw, 3rem) 3rem" }}>
+      <section className="site-section">
         <div
           style={{
             display: "flex",
@@ -146,7 +146,7 @@ export default async function HomePage() {
       </section>
 
       {home.liveAuctions.length > 0 ? (
-        <section style={{ padding: "0 clamp(1rem, 4vw, 3rem) 3rem" }}>
+        <section className="site-section">
           <div
             style={{
               display: "flex",
@@ -180,7 +180,7 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      <section style={{ padding: "0 clamp(1rem, 4vw, 3rem) 4rem" }}>
+      <section className="site-section">
         <div
           style={{
             display: "flex",

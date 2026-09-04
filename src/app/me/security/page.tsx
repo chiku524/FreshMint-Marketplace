@@ -10,7 +10,7 @@ export default async function MeSecurityPage() {
   if (!user) redirect("/create");
 
   return (
-    <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
+    <div className="page-wrap">
       <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
         <Link href="/me">← Account</Link>
       </p>

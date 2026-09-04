@@ -25,7 +25,7 @@ export default function DocsPage() {
   const mix = cfg.feedMix;
 
   return (
-    <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
+    <div className="page-wrap">
       <header style={{ maxWidth: "40rem", marginBottom: "2.75rem" }}>
         <p
           className="display"
@@ -60,7 +60,7 @@ export default function DocsPage() {
         </p>
       </header>
 
-      <section style={{ marginBottom: "3rem", maxWidth: "52rem" }}>
+      <section style={{ maxWidth: "52rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           Surfaces
         </h2>
@@ -113,14 +113,7 @@ export default function DocsPage() {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: "3rem",
-          padding: "1.5rem 0",
-          borderTop: "1px solid var(--line)",
-          borderBottom: "1px solid var(--line)",
-        }}
-      >
+      <section>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           Homepage mix
         </h2>
@@ -168,7 +161,7 @@ export default function DocsPage() {
         </p>
       </section>
 
-      <section style={{ marginBottom: "3rem", maxWidth: "48rem" }}>
+      <section style={{ maxWidth: "48rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           Listing stages
         </h2>
@@ -214,7 +207,7 @@ export default function DocsPage() {
         </ul>
       </section>
 
-      <section style={{ marginBottom: "3rem", maxWidth: "48rem" }}>
+      <section style={{ maxWidth: "48rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           Emerging
         </h2>
@@ -242,7 +235,7 @@ export default function DocsPage() {
         </p>
       </section>
 
-      <section style={{ marginBottom: "3rem", maxWidth: "48rem" }}>
+      <section style={{ maxWidth: "48rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           How works are scored
         </h2>
@@ -270,7 +263,7 @@ export default function DocsPage() {
         </p>
       </section>
 
-      <section style={{ marginBottom: "3rem", maxWidth: "48rem" }}>
+      <section style={{ maxWidth: "48rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           Congestion & trust
         </h2>

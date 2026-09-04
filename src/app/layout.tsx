@@ -43,7 +43,6 @@ export default function RootLayout({
               alignItems: "center",
               justifyContent: "space-between",
               gap: "1rem",
-              padding: "1.1rem clamp(1rem, 4vw, 3rem)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
@@ -55,14 +54,7 @@ export default function RootLayout({
             <WalletBar />
           </header>
           <main style={{ flex: 1 }}>{children}</main>
-          <footer
-            style={{
-              padding: "2rem clamp(1rem, 4vw, 3rem)",
-              borderTop: "1px solid var(--line)",
-              color: "var(--ink-muted)",
-              fontSize: "0.9rem",
-            }}
-          >
+          <footer className="site-footer">
             Attention is scarce. Emerging artists get a coded quota — not a slogan.
           </footer>
         </div>

@@ -17,7 +17,7 @@ export default async function CalendarPage() {
   const cal = await getDropCalendar();
 
   return (
-    <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
+    <div className="page-wrap">
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Drop calendar
       </h1>

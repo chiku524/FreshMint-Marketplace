@@ -12,7 +12,7 @@ export default async function MePage() {
   const user = await getSessionUser();
   if (!user) {
     return (
-      <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
+      <div className="page-wrap">
         <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.2rem" }}>
           Account
         </h1>
@@ -28,7 +28,7 @@ export default async function MePage() {
   if (!profile) redirect("/");
 
   return (
-    <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
+    <div className="page-wrap">
       <div
         style={{
           display: "flex",

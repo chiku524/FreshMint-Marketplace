@@ -30,7 +30,7 @@ export default async function CreatorProfilePage({
     (engine.state.follows.get(user.id)?.followedArtistIds.includes(id) ?? false);
 
   return (
-    <div style={{ padding: "2.5rem clamp(1rem, 4vw, 3rem) 4rem" }}>
+    <div className="page-wrap">
       <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
         <Link href="/open">Open Lane</Link>
         {" · "}
