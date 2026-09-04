@@ -4,16 +4,27 @@ import {
   upsertUserFromGoogle,
 } from "@/lib/auth/account";
 import {
-  consumeGooglePkce,
   exchangeGoogleCode,
+  GOOGLE_PKCE_COOKIE,
+  googlePkceCookieOptions,
   readGoogleOAuthState,
+  readGooglePkce,
 } from "@/lib/auth/google";
-import { safeNextPath } from "@/lib/auth/paths";
-import { completeLoginOrChallenge } from "@/lib/auth/session";
+import { absoluteAppUrl, safeNextPath } from "@/lib/auth/paths";
+import { applySessionCookie, completeLoginOrChallenge } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 function fail(req: NextRequest, error: string) {
-  return NextResponse.redirect(new URL(`/sign-in?error=${error}`, req.url));
+  return NextResponse.redirect(
+    absoluteAppUrl(`/sign-in?error=${error}`, req.url),
+  );
+}
+
+function clearPkce(res: NextResponse) {
+  res.cookies.set(GOOGLE_PKCE_COOKIE, "", googlePkceCookieOptions(0));
+  return res;
 }
 
 export async function GET(req: NextRequest) {
@@ -26,7 +37,7 @@ export async function GET(req: NextRequest) {
   const state = await readGoogleOAuthState(stateToken);
   if (!state) return fail(req, "google_invalid");
 
-  const verifier = await consumeGooglePkce();
+  const verifier = await readGooglePkce();
   if (!verifier) return fail(req, "google_invalid");
 
   try {
@@ -38,22 +49,29 @@ export async function GET(req: NextRequest) {
 
     if (state.uid) {
       await linkGoogleToUser({ userId: state.uid, profile });
-      return NextResponse.redirect(new URL(safeNextPath(state.next), req.url));
+      return clearPkce(
+        NextResponse.redirect(absoluteAppUrl(safeNextPath(state.next), req.url)),
+      );
     }
 
     const { userId } = await upsertUserFromGoogle(profile);
     const login = await completeLoginOrChallenge(userId);
     if (login.requires2fa) {
-      const dest = new URL("/sign-in", req.url);
+      const dest = absoluteAppUrl("/sign-in", req.url);
       dest.searchParams.set("challenge", login.pendingToken);
       dest.searchParams.set("name", login.displayName);
       dest.searchParams.set("next", safeNextPath(state.next));
-      return NextResponse.redirect(dest);
+      return clearPkce(NextResponse.redirect(dest));
     }
 
-    return NextResponse.redirect(new URL(safeNextPath(state.next), req.url));
+    const res = NextResponse.redirect(
+      absoluteAppUrl(safeNextPath(state.next), req.url),
+    );
+    applySessionCookie(res, login.jwt, login.expiresAt);
+    return clearPkce(res);
   } catch (e) {
     if (e instanceof AccountError) return fail(req, e.message);
+    console.error("[auth/google/callback]", e);
     return fail(req, "google_failed");
   }
 }

@@ -1,17 +1,21 @@
 import {
-  beginGooglePkce,
   createGoogleOAuthState,
+  createGooglePkce,
+  GOOGLE_PKCE_COOKIE,
   googleAuthorizeUrl,
+  googlePkceCookieOptions,
   isGoogleAuthConfigured,
 } from "@/lib/auth/google";
-import { safeNextPath } from "@/lib/auth/paths";
+import { absoluteAppUrl, safeNextPath } from "@/lib/auth/paths";
 import { getSessionUser } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   if (!isGoogleAuthConfigured()) {
     return NextResponse.redirect(
-      new URL("/sign-in?error=google_not_configured", req.url),
+      absoluteAppUrl("/sign-in?error=google_not_configured", req.url),
     );
   }
 
@@ -23,11 +27,13 @@ export async function GET(req: NextRequest) {
     next,
     uid: user?.id,
   });
-  const codeChallenge = await beginGooglePkce();
+  const { verifier, challenge } = createGooglePkce();
   const url = googleAuthorizeUrl({
     state,
-    codeChallenge,
+    codeChallenge: challenge,
     requestUrl: req.url,
   });
-  return NextResponse.redirect(url);
+  const res = NextResponse.redirect(url);
+  res.cookies.set(GOOGLE_PKCE_COOKIE, verifier, googlePkceCookieOptions());
+  return res;
 }

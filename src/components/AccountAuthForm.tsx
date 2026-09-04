@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
@@ -42,7 +41,6 @@ export function AccountAuthForm({
   initialChallenge?: string | null;
   initialName?: string | null;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(
     initialError ? (ERRORS[initialError] ?? initialError) : null,
@@ -88,8 +86,7 @@ export function AccountAuthForm({
         });
         return;
       }
-      router.push(nextPath);
-      router.refresh();
+      window.location.assign(nextPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "auth_failed");
     } finally {
@@ -108,8 +105,7 @@ export function AccountAuthForm({
           onCancel={() => setChallenge(null)}
           onSuccess={() => {
             setChallenge(null);
-            router.push(nextPath);
-            router.refresh();
+            window.location.assign(nextPath);
           }}
         />
       ) : null}

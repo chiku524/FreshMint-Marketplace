@@ -64,25 +64,27 @@ export async function readGoogleOAuthState(
   }
 }
 
-export async function beginGooglePkce(): Promise<string> {
-  const verifier = randomBytes(32).toString("base64url");
-  const jar = await cookies();
-  jar.set(PKCE_COOKIE, verifier, {
+export const GOOGLE_PKCE_COOKIE = PKCE_COOKIE;
+
+export function googlePkceCookieOptions(maxAge = 10 * 60) {
+  return {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 10 * 60,
-  });
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-  return challenge;
+    maxAge,
+  };
 }
 
-export async function consumeGooglePkce(): Promise<string | null> {
+export function createGooglePkce(): { verifier: string; challenge: string } {
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+}
+
+export async function readGooglePkce(): Promise<string | null> {
   const jar = await cookies();
-  const verifier = jar.get(PKCE_COOKIE)?.value ?? null;
-  jar.set(PKCE_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
-  return verifier;
+  return jar.get(PKCE_COOKIE)?.value ?? null;
 }
 
 export function googleAuthorizeUrl(input: {

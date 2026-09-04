@@ -2,10 +2,12 @@ import "@/lib/env";
 import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { CreatorProfile } from "@/lib/discovery/types";
 
-const COOKIE = "freshmint_session";
+export const SESSION_COOKIE = "freshmint_session";
+const COOKIE = SESSION_COOKIE;
 
 export type SessionUser = {
   id: string;
@@ -90,8 +92,30 @@ export function publicSession(user: SessionUser) {
   };
 }
 
+export function sessionCookieOptions(expiresAt: Date) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: expiresAt,
+  };
+}
+
+export function applySessionCookie(
+  res: NextResponse,
+  jwt: string,
+  expiresAt: Date,
+): NextResponse {
+  res.cookies.set(COOKIE, jwt, sessionCookieOptions(expiresAt));
+  return res;
+}
+
 /** Persist session cookie. In memory mode, JWT-only (no Session table). */
-export async function createSession(userId: string): Promise<string> {
+export async function createSession(userId: string): Promise<{
+  jwt: string;
+  expiresAt: Date;
+}> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const tokenHash = hashToken(token);
@@ -122,15 +146,9 @@ export async function createSession(userId: string): Promise<string> {
     .sign(secretKey());
 
   const jar = await cookies();
-  jar.set(COOKIE, jwt, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: expiresAt,
-  });
+  jar.set(COOKIE, jwt, sessionCookieOptions(expiresAt));
 
-  return jwt;
+  return { jwt, expiresAt };
 }
 
 export async function destroySession(): Promise<void> {
@@ -223,7 +241,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
 /** After wallet/demo auth: either create session or return pending 2FA token. */
 export async function completeLoginOrChallenge(userId: string): Promise<
-  | { ok: true; requires2fa: false }
+  | { ok: true; requires2fa: false; jwt: string; expiresAt: Date }
   | { ok: true; requires2fa: true; pendingToken: string; displayName: string }
 > {
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
@@ -254,6 +272,11 @@ export async function completeLoginOrChallenge(userId: string): Promise<
     return { ok: true, requires2fa: true, pendingToken, displayName };
   }
 
-  await createSession(userId);
-  return { ok: true, requires2fa: false };
+  const session = await createSession(userId);
+  return {
+    ok: true,
+    requires2fa: false,
+    jwt: session.jwt,
+    expiresAt: session.expiresAt,
+  };
 }

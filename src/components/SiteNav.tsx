@@ -166,20 +166,46 @@ function NavDropdown({
 export function SiteNav() {
   const pathname = usePathname() || "/";
   const [closeSignal, setCloseSignal] = useState(0);
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     setCloseSignal((n) => n + 1);
   }, [pathname]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data: { user?: { id?: string } | null }) => {
+        if (!cancelled) setSignedIn(Boolean(data.user?.id));
+      })
+      .catch(() => {
+        if (!cancelled) setSignedIn(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
   return (
     <nav className="site-nav" aria-label="Primary">
-      {GROUPS.map((group) => (
-        <NavDropdown
-          key={group.id}
-          group={group}
-          closeSignal={closeSignal}
-        />
-      ))}
+      {GROUPS.map((group) => {
+        const items =
+          group.id === "account"
+            ? group.items.filter((item) =>
+                signedIn
+                  ? item.href !== "/sign-in" && item.href !== "/sign-up"
+                  : true,
+              )
+            : group.items;
+        return (
+          <NavDropdown
+            key={group.id}
+            group={{ ...group, items }}
+            closeSignal={closeSignal}
+          />
+        );
+      })}
     </nav>
   );
 }

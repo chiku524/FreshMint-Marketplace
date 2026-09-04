@@ -35,3 +35,8 @@ export function appBaseUrl(requestUrl?: string): string {
   }
   return "http://localhost:3000";
 }
+
+export function absoluteAppUrl(path: string, requestUrl?: string): URL {
+  const dest = path.startsWith("/") ? path : `/${path}`;
+  return new URL(dest, `${appBaseUrl(requestUrl)}/`);
+}

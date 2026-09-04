@@ -8,7 +8,7 @@ import {
   upsertUserFromGoogle,
 } from "@/lib/auth/account";
 import { hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth/password";
-import { appBaseUrl, safeNextPath } from "@/lib/auth/paths";
+import { absoluteAppUrl, appBaseUrl, safeNextPath } from "@/lib/auth/paths";
 import {
   enableMemoryMode,
   getMemoryState,
@@ -66,6 +66,9 @@ describe("appBaseUrl", () => {
     expect(appBaseUrl("http://localhost:3000/api/auth/google")).toBe(
       "https://fresh-mint-marketplace.vercel.app",
     );
+    expect(
+      absoluteAppUrl("/me", "http://localhost:3000/api/auth/google/callback").href,
+    ).toBe("https://fresh-mint-marketplace.vercel.app/me");
   });
 });
 
