@@ -379,8 +379,16 @@ html.fm-intro-pending body {
   overflow: hidden;
 }
 
-html.fm-intro-pending .site-shell > :not(.fm-intro-splash) {
-  visibility: hidden;
+.fm-intro-cover {
+  display: none;
+}
+
+html.fm-intro-pending .fm-intro-cover {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  background: #09090b;
 }
 
 @media (prefers-reduced-motion: reduce) {
