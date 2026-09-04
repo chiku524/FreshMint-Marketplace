@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { signWallet, type BrowserWalletChain } from "@/lib/auth/browser-wallets";
+import {
+  discoverEvmWallets,
+  signWallet,
+  WALLET_AUTH_ERRORS,
+  type BrowserWalletChain,
+  type DiscoveredEvmWallet,
+  type EthProvider,
+} from "@/lib/auth/browser-wallets";
+import { EvmWalletPicker } from "@/components/EvmWalletPicker";
 import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
 type SessionUser = {
@@ -32,6 +40,9 @@ export function WalletBar() {
     pendingToken: string;
     displayName: string;
   } | null>(null);
+  const [evmChoices, setEvmChoices] = useState<DiscoveredEvmWallet[] | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/auth/me");
@@ -78,11 +89,24 @@ export function WalletBar() {
     }
   }
 
-  async function connectOrLink(chain: BrowserWalletChain) {
+  async function connectOrLink(
+    chain: BrowserWalletChain,
+    evmProvider?: EthProvider,
+  ) {
     setBusy(true);
     setError(null);
     try {
-      const proof = await signWallet(chain);
+      if (chain === "evm" && !evmProvider) {
+        const wallets = await discoverEvmWallets();
+        if (wallets.length === 0) throw new Error("No EVM wallet found");
+        if (wallets.length > 1) {
+          setEvmChoices(wallets);
+          setBusy(false);
+          return;
+        }
+        evmProvider = wallets[0].provider;
+      }
+      const proof = await signWallet(chain, evmProvider);
       const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
       const verifyRes = await fetch(endpoint, {
         method: "POST",
@@ -96,8 +120,10 @@ export function WalletBar() {
       } else {
         await refresh();
       }
+      setEvmChoices(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "connect_failed");
+      const raw = e instanceof Error ? e.message : "connect_failed";
+      setError(WALLET_AUTH_ERRORS[raw] ?? raw);
     } finally {
       setBusy(false);
     }
@@ -212,6 +238,13 @@ export function WalletBar() {
             </select>
           </>
         )}
+        {evmChoices ? (
+          <EvmWalletPicker
+            wallets={evmChoices}
+            onSelect={(wallet) => void connectOrLink("evm", wallet.provider)}
+            onCancel={() => setEvmChoices(null)}
+          />
+        ) : null}
         {error ? (
           <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
             {error}

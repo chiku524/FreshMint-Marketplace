@@ -251,13 +251,27 @@ export async function linkWalletToUser(input: {
 
   if (await useMemoryAuth()) {
     const { getMemoryState } = await import("@/lib/data/memory-store");
+    const { getMemoryAccount } = await import("@/lib/auth/account");
     const state = getMemoryState();
     for (const creator of state.creators.values()) {
       const match = creator.wallets.find(
         (w) => w.chain === input.chain && w.address === address,
       );
       if (match && creator.id !== input.userId) {
-        throw new Error("wallet_already_linked");
+        const account = getMemoryAccount(creator.id);
+        const orphan =
+          !account?.email &&
+          !account?.googleId &&
+          !account?.passwordHash &&
+          creator.wallets.length === 1;
+        if (!orphan) throw new Error("wallet_already_linked");
+        state.creators.set(creator.id, {
+          ...creator,
+          wallets: creator.wallets.filter(
+            (w) => !(w.chain === input.chain && w.address === address),
+          ),
+        });
+        break;
       }
       if (match) return { chain: input.chain, address, userId: creator.id };
     }
@@ -266,7 +280,11 @@ export async function linkWalletToUser(input: {
     const wallet = { chain: input.chain, address };
     state.creators.set(input.userId, {
       ...creator,
-      wallets: [...creator.wallets, wallet],
+      wallets: creator.wallets.some(
+        (w) => w.chain === input.chain && w.address === address,
+      )
+        ? creator.wallets
+        : [...creator.wallets, wallet],
     });
     return { ...wallet, userId: input.userId };
   }
@@ -275,7 +293,26 @@ export async function linkWalletToUser(input: {
     where: { chain_address: { chain: input.chain, address } },
   });
   if (taken && taken.userId !== input.userId) {
-    throw new Error("wallet_already_linked");
+    const other = await prisma.user.findUnique({
+      where: { id: taken.userId },
+      include: {
+        wallets: true,
+        _count: { select: { listings: true, purchases: true } },
+      },
+    });
+    const orphan =
+      other &&
+      !other.email &&
+      !other.googleId &&
+      !other.passwordHash &&
+      other.wallets.length === 1 &&
+      other._count.listings === 0 &&
+      other._count.purchases === 0;
+    if (!orphan) throw new Error("wallet_already_linked");
+    return prisma.wallet.update({
+      where: { id: taken.id },
+      data: { userId: input.userId },
+    });
   }
   if (taken) return taken;
   return prisma.wallet.create({

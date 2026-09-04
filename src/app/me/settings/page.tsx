@@ -33,8 +33,9 @@ export default async function MeSettingsPage() {
           Wallets
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 0.85rem", maxWidth: "48ch" }}>
-          Link a wallet by signing a message. That proves you control the key —
-          no gas is spent. NFTs already in that wallet then appear on Collection.
+          Link EVM, Solana, or Boing by signing a message. If several EVM
+          wallets are installed, you can pick Coinbase, MetaMask, Phantom, or
+          another provider. NFTs in each linked address appear on Collection.
         </p>
         {profile.wallets.length === 0 ? (
           <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem" }}>
@@ -61,7 +62,7 @@ export default async function MeSettingsPage() {
             ))}
           </ul>
         )}
-        <WalletLinkPanel linkedChains={profile.wallets.map((w) => w.chain)} />
+        <WalletLinkPanel />
       </section>
     </>
   );
