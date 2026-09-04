@@ -283,13 +283,14 @@ a {
   flex-direction: column;
 }
 
-.site-shell > *:not(.fm-engrave-bg):not(.fm-intro-splash) {
+.site-shell > *:not(.fm-engrave-bg):not(.fm-intro-splash):not(.site-header) {
   position: relative;
   z-index: 1;
 }
 
 /* Keep header (and its menus) above <main> so dropdowns stay hoverable */
 .site-shell > .site-header {
+  position: relative;
   z-index: 50;
 }
 
