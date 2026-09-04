@@ -84,7 +84,7 @@ export default function DocsPage() {
             {
               name: "Rising",
               href: "/rising",
-              job: `Fair discovery pool. ${budgets.risingEmergingReserved} of ${budgets.risingTotal} daily slots reserved for Emerging.`,
+              job: `Fair discovery pool. ${budgets.risingEmergingReserved} of ${budgets.risingTotal} daily slots reserved for Emerging, ${budgets.risingExplore} explore.`,
             },
             {
               name: "Featured",
@@ -162,7 +162,9 @@ export default function DocsPage() {
         </div>
         <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem" }}>
           Max {cfg.maxArtistPerScreen} artist per screen · collection flood capped
-          at {cfg.maxCollectionFloodPerSession} per session window.
+          at {cfg.maxCollectionFloodPerSession} per session · one chain ≤{" "}
+          {pct(cfg.maxChainSharePerPage)} of a page. Guest Emerging uses a taste
+          seed, not a demo follow graph.
         </p>
       </section>
 
@@ -217,9 +219,10 @@ export default function DocsPage() {
           Emerging
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem" }}>
-          A creator is Emerging if{" "}
-          <em style={{ color: "var(--ink)" }}>any</em> threshold holds, and they
-          are not flagged or in a wash cluster. External follower fame is ignored.
+          A creator is Emerging if they are not flagged or in a wash cluster and
+          they have exceeded fewer than{" "}
+          {cfg.emerging.graduationThresholdsRequired} of the three thresholds
+          below (two-of-three graduation). External follower fame is ignored.
           Verification is not required for Rising.
         </p>
         <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.65 }}>
@@ -235,7 +238,7 @@ export default function DocsPage() {
         <p style={{ margin: "1rem 0 0", color: "var(--emergent)" }}>
           Rising reserves {pct(cfg.emergingRisingQuota)} of its daily slots for
           Emerging works ({budgets.risingEmergingReserved} of {budgets.risingTotal}{" "}
-          today).
+          today) and {budgets.risingExplore} low-exposure explore slots.
         </p>
       </section>
 
@@ -255,12 +258,15 @@ export default function DocsPage() {
           quality × novelty × diversity × spam⁻¹ × decay × temporal
         </p>
         <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
-          Quality favors saves, dwell, unique viewers, and nominations — not raw
-          clicks. Novelty lifts low-exposure artists. Diversity blocks the same
-          artist from flooding a screen. Impression fair-share (
+          Quality is a Bayesian engagement <em>rate</em> (saves, follows, dwell,
+          nominations per unique viewer), not a raw popularity sum. Saves from
+          listings with fewer than {cfg.sybil.minUniqueViewersForSaveTrust} unique
+          viewers are discounted. Novelty lifts low-exposure artists and applies
+          listing-type weights. Diversity blocks the same artist from flooding a
+          session. Impression fair-share (
           {cfg.impressionFairSharePerDay.toLocaleString()}/day) applies decay so
-          winners cannot monopolize Rising forever. Open editions and auctions get
-          short temporal bursts, then decay hard.
+          winners cannot monopolize Rising forever. Singles get a short Rising-age
+          burst; open editions and auctions keep their own clocks.
         </p>
       </section>
 
@@ -304,8 +310,9 @@ export default function DocsPage() {
               Collectors
             </h3>
             <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-              Follow artists and shelves to fill the Following slice. Nominate
-              Emerging works into Rising with reputation at stake. Create shelves
+              Follow artists, collectors, and shelves to fill the Following slice.
+              Collectors you follow contribute their graph. Nominate Emerging
+              works into Rising with reputation at stake. Create shelves
               in{" "}
               <Link href="/studio" style={{ color: "var(--accent-soft)" }}>
                 Studio

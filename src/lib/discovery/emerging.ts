@@ -6,11 +6,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export interface EmergingResult {
   emerging: boolean;
   reasons: string[];
+  /** How many of the three graduation thresholds this creator has exceeded. */
+  exceededCount: number;
 }
 
 /**
- * Emerging = (volume OR sales OR tenure threshold) AND not flagged AND not wash.
- * External follower fame is intentionally ignored.
+ * Emerging = not flagged/wash AND fewer than N graduation thresholds exceeded.
+ * Default N=2 (two-of-three). External follower fame is ignored.
  * Verified creator badge is NOT required.
  */
 export function isEmergingCreator(
@@ -20,14 +22,18 @@ export function isEmergingCreator(
   const reasons: string[] = [];
 
   if (creator.flagged) {
-    return { emerging: false, reasons: ["creator_flagged"] };
+    return { emerging: false, reasons: ["creator_flagged"], exceededCount: 3 };
   }
   if (creator.washCluster) {
-    return { emerging: false, reasons: ["wash_cluster"] };
+    return { emerging: false, reasons: ["wash_cluster"], exceededCount: 3 };
   }
 
-  const { maxLifetimePrimaryVolumeUsd, maxCompletedSales, maxDaysSinceFirstListing } =
-    DISCOVERY_CONFIG.emerging;
+  const {
+    maxLifetimePrimaryVolumeUsd,
+    maxCompletedSales,
+    maxDaysSinceFirstListing,
+    graduationThresholdsRequired,
+  } = DISCOVERY_CONFIG.emerging;
 
   const underVolume =
     creator.lifetimePrimaryVolumeUsd < maxLifetimePrimaryVolumeUsd;
@@ -40,12 +46,26 @@ export function isEmergingCreator(
   if (underSales) reasons.push("under_sales_threshold");
   if (withinWindow) reasons.push("within_tenure_window");
 
-  const emerging = underVolume || underSales || withinWindow;
-  if (!emerging) {
-    reasons.push("graduated_from_emerging");
+  let exceededCount = 0;
+  if (!underVolume) {
+    exceededCount += 1;
+    reasons.push("exceeded_volume_threshold");
+  }
+  if (!underSales) {
+    exceededCount += 1;
+    reasons.push("exceeded_sales_threshold");
+  }
+  if (!withinWindow) {
+    exceededCount += 1;
+    reasons.push("exceeded_tenure_window");
   }
 
-  return { emerging, reasons };
+  const emerging = exceededCount < graduationThresholdsRequired;
+  if (!emerging) {
+    reasons.push("graduated_two_of_three");
+  }
+
+  return { emerging, reasons, exceededCount };
 }
 
 export function isEmergingListing(
@@ -54,13 +74,14 @@ export function isEmergingListing(
   now = Date.now(),
 ): EmergingResult {
   if (listing.delisted) {
-    return { emerging: false, reasons: ["listing_delisted"] };
+    return { emerging: false, reasons: ["listing_delisted"], exceededCount: 0 };
   }
   return isEmergingCreator(creator, now);
 }
 
 /**
- * Artists who already dominate Featured must not monopolize Rising.
+ * Artists who already hold a live Featured slot must not monopolize Rising.
+ * Ended/sold auctions in Featured stage do not count as current inventory.
  */
 export function blocksRisingDueToFeaturedDominance(
   creator: CreatorProfile,
@@ -68,6 +89,5 @@ export function blocksRisingDueToFeaturedDominance(
   featuredCountForCreator: number,
 ): boolean {
   if (!featuredCreatorIdsToday.has(creator.id)) return false;
-  // More than one Featured slot today → blocked from additional Rising saturation.
   return featuredCountForCreator >= 1;
 }

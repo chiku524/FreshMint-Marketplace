@@ -65,7 +65,7 @@ Locked in `DISCOVERY_CONFIG.feedMix` (must sum to 1):
 
 Diversity: **max 1 artist per screen**; collection flood capped per session.
 
-Anonymous visitors currently fall back to a demo Following persona for cold-start mix; signed-in users get their real Follow graph.
+Anonymous visitors pick a **taste seed** (style tags) for Emerging only — they do not inherit a demo collector’s follow graph. Signed-in users get their Follow graph, including **collectors they follow** (those collectors’ artists and shelves). Taste affinity reranks the Emerging homepage slice only and cannot steal quota.
 
 ---
 
@@ -111,13 +111,15 @@ Implemented in `src/lib/discovery/staging.ts`.
 
 Emerging is **game-resistant** and ignores external follower fame. Verified badge is **not** required.
 
-A creator is Emerging if **any** of these hold, **and** they are not flagged / wash:
+A creator is Emerging if they are not flagged / wash **and** they have exceeded fewer than **2** of these three thresholds (two-of-three graduation):
 
-- Lifetime primary volume &lt; **$5,000**, or  
-- Completed sales &lt; **10**, or  
-- First listing within **90 days** (or no first listing yet)
+- Lifetime primary volume ≥ **$5,000**
+- Completed sales ≥ **10**
+- First listing older than **90 days**
 
-Then Rising applies a hard **Emerging quota** (default **40%** of Rising slots) after scoring and OE concurrency caps.
+A high-sale / low-volume artist (or the reverse) graduates instead of camping Emerging forever.
+
+Then Rising applies a hard **Emerging quota** (default **40%** of Rising slots), a **12% explore slice** for low-exposure Emerging work, Featured-dominance blocking, and OE concurrency caps.
 
 See `src/lib/discovery/emerging.ts` and `quotas.ts`.
 
@@ -131,14 +133,14 @@ score = quality × novelty × diversity × spam_inverse × impression_decay × t
 
 | Factor | Intent |
 |---|---|
-| **quality** | Saves, follows, dwell, unique viewers, nominations (not raw clicks alone) |
-| **novelty** | Boost when artist/collection has low prior platform exposure |
-| **diversity** | Downrank if same artist already on this screen / session |
+| **quality** | Bayesian engagement *rate* (saves/follows/dwell/nominations per unique viewer), shrunk toward a prior. Raw click volume does not win. Saves before 3 unique viewers are discounted. |
+| **novelty** | Boost when artist/collection has low prior platform exposure; `discoveryWeightForType` (singles 1.15, collections 0.9) |
+| **diversity** | Downrank if same artist already on this screen / **persisted session** |
 | **spam_inverse** | Report rate, new wallet, flags |
 | **impression_decay** | Fair-share daily/weekly impressions before hard decay |
-| **temporal** | OE drop burst; auction ending-soon boost |
+| **temporal** | OE drop burst; auction ending-soon; Rising-age burst (48h) for singles/collections |
 
-Listing types get discovery weights (1/1 singles slightly favored; collections surface hero + samples until traction).
+Impressions are recorded when a card enters the viewport (`ImpressionTracker`). Dwell/views no longer increment impression counters. Unique viewers are deduped per `viewerId × listingId`.
 
 ---
 
@@ -150,7 +152,9 @@ From `DISCOVERY_CONFIG`:
 |---|---|
 | Rising slots / day | 36 |
 | Emerging share of Rising | 40% |
+| Rising explore slice | 12% (~4 slots) |
 | Featured slots / day | 12 |
+| Max chain share / homepage page | 60% |
 | Max concurrent OE on Rising | 3 |
 | Live auction strip slots | 6 |
 | Rising entries / creator / week | 3 |
@@ -215,7 +219,11 @@ If volume leaders capture most Rising → fairness is broken.
 | Orchestration | `src/lib/discovery/engine.ts` |
 | Emerging | `emerging.ts` |
 | Scoring | `scoring.ts` |
-| Quotas / strips | `quotas.ts` |
+| Quotas / strips / explore | `quotas.ts` |
+| Candidate retrieve | `candidates.ts` |
+| Taste (Emerging-only) | `taste.ts` |
+| Session diversity cookies | `viewer-session.ts` |
+| Weekly policy check | `policy.ts` |
 | Homepage mix / Open filters | `feed-mix.ts` |
 | Stages / visibility | `staging.ts` |
 | Rate limits, dupes, nominations, reports | `anti-spam.ts` |

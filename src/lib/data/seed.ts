@@ -136,6 +136,21 @@ export function buildSeedState(): MarketplaceState {
       curatorScore: 55,
       establishedBadge: false,
     }),
+    creator({
+      id: "collector-kai",
+      displayName: "Kai Collects",
+      firstListingAt: null,
+      lifetimePrimaryVolumeUsd: 0,
+      completedSales: 0,
+      flagged: false,
+      washCluster: false,
+      verifiedCreator: false,
+      walletCreatedAt: now - 180 * day,
+      risingEntriesThisWeek: 0,
+      openLaneListingsToday: 0,
+      curatorScore: 40,
+      establishedBadge: false,
+    }),
   ];
 
   for (const c of roster) creators.set(c.id, c);
@@ -495,10 +510,17 @@ export function buildSeedState(): MarketplaceState {
     followerIds: ["collector-mira"],
   });
 
+  follows.set("collector-kai", {
+    collectorId: "collector-kai",
+    followedArtistIds: ["artist-glitch"],
+    followedCollectorIds: [],
+    followedShelfIds: [],
+  });
+
   follows.set("collector-mira", {
     collectorId: "collector-mira",
     followedArtistIds: ["artist-nova", "artist-fresh"],
-    followedCollectorIds: [],
+    followedCollectorIds: ["collector-kai"],
     followedShelfIds: ["shelf-ink"],
   });
 

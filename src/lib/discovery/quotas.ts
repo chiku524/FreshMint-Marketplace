@@ -1,10 +1,14 @@
 import { DISCOVERY_CONFIG } from "./config";
-import { isEmergingListing } from "./emerging";
+import {
+  blocksRisingDueToFeaturedDominance,
+  isEmergingListing,
+} from "./emerging";
 import type { CreatorProfile, Listing, RankedListing } from "./types";
 
 export interface SlotBudget {
   risingTotal: number;
   risingEmergingReserved: number;
+  risingExplore: number;
   risingOpen: number;
   featuredTotal: number;
   liveAuctionStrip: number;
@@ -16,19 +20,65 @@ export function getDailySlotBudgets(): SlotBudget {
   const risingEmergingReserved = Math.ceil(
     risingTotal * DISCOVERY_CONFIG.emergingRisingQuota,
   );
+  const risingExplore = Math.max(
+    1,
+    Math.floor(risingTotal * DISCOVERY_CONFIG.exploreRisingShare),
+  );
   return {
     risingTotal,
     risingEmergingReserved,
-    risingOpen: risingTotal - risingEmergingReserved,
+    risingExplore,
+    risingOpen: Math.max(0, risingTotal - risingEmergingReserved - risingExplore),
     featuredTotal: DISCOVERY_CONFIG.featuredSlotsPerDay,
     liveAuctionStrip: DISCOVERY_CONFIG.liveAuctionStripSlots,
     maxConcurrentOeOnRising: DISCOVERY_CONFIG.maxConcurrentOeOnRising,
   };
 }
 
+function isLiveFeatured(listing: Listing, now: number): boolean {
+  if (listing.stage !== "featured" || listing.delisted) return false;
+  if (
+    listing.type === "auction" &&
+    listing.auctionEndsAt != null &&
+    listing.auctionEndsAt < now
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** Drop Rising candidates whose creator already holds live Featured inventory. */
+export function excludeFeaturedDominantFromRising(
+  ranked: RankedListing[],
+  listings: Iterable<Listing>,
+  creators: Map<string, CreatorProfile>,
+  now = Date.now(),
+): RankedListing[] {
+  const featuredCreatorIds = new Set<string>();
+  const featuredCounts = new Map<string, number>();
+  for (const listing of listings) {
+    if (!isLiveFeatured(listing, now)) continue;
+    featuredCreatorIds.add(listing.creatorId);
+    featuredCounts.set(
+      listing.creatorId,
+      (featuredCounts.get(listing.creatorId) ?? 0) + 1,
+    );
+  }
+
+  return ranked.filter((item) => {
+    const creator = creators.get(item.listing.creatorId);
+    if (!creator) return false;
+    return !blocksRisingDueToFeaturedDominance(
+      creator,
+      featuredCreatorIds,
+      featuredCounts.get(creator.id) ?? 0,
+    );
+  });
+}
+
 /**
- * Enforce Emerging quota on a ranked Rising candidate list.
- * Fills reserved Emerging slots first, then remaining with fairness ranker order.
+ * Enforce Emerging quota, then a low-exposure explore slice,
+ * then remaining slots by fairness ranker order.
  */
 export function applyEmergingQuota(
   ranked: RankedListing[],
@@ -53,7 +103,29 @@ export function applyEmergingQuota(
     usedIds.add(item.listing.id);
   }
 
-  // Fill remaining Rising slots from general + leftover emerging, by score.
+  const explorePool = emergingPool
+    .filter((r) => !usedIds.has(r.listing.id))
+    .sort((a, b) => {
+      const ia = a.listing.signals.impressionsThisWeek;
+      const ib = b.listing.signals.impressionsThisWeek;
+      if (ia !== ib) return ia - ib;
+      return a.listing.id.localeCompare(b.listing.id);
+    });
+
+  let exploreTaken = 0;
+  for (const item of explorePool) {
+    if (exploreTaken >= budget.risingExplore) break;
+    if (selected.length >= budget.risingTotal) break;
+    selected.push({
+      ...item,
+      emerging: true,
+      bucket: "rising",
+      reasons: [...item.reasons, "explore"],
+    });
+    usedIds.add(item.listing.id);
+    exploreTaken += 1;
+  }
+
   const remainder = [...emergingPool, ...generalPool]
     .filter((r) => !usedIds.has(r.listing.id))
     .sort((a, b) => b.score - a.score);
@@ -71,7 +143,6 @@ export function applyEmergingQuota(
   return selected;
 }
 
-/** Cap concurrent open editions on Rising. */
 export function capConcurrentOpenEditions(
   ranked: RankedListing[],
   now = Date.now(),

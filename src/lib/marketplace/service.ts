@@ -462,27 +462,27 @@ export async function recordSignal(input: {
     if (!listing || !creator) return { ok: false as const, error: "not_found" };
     const emerging = isEmergingListing(listing, creator).emerging;
     const s = { ...listing.signals };
-    if (
-      input.type === "impression" ||
-      input.type === "dwell" ||
-      input.type === "meaningful_view"
-    ) {
+    if (input.type === "impression") {
       s.impressionsToday += 1;
       s.impressionsThisWeek += 1;
-      if (w >= 0.5) s.uniqueViewers += 1;
     }
     if (input.dwellMs) s.dwellMsTotal += Math.round(input.dwellMs * w);
+    if (
+      (input.type === "impression" ||
+        input.type === "dwell" ||
+        input.type === "meaningful_view") &&
+      w >= 0.5 &&
+      input.viewerId &&
+      engine.markUniqueViewer(listing.id, input.viewerId)
+    ) {
+      s.uniqueViewers += 1;
+    }
     if (input.type === "save" && w >= 0.4) s.saves += 1;
     if (input.type === "follow" && w >= 0.4) s.follows += 1;
     engine.state.listings.set(listing.id, { ...listing, signals: s });
-    if (
-      input.type === "impression" ||
-      input.type === "dwell" ||
-      input.type === "meaningful_view"
-    ) {
+    if (input.type === "impression" || input.type === "meaningful_view") {
       engine.metrics.record({
-        type:
-          input.type === "meaningful_view" ? "meaningful_view" : "impression",
+        type: input.type,
         listingId: listing.id,
         creatorId: listing.creatorId,
         viewerId: input.viewerId ?? undefined,
@@ -523,10 +523,28 @@ export async function recordSignal(input: {
   const emerging = isEmergingListing(engineListing, creatorProfile).emerging;
 
   const data: Record<string, number> = {};
-  if (input.type === "impression" || input.type === "dwell" || input.type === "meaningful_view") {
+  if (input.type === "impression") {
     data.impressionsToday = listing.impressionsToday + 1;
     data.impressionsThisWeek = listing.impressionsThisWeek + 1;
-    data.uniqueViewers = listing.uniqueViewers + (w >= 0.5 ? 1 : 0);
+  }
+  if (
+    (input.type === "impression" ||
+      input.type === "dwell" ||
+      input.type === "meaningful_view") &&
+    w >= 0.5 &&
+    input.viewerId
+  ) {
+    const alreadyViewed = await prisma.signalEvent.findFirst({
+      where: {
+        listingId: listing.id,
+        viewerId: input.viewerId,
+        type: { in: ["impression", "dwell", "meaningful_view"] },
+      },
+      select: { id: true },
+    });
+    if (!alreadyViewed) {
+      data.uniqueViewers = listing.uniqueViewers + 1;
+    }
   }
   if (input.dwellMs) {
     data.dwellMsTotal = listing.dwellMsTotal + Math.round(input.dwellMs * w);
@@ -1153,11 +1171,46 @@ export async function purchaseListing(input: {
 
 export async function getPersistedMetrics() {
   const engine = await getDiscoveryEngine();
+  const { evaluateDiscoveryPolicy } = await import("@/lib/discovery/policy");
+
+  if (await inMemoryMode()) {
+    const metrics = engine.metrics.snapshot();
+    return {
+      config: {
+        emerging: engine.getConfig().emerging,
+        emergingRisingQuota: engine.getConfig().emergingRisingQuota,
+        feedMix: engine.getConfig().feedMix,
+        risingSlotsPerDay: engine.getConfig().risingSlotsPerDay,
+        featuredSlotsPerDay: engine.getConfig().featuredSlotsPerDay,
+      },
+      budgets: engine.getBudgets(),
+      metrics,
+      policy: evaluateDiscoveryPolicy(metrics),
+    };
+  }
+
   // Rebuild impression metrics from signal events for durability.
-  const events = await prisma.signalEvent.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 5000,
-  });
+  let events: Awaited<ReturnType<typeof prisma.signalEvent.findMany>> = [];
+  try {
+    events = await prisma.signalEvent.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+    });
+  } catch {
+    const metrics = engine.metrics.snapshot();
+    return {
+      config: {
+        emerging: engine.getConfig().emerging,
+        emergingRisingQuota: engine.getConfig().emergingRisingQuota,
+        feedMix: engine.getConfig().feedMix,
+        risingSlotsPerDay: engine.getConfig().risingSlotsPerDay,
+        featuredSlotsPerDay: engine.getConfig().featuredSlotsPerDay,
+      },
+      budgets: engine.getBudgets(),
+      metrics,
+      policy: evaluateDiscoveryPolicy(metrics),
+    };
+  }
   engine.metrics.clear();
   for (const e of events.reverse()) {
     if (
@@ -1198,6 +1251,7 @@ export async function getPersistedMetrics() {
     }
   }
 
+  const metrics = engine.metrics.snapshot();
   return {
     config: {
       emerging: engine.getConfig().emerging,
@@ -1207,6 +1261,7 @@ export async function getPersistedMetrics() {
       featuredSlotsPerDay: engine.getConfig().featuredSlotsPerDay,
     },
     budgets: engine.getBudgets(),
-    metrics: engine.metrics.snapshot(),
+    metrics,
+    policy: evaluateDiscoveryPolicy(metrics),
   };
 }

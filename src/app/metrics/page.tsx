@@ -11,6 +11,7 @@ export default async function MetricsPage() {
   const data = await getPersistedMetrics();
   const snap = data.metrics;
   const budgets = data.budgets;
+  const policy = data.policy;
 
   const cards = [
     {
@@ -70,7 +71,7 @@ export default async function MetricsPage() {
         {pct(DISCOVERY_CONFIG.feedMix.following)} /{" "}
         {pct(DISCOVERY_CONFIG.feedMix.featured)} /{" "}
         {pct(DISCOVERY_CONFIG.feedMix.auctions_live)}. Metrics persist from
-        SignalEvent rows in SQLite.
+        SignalEvent rows. Policy recommendations below are advisory — quotas stay locked.
       </p>
       <div className="metric-grid">
         {cards.map((card) => (
@@ -104,6 +105,25 @@ export default async function MetricsPage() {
           </div>
         ))}
       </div>
+      <section style={{ marginTop: "2.5rem", maxWidth: "48rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.6rem", fontSize: "1.35rem" }}>
+          Weekly policy check
+        </h2>
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", fontSize: "0.92rem" }}>
+          Conversion gap (Emerging impressions − first-purchase share):{" "}
+          {(policy.emergingConversionGap * 100).toFixed(1)} points. These are
+          operator recommendations, not live auto-tuning.
+        </p>
+        <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.65 }}>
+          {policy.recommendations.map((rec) => (
+            <li key={rec.action}>
+              <strong style={{ color: "var(--ink)" }}>{rec.action.replaceAll("_", " ")}</strong>
+              {" — "}
+              {rec.reason}
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export default async function OpenLanePage({
   const maxPrice = typeof sp.maxPrice === "string" ? sp.maxPrice : undefined;
 
   const engine = await getDiscoveryEngine();
-  const items = engine.buildOpenLane({
+  const ranked = engine.rankOpenLane({
     chain: chain === "evm" || chain === "solana" ? chain : undefined,
     network,
     query: q,
@@ -47,7 +47,8 @@ export default async function OpenLanePage({
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.25rem" }}>
         Permissionless browse across Ethereum, Base, Arbitrum, Optimism, and Solana.
-        Soft-launched works appear here — not dumped onto the homepage firehose.
+        Soft-launched works appear here, lightly ranked by quality — not dumped
+        onto the homepage firehose.
       </p>
       <OpenLaneFilters
         chain={chain}
@@ -59,21 +60,21 @@ export default async function OpenLanePage({
         maxPrice={maxPrice}
       />
       <p style={{ color: "var(--ink-muted)", margin: "1rem 0 1.5rem" }}>
-        {items.length} works
+        {ranked.length} works
       </p>
-      {items.length === 0 ? (
+      {ranked.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
           No works match these filters. Clear filters or soft-launch something new.
         </p>
       ) : (
         <PuzzleRail>
-          {items.map((listing) => (
+          {ranked.map((item) => (
             <WorkCard
-              key={listing.id}
-              listing={listing}
+              key={item.listing.id}
+              listing={item.listing}
               showActions
               creatorName={
-                engine.state.creators.get(listing.creatorId)?.displayName
+                engine.state.creators.get(item.listing.creatorId)?.displayName
               }
             />
           ))}

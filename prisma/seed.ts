@@ -145,6 +145,23 @@ async function main() {
     },
   });
 
+  const kai = await prisma.user.create({
+    data: {
+      id: "collector-kai",
+      displayName: "Kai Collects",
+      walletCreatedAt: new Date(now - 180 * day),
+      curatorScore: 40,
+      wallets: {
+        create: [
+          {
+            chain: "evm",
+            address: "0xkai00000000000000000000000000000000001",
+          },
+        ],
+      },
+    },
+  });
+
   // Guest curators for cold start
   const guest = await prisma.user.create({
     data: {
@@ -466,6 +483,8 @@ async function main() {
     data: [
       { followerId: mira.id, followeeId: nova.id, kind: "artist" },
       { followerId: mira.id, followeeId: fresh.id, kind: "artist" },
+      { followerId: mira.id, followeeId: kai.id, kind: "collector" },
+      { followerId: kai.id, followeeId: glitch.id, kind: "artist" },
     ],
   });
 
@@ -507,7 +526,7 @@ async function main() {
   }
 
   console.log("Seeded FreshMint cold-start catalog:", {
-    users: 7,
+    users: 8,
     listings: listings.length + 3,
     shelves: 2,
     shelfInk: shelf.id,

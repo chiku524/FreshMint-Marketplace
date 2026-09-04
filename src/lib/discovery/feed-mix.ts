@@ -1,6 +1,7 @@
 import { DISCOVERY_CONFIG, type FeedMixKey } from "./config";
 import { scoreListing } from "./scoring";
 import { visibilityForStage } from "./staging";
+import { computeTasteAffinity, type ViewerTaste } from "./taste";
 import type {
   CreatorProfile,
   FeedBucket,
@@ -123,12 +124,31 @@ export interface ComposeFeedInput {
   listings: Listing[];
   creators: Map<string, CreatorProfile>;
   follows?: FollowGraph | null;
+  followGraphs?: Map<string, FollowGraph>;
   shelves?: Shelf[];
   risingPool: RankedListing[];
   featuredPool: RankedListing[];
   session: SessionContext;
   pageSize?: number;
   now?: number;
+  taste?: ViewerTaste | null;
+}
+
+/** Followed collectors contribute their artist/shelf follows into Following. */
+export function expandFollowGraph(
+  follows: FollowGraph | null | undefined,
+  followGraphs?: Map<string, FollowGraph>,
+): { artistIds: Set<string>; shelfIds: Set<string> } {
+  const artistIds = new Set(follows?.followedArtistIds ?? []);
+  const shelfIds = new Set(follows?.followedShelfIds ?? []);
+  if (!follows || !followGraphs) return { artistIds, shelfIds };
+  for (const collectorId of follows.followedCollectorIds) {
+    const other = followGraphs.get(collectorId);
+    if (!other) continue;
+    for (const id of other.followedArtistIds) artistIds.add(id);
+    for (const id of other.followedShelfIds) shelfIds.add(id);
+  }
+  return { artistIds, shelfIds };
 }
 
 /**
@@ -141,14 +161,26 @@ export function composeHomepageFeed(input: ComposeFeedInput): RankedListing[] {
   const plan = planFeedMix(pageSize);
 
   const emergingRising = applySessionDiversity(
-    input.risingPool.filter((r) => r.emerging),
+    input.risingPool
+      .filter((r) => r.emerging)
+      .map((r) => {
+        const affinity = computeTasteAffinity(r.listing, input.taste);
+        return {
+          ...r,
+          score: r.score * affinity,
+          reasons:
+            affinity !== 1 ? [...r.reasons, "taste_affinity"] : r.reasons,
+        };
+      })
+      .sort((a, b) => b.score - a.score),
     input.session,
   ).slice(0, plan.counts.emerging_rising);
 
-  const followedArtistIds = new Set(input.follows?.followedArtistIds ?? []);
+  const expanded = expandFollowGraph(input.follows, input.followGraphs);
+  const followedArtistIds = expanded.artistIds;
   const shelfListingIds = new Set<string>();
   for (const shelf of input.shelves ?? []) {
-    if (input.follows?.followedShelfIds.includes(shelf.id)) {
+    if (expanded.shelfIds.has(shelf.id)) {
       for (const id of shelf.listingIds) shelfListingIds.add(id);
     }
   }
@@ -225,43 +257,53 @@ export function composeHomepageFeed(input: ComposeFeedInput): RankedListing[] {
     "auctions_live",
   ];
   const result: RankedListing[] = [];
+  const maxPerChain = Math.max(
+    1,
+    Math.floor(pageSize * DISCOVERY_CONFIG.maxChainSharePerPage),
+  );
+  const chainCounts = new Map<string, number>();
+
+  const canTake = (item: RankedListing) => {
+    if (result.some((r) => r.listing.id === item.listing.id)) return false;
+    if (result.some((r) => r.listing.creatorId === item.listing.creatorId)) {
+      return false;
+    }
+    const chainN = chainCounts.get(item.listing.chain) ?? 0;
+    if (chainN >= maxPerChain) return false;
+    return true;
+  };
+
+  const take = (item: RankedListing) => {
+    result.push(item);
+    chainCounts.set(
+      item.listing.chain,
+      (chainCounts.get(item.listing.chain) ?? 0) + 1,
+    );
+  };
+
   let progress = true;
   while (result.length < pageSize && progress) {
     progress = false;
     for (const bucket of order) {
       if (queues[bucket].length === 0) continue;
-      // Respect remaining planned counts loosely while filling.
       const planned = plan.counts[bucket];
       const have = result.filter((r) => r.bucket === bucket).length;
       if (have >= planned) continue;
       const next = queues[bucket].shift();
       if (!next) continue;
-      // Final per-screen artist constraint.
-      if (
-        result.some(
-          (r) => r.listing.creatorId === next.listing.creatorId,
-        )
-      ) {
-        continue;
-      }
-      result.push(next);
+      if (!canTake(next)) continue;
+      take(next);
       progress = true;
       if (result.length >= pageSize) break;
     }
   }
 
-  // Backfill from any remaining queues if short.
   if (result.length < pageSize) {
     const leftovers = order.flatMap((b) => queues[b]);
     for (const item of leftovers) {
       if (result.length >= pageSize) break;
-      if (result.some((r) => r.listing.id === item.listing.id)) continue;
-      if (
-        result.some((r) => r.listing.creatorId === item.listing.creatorId)
-      ) {
-        continue;
-      }
-      result.push(item);
+      if (!canTake(item)) continue;
+      take(item);
     }
   }
 
@@ -302,6 +344,16 @@ export function filterOpenLane(
     }
     return true;
   });
+}
+
+/** Light quality ranking for Open Lane search/browse (not the homepage mix). */
+export function rankOpenLane(
+  listings: Listing[],
+  creators: Map<string, CreatorProfile>,
+  session: SessionContext,
+  now = Date.now(),
+): RankedListing[] {
+  return rankPool(listings, creators, session, "open", now);
 }
 
 /** Verify feed mix ratios within tolerance for tests / monitoring. */

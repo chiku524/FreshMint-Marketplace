@@ -10,23 +10,29 @@ import {
   resolveAppeal,
   validateListingQuality,
 } from "./anti-spam";
+import {
+  retrieveFeaturedCandidates,
+  retrieveRisingCandidates,
+} from "./candidates";
 import { DISCOVERY_CONFIG } from "./config";
 import { isEmergingCreator, isEmergingListing } from "./emerging";
-import { composeHomepageFeed, filterOpenLane } from "./feed-mix";
+import {
+  composeHomepageFeed,
+  filterOpenLane,
+  rankOpenLane,
+} from "./feed-mix";
 import { MetricsCollector, isMeaningfulView } from "./metrics";
 import {
   applyEmergingQuota,
   capConcurrentOpenEditions,
+  excludeFeaturedDominantFromRising,
   getDailySlotBudgets,
   selectFeaturedSlots,
   selectLiveAuctionStrip,
 } from "./quotas";
 import { scoreListing } from "./scoring";
-import {
-  advanceStage,
-  collectionFeedSurface,
-  visibilityForStage,
-} from "./staging";
+import { advanceStage, collectionFeedSurface } from "./staging";
+import type { ViewerTaste } from "./taste";
 import type {
   Appeal,
   CreatorProfile,
@@ -39,6 +45,13 @@ import type {
   Shelf,
   Collection,
 } from "./types";
+import { emptySession, mergeSession } from "./viewer-session";
+
+export interface HomepageOptions {
+  session?: Partial<SessionContext> | SessionContext;
+  taste?: ViewerTaste | null;
+  recordImpressions?: boolean;
+}
 
 export interface MarketplaceState {
   creators: Map<string, CreatorProfile>;
@@ -52,8 +65,24 @@ export interface MarketplaceState {
 
 export class DiscoveryEngine {
   readonly metrics = new MetricsCollector();
+  private viewedBy = new Map<string, Set<string>>();
 
   constructor(public state: MarketplaceState) {}
+
+  markUniqueViewer(listingId: string, viewerId: string): boolean {
+    let set = this.viewedBy.get(listingId);
+    if (!set) {
+      set = new Set();
+      this.viewedBy.set(listingId, set);
+    }
+    if (set.has(viewerId)) return false;
+    set.add(viewerId);
+    return true;
+  }
+
+  hasUniqueViewer(listingId: string, viewerId: string): boolean {
+    return this.viewedBy.get(listingId)?.has(viewerId) ?? false;
+  }
 
   getBudgets() {
     return getDailySlotBudgets();
@@ -69,24 +98,13 @@ export class DiscoveryEngine {
     return isEmergingCreator(creator, now);
   }
 
-  private emptySession(viewerId: string | null = null): SessionContext {
-    return {
-      viewerId,
-      seenArtistIds: [],
-      seenListingIds: [],
-      seenCollectionIds: [],
-      itemsOnCurrentScreen: [],
-    };
-  }
-
   buildRising(
-    session: SessionContext = this.emptySession(),
+    session: SessionContext = emptySession(),
     now = Date.now(),
   ): RankedListing[] {
+    const retrieved = retrieveRisingCandidates(this.state.listings.values(), now);
     const candidates: RankedListing[] = [];
-    for (const listing of this.state.listings.values()) {
-      const vis = visibilityForStage(listing.stage);
-      if (!vis.rising || listing.delisted) continue;
+    for (const listing of retrieved) {
       const creator = this.state.creators.get(listing.creatorId);
       if (!creator) continue;
       const breakdown = scoreListing(listing, creator, session, now);
@@ -100,19 +118,23 @@ export class DiscoveryEngine {
     }
 
     candidates.sort((a, b) => b.score - a.score);
-    const capped = capConcurrentOpenEditions(candidates, now);
+    const uncapped = excludeFeaturedDominantFromRising(
+      candidates,
+      this.state.listings.values(),
+      this.state.creators,
+      now,
+    );
+    const capped = capConcurrentOpenEditions(uncapped, now);
     return applyEmergingQuota(capped, this.state.creators, now);
   }
 
   buildFeatured(
-    session: SessionContext = this.emptySession(),
+    session: SessionContext = emptySession(),
     now = Date.now(),
   ): RankedListing[] {
+    const retrieved = retrieveFeaturedCandidates(this.state.listings.values());
     const candidates: RankedListing[] = [];
-    for (const listing of this.state.listings.values()) {
-      const vis = visibilityForStage(listing.stage);
-      if (!vis.featured && listing.stage !== "featured_eligible") continue;
-      if (listing.delisted) continue;
+    for (const listing of retrieved) {
       const creator = this.state.creators.get(listing.creatorId);
       if (!creator) continue;
       const breakdown = scoreListing(listing, creator, session, now);
@@ -131,8 +153,26 @@ export class DiscoveryEngine {
     return filterOpenLane([...this.state.listings.values()], filters);
   }
 
-  buildHomepage(viewerId: string | null = null, pageSize = 20, now = Date.now()) {
-    const session = this.emptySession(viewerId);
+  rankOpenLane(
+    filters: Parameters<typeof filterOpenLane>[1] = {},
+    session: SessionContext = emptySession(),
+    now = Date.now(),
+  ) {
+    return rankOpenLane(
+      this.buildOpenLane(filters),
+      this.state.creators,
+      session,
+      now,
+    );
+  }
+
+  buildHomepage(
+    viewerId: string | null = null,
+    pageSize = 20,
+    now = Date.now(),
+    options: HomepageOptions = {},
+  ) {
+    const session = mergeSession(emptySession(viewerId), options.session);
     const rising = this.buildRising(session, now);
     const featured = this.buildFeatured(session, now);
     const follows = viewerId ? this.state.follows.get(viewerId) ?? null : null;
@@ -140,14 +180,18 @@ export class DiscoveryEngine {
       listings: [...this.state.listings.values()],
       creators: this.state.creators,
       follows,
+      followGraphs: this.state.follows,
       shelves: [...this.state.shelves.values()],
       risingPool: rising,
       featuredPool: featured,
       session,
       pageSize,
       now,
+      taste: options.taste,
     });
-    this.metrics.recordFeedImpressions(feed, viewerId ?? undefined, now);
+    if (options.recordImpressions !== false) {
+      this.metrics.recordFeedImpressions(feed, viewerId ?? undefined, now);
+    }
     return {
       feed,
       rising,
@@ -318,10 +362,10 @@ export class DiscoveryEngine {
     const listing = this.state.listings.get(input.listingId);
     if (!listing) return;
     const creator = this.state.creators.get(listing.creatorId);
-    listing.signals.uniqueViewers += 1;
     listing.signals.dwellMsTotal += input.dwellMs;
-    listing.signals.impressionsToday += 1;
-    listing.signals.impressionsThisWeek += 1;
+    if (this.markUniqueViewer(listing.id, input.viewerId)) {
+      listing.signals.uniqueViewers += 1;
+    }
 
     if (isMeaningfulView(input.dwellMs) && creator) {
       const emerging = isEmergingListing(listing, creator).emerging;

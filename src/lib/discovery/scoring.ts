@@ -1,23 +1,54 @@
 import { DISCOVERY_CONFIG } from "./config";
 import { isEmergingListing } from "./emerging";
+import { discoveryWeightForType } from "./staging";
 import type { CreatorProfile, Listing, SessionContext } from "./types";
 
+function bayesianRate(
+  successes: number,
+  trials: number,
+  prior: number,
+  priorN: number,
+): number {
+  const s = Math.max(0, successes);
+  const n = Math.max(0, trials);
+  return (s + prior * priorN) / (n + priorN);
+}
+
 /**
- * score = quality_signal * novelty_boost * diversity_penalty_inverse * spam_risk_inverse
- * with impression decay when fair-share is exceeded.
+ * Rate-based quality with a Bayesian prior.
+ * High-impression / low-rate work cannot outrank small, real attention.
  */
 export function computeQualitySignal(listing: Listing): number {
   const s = listing.signals;
-  const dwellMinutes = s.dwellMsTotal / 60_000;
-  // Weighted engagement that prefers unique attention over raw clicks.
-  return (
-    1 +
-    s.saves * 3 +
-    s.follows * 4 +
-    dwellMinutes * 2 +
-    s.uniqueViewers * 1.5 +
-    s.nominationScore * 2
+  const n = Math.max(s.uniqueViewers, 0);
+  const q = DISCOVERY_CONFIG.quality;
+  const priorN = q.priorUniqueViewers;
+
+  const saveRate = bayesianRate(s.saves, n, q.priorSaveRate, priorN);
+  const followRate = bayesianRate(s.follows, n, q.priorFollowRate, priorN);
+  const meaningfulApprox =
+    s.dwellMsTotal / DISCOVERY_CONFIG.meaningfulViewDwellMs;
+  const dwellRate = bayesianRate(
+    meaningfulApprox,
+    n,
+    q.priorMeaningfulViewRate,
+    priorN,
   );
+  const nomRate = bayesianRate(
+    s.nominationScore,
+    n,
+    q.priorNominationRate,
+    priorN,
+  );
+
+  let saveW = 4;
+  let followW = 5;
+  if (n < DISCOVERY_CONFIG.sybil.minUniqueViewersForSaveTrust) {
+    saveW *= 0.35;
+    followW *= 0.35;
+  }
+
+  return 1 + saveRate * saveW + followRate * followW + dwellRate * 3 + nomRate * 2.5;
 }
 
 export function computeNoveltyBoost(
@@ -25,12 +56,10 @@ export function computeNoveltyBoost(
   creator: CreatorProfile,
 ): number {
   const exposure = listing.signals.impressionsThisWeek;
-  // Higher when low prior exposure; singles get a slight novelty edge.
-  const typeBoost = listing.type === "single" ? 1.15 : 1;
+  const typeBoost = discoveryWeightForType(listing.type);
   const exposureFactor = 1 / (1 + Math.log10(1 + exposure));
   const creatorExposurePenalty =
     creator.lifetimePrimaryVolumeUsd > 50_000 ? 0.7 : 1;
-  // Established badge is informational only — never a Rising boost.
   return typeBoost * exposureFactor * creatorExposurePenalty;
 }
 
@@ -67,7 +96,6 @@ export function computeSpamRiskInverse(
   if (walletAgeDays < 3) risk += 1.2;
   else if (walletAgeDays < 14) risk += 0.4;
 
-  // Mint / listing velocity proxy.
   if (creator.openLaneListingsToday > 15) risk += 1;
   if (creator.risingEntriesThisWeek >= DISCOVERY_CONFIG.risingEntriesPerCreatorPerWeek) {
     risk += 0.8;
@@ -82,11 +110,9 @@ export function computeImpressionDecay(listing: Listing): number {
   const dayRatio = listing.signals.impressionsToday / dayShare;
   const weekRatio = listing.signals.impressionsThisWeek / weekShare;
   const over = Math.max(0, dayRatio - 1) + Math.max(0, weekRatio - 1) * 0.5;
-  // Hard decay after fair share captured.
   return 1 / (1 + over * 2);
 }
 
-/** Open editions get a time-boxed burst at drop start, then hard decay. */
 export function computeOpenEditionTemporalBoost(
   listing: Listing,
   now = Date.now(),
@@ -98,7 +124,6 @@ export function computeOpenEditionTemporalBoost(
   const window = listing.oeEndsAt - listing.oeStartsAt;
   const elapsed = now - listing.oeStartsAt;
   const progress = window <= 0 ? 1 : elapsed / window;
-  // Burst in first 15% of window, then decay hard.
   if (progress <= 0.15) return 1.8;
   if (progress <= 0.4) return 1.1;
   return 0.35;
@@ -115,6 +140,21 @@ export function computeAuctionEndingBoost(
   if (hoursLeft <= 1) return 1.6;
   if (hoursLeft <= 6) return 1.25;
   return 1;
+}
+
+/** Short look-window for newly Rising-eligible singles/collections. */
+export function computeRisingAgeBoost(
+  listing: Listing,
+  now = Date.now(),
+): number {
+  if (listing.type === "open_edition" || listing.type === "auction") return 1;
+  if (listing.risingEligibleAt == null) return 1;
+  const age = now - listing.risingEligibleAt;
+  const { burstMs, burstBoost, tailMs, tailBoost, agedBoost } =
+    DISCOVERY_CONFIG.risingAge;
+  if (age <= burstMs) return burstBoost;
+  if (age <= tailMs) return tailBoost;
+  return agedBoost;
 }
 
 export interface ScoreBreakdown {
@@ -142,7 +182,8 @@ export function scoreListing(
   const decay = computeImpressionDecay(listing);
   const temporal =
     computeOpenEditionTemporalBoost(listing, now) *
-    computeAuctionEndingBoost(listing, now);
+    computeAuctionEndingBoost(listing, now) *
+    computeRisingAgeBoost(listing, now);
 
   const score = quality * novelty * diversity * spamInverse * decay * temporal;
   const emerging = isEmergingListing(listing, creator, now);
@@ -154,6 +195,9 @@ export function scoreListing(
   if (spamInverse < 0.7) reasons.push("elevated_spam_risk");
   if (listing.type === "open_edition") reasons.push("oe_temporal");
   if (listing.type === "auction") reasons.push("auction_temporal");
+  if (temporal > 1.05 && listing.type !== "open_edition" && listing.type !== "auction") {
+    reasons.push("rising_age_burst");
+  }
 
   return {
     score,

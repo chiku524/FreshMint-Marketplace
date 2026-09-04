@@ -28,7 +28,7 @@ const emptySession = (viewerId: string | null = null): SessionContext => ({
 });
 
 describe("Emerging eligibility", () => {
-  it("locks volume/sales/tenure OR rules and blocks flagged/wash", () => {
+  it("locks two-of-three graduation and blocks flagged/wash", () => {
     const now = Date.now();
     const emerging = isEmergingCreator(
       {

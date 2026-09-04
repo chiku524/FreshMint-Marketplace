@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const engine = await getDiscoveryEngine();
-  const items = engine.buildOpenLane({
+  const filters = {
     chain: (sp.get("chain") as Chain | null) ?? undefined,
     medium: sp.get("medium") ?? undefined,
     style: sp.get("style") ?? undefined,
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     query: sp.get("q") ?? undefined,
     maxPriceUsd: sp.get("maxPrice") ? Number(sp.get("maxPrice")) : undefined,
     minPriceUsd: sp.get("minPrice") ? Number(sp.get("minPrice")) : undefined,
-  });
+  };
+  const items = engine.rankOpenLane(filters);
   return NextResponse.json({ items, count: items.length });
 }

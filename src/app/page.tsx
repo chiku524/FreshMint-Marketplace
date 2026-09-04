@@ -1,10 +1,14 @@
+import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
 import { BrandMark } from "@/components/MintLeaf";
 import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
+import { TasteSeed } from "@/components/TasteSeed";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { DISCOVERY_CONFIG } from "@/lib/discovery";
+import { readViewerSession, readViewerTaste } from "@/lib/discovery/cookies";
+import { hasTaste, inferTasteFromCatalog } from "@/lib/discovery/taste";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { listSoldAuctions } from "@/lib/marketplace/sold-auctions";
 import Link from "next/link";
@@ -14,8 +18,18 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const engine = await getDiscoveryEngine();
   const user = await getSessionUser();
-  const viewerId = user?.id ?? "collector-mira";
-  const home = engine.buildHomepage(viewerId, 12);
+  const viewerId = user?.id ?? null;
+  const session = await readViewerSession(viewerId);
+  const cookieTaste = await readViewerTaste();
+  const follows = viewerId ? engine.state.follows.get(viewerId) ?? null : null;
+  const taste = hasTaste(cookieTaste)
+    ? cookieTaste
+    : inferTasteFromCatalog(follows, engine.state.listings.values());
+  const home = engine.buildHomepage(viewerId, 12, Date.now(), {
+    session,
+    taste,
+    recordImpressions: false,
+  });
   const soldAuctions = await listSoldAuctions(6);
   const mix = DISCOVERY_CONFIG.feedMix;
   const personalized = Boolean(user);
@@ -99,9 +113,19 @@ export default async function HomePage() {
           <span style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
             Rising slots/day: {home.budgets.risingTotal} · Emerging reserved:{" "}
             {home.budgets.risingEmergingReserved}
-            {!personalized ? " · demo as Mira for Following mix" : ""}
+            {!personalized
+              ? " · pick tastes below for Emerging"
+              : ""}
           </span>
         </div>
+        {!personalized ? <TasteSeed selected={taste.styleTags} /> : null}
+        <DiscoverySessionRecorder
+          listingIds={home.feed.map((item) => item.listing.id)}
+          artistIds={home.feed.map((item) => item.listing.creatorId)}
+          collectionIds={home.feed
+            .map((item) => item.listing.collectionId)
+            .filter((id): id is string => !!id)}
+        />
         {home.feed.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
             Feed is empty — soft-launch a work or follow an emerging artist.

@@ -50,13 +50,72 @@ export const DISCOVERY_CONFIG = {
   impressionFairSharePerWeek: 8_000,
 
   /**
-   * Emerging eligibility (OR of thresholds, AND not flagged/wash).
-   * Locked game-resistant defaults.
+   * Emerging eligibility thresholds. Graduation is two-of-three:
+   * exceed this many thresholds → leave Emerging.
    */
   emerging: {
     maxLifetimePrimaryVolumeUsd: 5_000,
     maxCompletedSales: 10,
     maxDaysSinceFirstListing: 90,
+    /** Graduate when this many of the three thresholds are exceeded. */
+    graduationThresholdsRequired: 2,
+  },
+
+  /**
+   * Share of Rising slots reserved for low-exposure Emerging explore
+   * (never-shown / lowest weekly impressions). 10–15% of daily Rising.
+   */
+  exploreRisingShare: 0.12,
+
+  /**
+   * Rising-age burst for singles/collections (OE/auctions use their own clocks).
+   * Newly eligible work gets a look, then decays.
+   */
+  risingAge: {
+    burstMs: 48 * 60 * 60 * 1000,
+    burstBoost: 1.45,
+    tailMs: 7 * 24 * 60 * 60 * 1000,
+    tailBoost: 1.1,
+    agedBoost: 0.88,
+  },
+
+  /** Bayesian prior for rate-based quality (not raw popularity sums). */
+  quality: {
+    priorUniqueViewers: 20,
+    priorSaveRate: 0.04,
+    priorFollowRate: 0.02,
+    priorMeaningfulViewRate: 0.15,
+    priorNominationRate: 0.05,
+  },
+
+  /** Two-stage retrieve: score at most this many Rising candidates. */
+  risingCandidateLimit: 250,
+
+  /** Max share of a homepage page from one settlement chain. */
+  maxChainSharePerPage: 0.6,
+
+  taste: {
+    seedTags: ["ink", "glitch", "paper", "floral", "architecture", "minimal"],
+    affinityBoostPerTag: 0.18,
+    noOverlapPenalty: 0.86,
+    mediumBoost: 1.12,
+  },
+
+  viewerSession: {
+    cookieName: "freshmint_discovery_seen",
+    tasteCookieName: "freshmint_taste",
+    maxIds: 80,
+    ttlSeconds: 60 * 60 * 24,
+  },
+
+  /**
+   * Weekly policy check thresholds (recommendations only — no live auto-tune).
+   */
+  policy: {
+    emergingImpressionHealthyMin: 0.3,
+    emergingImpressionHigh: 0.45,
+    emergingConversionFloor: 0.08,
+    feedEntropyFloor: 2.2,
   },
 
   /**

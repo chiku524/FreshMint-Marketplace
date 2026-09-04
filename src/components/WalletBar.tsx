@@ -19,6 +19,7 @@ const DEMO_PERSONAS = [
   { id: "artist-fresh", label: "Fresh Paper (emerging)" },
   { id: "artist-nova", label: "Nova Ink" },
   { id: "collector-mira", label: "Mira Collects" },
+  { id: "collector-kai", label: "Kai Collects" },
   { id: "curator-guest", label: "Guest Atelier (editor)" },
   { id: "mod-ops", label: "Ops Moderator" },
 ];
