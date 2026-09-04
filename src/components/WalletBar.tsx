@@ -106,11 +106,8 @@ export function WalletBar() {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
+    window.dispatchEvent(new Event("fm-auth-changed"));
   }
-
-  const hasEvm = user?.wallets.some((w) => w.chain === "evm");
-  const hasSol = user?.wallets.some((w) => w.chain === "solana");
-  const hasBoing = user?.wallets.some((w) => w.chain === "boing");
 
   return (
     <>
@@ -147,39 +144,6 @@ export function WalletBar() {
               score {user.curatorScore}
               {user.totpEnabled ? " · 2FA" : ""}
             </Link>
-            {!hasEvm ? (
-              <button
-                type="button"
-                className="badge"
-                disabled={busy}
-                onClick={() => void connectOrLink("evm")}
-                style={{ cursor: "pointer", background: "transparent" }}
-              >
-                Link EVM
-              </button>
-            ) : null}
-            {!hasSol ? (
-              <button
-                type="button"
-                className="badge emerging"
-                disabled={busy}
-                onClick={() => void connectOrLink("solana")}
-                style={{ cursor: "pointer", background: "transparent" }}
-              >
-                Link Solana
-              </button>
-            ) : null}
-            {!hasBoing ? (
-              <button
-                type="button"
-                className="badge"
-                disabled={busy}
-                onClick={() => void connectOrLink("boing")}
-                style={{ cursor: "pointer", background: "transparent" }}
-              >
-                Link Boing
-              </button>
-            ) : null}
             <button
               type="button"
               className="badge"

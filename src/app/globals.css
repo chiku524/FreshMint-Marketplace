@@ -610,9 +610,15 @@ html.fm-intro-pending .fm-intro-cover {
 
 .site-nav__item {
   display: block;
+  width: 100%;
   padding: 0.45rem 0.65rem;
+  border: 0;
+  background: transparent;
   color: var(--ink-muted);
+  font: inherit;
+  text-align: left;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .site-nav__item:hover {

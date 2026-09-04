@@ -4,13 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-type NavItem = { href: string; label: string };
+type NavLinkItem = { href: string; label: string };
+type NavActionItem = { action: "logout"; label: string };
+type NavItem = NavLinkItem | NavActionItem;
 
 type NavGroup = {
   id: string;
   label: string;
   items: NavItem[];
 };
+
+function isLinkItem(item: NavItem): item is NavLinkItem {
+  return "href" in item;
+}
 
 const GROUPS: NavGroup[] = [
   {
@@ -44,9 +50,8 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/sign-in", label: "Sign in" },
       { href: "/sign-up", label: "Create profile" },
-      { href: "/me", label: "Collection" },
-      { href: "/me/settings", label: "Settings" },
-      { href: "/me/security", label: "Security (2FA)" },
+      { href: "/me", label: "Profile" },
+      { action: "logout", label: "Sign out" },
     ],
   },
   {
@@ -63,10 +68,12 @@ const GROUPS: NavGroup[] = [
 function NavDropdown({
   group,
   closeSignal,
+  onLogout,
 }: {
   group: NavGroup;
   /** Increments on route change — forces every menu shut. */
   closeSignal: number;
+  onLogout?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -144,20 +151,36 @@ function NavDropdown({
       </button>
       <div id={menuId} role="menu" className="site-nav__menu">
         <div className="site-nav__menu-panel">
-          {group.items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              role="menuitem"
-              className="site-nav__item"
-              onClick={() => {
-                ignoreHoverUntilLeave.current = true;
-                closeMenu();
-              }}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {group.items.map((item) =>
+            isLinkItem(item) ? (
+              <Link
+                key={item.href}
+                href={item.href}
+                role="menuitem"
+                className="site-nav__item"
+                onClick={() => {
+                  ignoreHoverUntilLeave.current = true;
+                  closeMenu();
+                }}
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <button
+                key={item.action}
+                type="button"
+                role="menuitem"
+                className="site-nav__item"
+                onClick={() => {
+                  ignoreHoverUntilLeave.current = true;
+                  closeMenu();
+                  onLogout?.();
+                }}
+              >
+                {item.label}
+              </button>
+            ),
+          )}
         </div>
       </div>
     </div>
@@ -175,18 +198,29 @@ export function SiteNav() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data: { user?: { id?: string } | null }) => {
-        if (!cancelled) setSignedIn(Boolean(data.user?.id));
-      })
-      .catch(() => {
-        if (!cancelled) setSignedIn(false);
-      });
+    function refreshAuth() {
+      void fetch("/api/auth/me")
+        .then((res) => res.json())
+        .then((data: { user?: { id?: string } | null }) => {
+          if (!cancelled) setSignedIn(Boolean(data.user?.id));
+        })
+        .catch(() => {
+          if (!cancelled) setSignedIn(false);
+        });
+    }
+    refreshAuth();
+    window.addEventListener("fm-auth-changed", refreshAuth);
     return () => {
       cancelled = true;
+      window.removeEventListener("fm-auth-changed", refreshAuth);
     };
   }, [pathname]);
+
+  function logout() {
+    void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+      window.location.assign("/");
+    });
+  }
 
   return (
     <nav className="site-nav" aria-label="Primary">
@@ -195,8 +229,8 @@ export function SiteNav() {
           group.id === "account"
             ? group.items.filter((item) =>
                 signedIn
-                  ? item.href !== "/sign-in" && item.href !== "/sign-up"
-                  : true,
+                  ? !isLinkItem(item) || item.href === "/me"
+                  : isLinkItem(item) && item.href !== "/me",
               )
             : group.items;
         return (
@@ -204,6 +238,7 @@ export function SiteNav() {
             key={group.id}
             group={{ ...group, items }}
             closeSignal={closeSignal}
+            onLogout={group.id === "account" ? logout : undefined}
           />
         );
       })}
