@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import bs58 from "bs58";
+import { signWallet, type BrowserWalletChain } from "@/lib/auth/browser-wallets";
 import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
 type SessionUser = {
@@ -78,229 +78,26 @@ export function WalletBar() {
     }
   }
 
-  async function connectEvm() {
+  async function connectOrLink(chain: BrowserWalletChain) {
     setBusy(true);
     setError(null);
     try {
-      const eth = (
-        window as unknown as {
-          ethereum?: {
-            request: (args: {
-              method: string;
-              params?: unknown[];
-            }) => Promise<unknown>;
-          };
-        }
-      ).ethereum;
-      if (!eth) {
-        throw new Error("No EVM wallet found — use a demo persona below");
-      }
-      const accounts = (await eth.request({
-        method: "eth_requestAccounts",
-      })) as string[];
-      const address = accounts[0];
-      if (!address) throw new Error("no_account");
-
-      const nonceRes = await fetch("/api/auth/nonce", {
+      const proof = await signWallet(chain);
+      const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
+      const verifyRes = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "evm", address }),
-      });
-      const { message } = await nonceRes.json();
-      const signature = (await eth.request({
-        method: "personal_sign",
-        params: [message, address],
-      })) as string;
-
-      const verifyRes = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "evm", address, signature }),
+        body: JSON.stringify(proof),
       });
       const data = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
-      handleAuthResponse(data);
+      if (endpoint === "/api/auth/verify") {
+        handleAuthResponse(data);
+      } else {
+        await refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "connect_failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function getBoingProvider() {
-    const provider = (
-      window as unknown as {
-        boing?: {
-          request: (args: {
-            method: string;
-            params?: unknown[];
-          }) => Promise<unknown>;
-        };
-      }
-    ).boing;
-    if (!provider?.request) {
-      throw new Error("No Boing Express wallet found — install Boing Express");
-    }
-    return provider;
-  }
-
-  function encodeBoingSignature(value: unknown): string {
-    if (typeof value === "string") return value;
-    if (value instanceof Uint8Array) return bs58.encode(value);
-    if (value && typeof value === "object") {
-      const rec = value as { signature?: unknown; result?: unknown };
-      if (typeof rec.signature === "string") return rec.signature;
-      if (rec.signature instanceof Uint8Array) return bs58.encode(rec.signature);
-      if (typeof rec.result === "string") return rec.result;
-    }
-    throw new Error("boing_signature_missing");
-  }
-
-  async function connectBoing() {
-    setBusy(true);
-    setError(null);
-    try {
-      const provider = getBoingProvider();
-      const accounts = (await provider.request({
-        method: "boing_requestAccounts",
-      })) as string[];
-      const address = Array.isArray(accounts) ? accounts[0] : undefined;
-      if (!address) throw new Error("no_account");
-
-      const nonceRes = await fetch("/api/auth/nonce", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "boing", address }),
-      });
-      const { message } = await nonceRes.json();
-      let signed: unknown;
-      try {
-        signed = await provider.request({
-          method: "boing_signMessage",
-          params: [message],
-        });
-      } catch {
-        signed = await provider.request({
-          method: "personal_sign",
-          params: [message, address],
-        });
-      }
-      const signature = encodeBoingSignature(signed);
-
-      const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
-      const verifyRes = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "boing", address, signature }),
-      });
-      const data = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
-      if (endpoint === "/api/auth/verify") {
-        handleAuthResponse(data);
-      } else {
-        await refresh();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "boing_connect_failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function connectSolana() {
-    setBusy(true);
-    setError(null);
-    try {
-      const provider = (
-        window as unknown as {
-          solana?: {
-            connect: () => Promise<{
-              publicKey: { toBytes: () => Uint8Array; toString: () => string };
-            }>;
-            signMessage: (
-              msg: Uint8Array,
-              display?: string,
-            ) => Promise<{ signature: Uint8Array }>;
-          };
-        }
-      ).solana;
-      if (!provider) {
-        throw new Error("No Phantom wallet found");
-      }
-      const { publicKey } = await provider.connect();
-      const address = publicKey.toString();
-
-      const nonceRes = await fetch("/api/auth/nonce", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "solana", address }),
-      });
-      const { message } = await nonceRes.json();
-      const encoded = new TextEncoder().encode(message);
-      const signed = await provider.signMessage(encoded, "utf8");
-      const signature = bs58.encode(signed.signature);
-
-      const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
-      const verifyRes = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "solana", address, signature }),
-      });
-      const data = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
-      if (endpoint === "/api/auth/verify") {
-        handleAuthResponse(data);
-      } else {
-        await refresh();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "solana_connect_failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function linkEvm() {
-    if (!user) return connectEvm();
-    setBusy(true);
-    setError(null);
-    try {
-      const eth = (
-        window as unknown as {
-          ethereum?: {
-            request: (args: {
-              method: string;
-              params?: unknown[];
-            }) => Promise<unknown>;
-          };
-        }
-      ).ethereum;
-      if (!eth) throw new Error("No EVM wallet");
-      const accounts = (await eth.request({
-        method: "eth_requestAccounts",
-      })) as string[];
-      const address = accounts[0];
-      if (!address) throw new Error("no_account");
-      const nonceRes = await fetch("/api/auth/nonce", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "evm", address }),
-      });
-      const { message } = await nonceRes.json();
-      const signature = (await eth.request({
-        method: "personal_sign",
-        params: [message, address],
-      })) as string;
-      const res = await fetch("/api/auth/link-wallet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: "evm", address, signature }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "link_failed");
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "link_failed");
     } finally {
       setBusy(false);
     }
@@ -355,7 +152,7 @@ export function WalletBar() {
                 type="button"
                 className="badge"
                 disabled={busy}
-                onClick={() => void linkEvm()}
+                onClick={() => void connectOrLink("evm")}
                 style={{ cursor: "pointer", background: "transparent" }}
               >
                 Link EVM
@@ -366,7 +163,7 @@ export function WalletBar() {
                 type="button"
                 className="badge emerging"
                 disabled={busy}
-                onClick={() => void connectSolana()}
+                onClick={() => void connectOrLink("solana")}
                 style={{ cursor: "pointer", background: "transparent" }}
               >
                 Link Solana
@@ -377,7 +174,7 @@ export function WalletBar() {
                 type="button"
                 className="badge"
                 disabled={busy}
-                onClick={() => void connectBoing()}
+                onClick={() => void connectOrLink("boing")}
                 style={{ cursor: "pointer", background: "transparent" }}
               >
                 Link Boing
@@ -394,11 +191,17 @@ export function WalletBar() {
           </>
         ) : (
           <>
+            <Link href="/sign-in" className="badge featured">
+              Sign in
+            </Link>
+            <Link href="/sign-up" className="badge">
+              Create profile
+            </Link>
             <button
               type="button"
               className="badge featured"
               disabled={busy}
-              onClick={() => void connectEvm()}
+              onClick={() => void connectOrLink("evm")}
               style={{ cursor: "pointer", background: "transparent" }}
             >
               Connect EVM
@@ -407,7 +210,7 @@ export function WalletBar() {
               type="button"
               className="badge emerging"
               disabled={busy}
-              onClick={() => void connectSolana()}
+              onClick={() => void connectOrLink("solana")}
               style={{ cursor: "pointer", background: "transparent" }}
             >
               Connect Solana
@@ -416,7 +219,7 @@ export function WalletBar() {
               type="button"
               className="badge"
               disabled={busy}
-              onClick={() => void connectBoing()}
+              onClick={() => void connectOrLink("boing")}
               style={{ cursor: "pointer", background: "transparent" }}
             >
               Connect Boing

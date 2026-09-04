@@ -24,6 +24,10 @@ export type SessionUser = {
   openLaneListingsToday: number;
   establishedBadge: boolean;
   totpEnabled: boolean;
+  email: string | null;
+  googleLinked: boolean;
+  hasPassword: boolean;
+  avatarUrl: string | null;
 };
 
 function secretKey() {
@@ -63,6 +67,26 @@ function creatorToSession(creator: CreatorProfile): SessionUser {
     openLaneListingsToday: creator.openLaneListingsToday,
     establishedBadge: creator.establishedBadge,
     totpEnabled: false,
+    email: null,
+    googleLinked: false,
+    hasPassword: false,
+    avatarUrl: null,
+  };
+}
+
+export function publicSession(user: SessionUser) {
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    wallets: user.wallets,
+    curatorScore: user.curatorScore,
+    verifiedCreator: user.verifiedCreator,
+    role: user.role,
+    totpEnabled: user.totpEnabled,
+    email: user.email,
+    googleLinked: user.googleLinked,
+    hasPassword: user.hasPassword,
+    avatarUrl: user.avatarUrl,
   };
 }
 
@@ -150,6 +174,14 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       const session = creatorToSession(creator);
       const { getMemoryTotp } = await import("@/lib/auth/totp");
       session.totpEnabled = getMemoryTotp(userId).totpEnabled;
+      const { getMemoryAccount } = await import("@/lib/auth/account");
+      const account = getMemoryAccount(userId);
+      if (account) {
+        session.email = account.email;
+        session.googleLinked = Boolean(account.googleId);
+        session.hasPassword = Boolean(account.passwordHash);
+        session.avatarUrl = account.avatarUrl;
+      }
       return session;
     }
 
@@ -179,6 +211,10 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       openLaneListingsToday: u.openLaneListingsToday,
       establishedBadge: u.establishedBadge,
       totpEnabled: u.totpEnabled,
+      email: u.email,
+      googleLinked: Boolean(u.googleId),
+      hasPassword: Boolean(u.passwordHash),
+      avatarUrl: u.avatarUrl,
     };
   } catch {
     return null;

@@ -34,15 +34,48 @@ export function buildSignMessage(input: {
   ].join("\n");
 }
 
+type MemoryNonce = { nonce: string; expiresAt: number };
+
+const nonceGlobal = globalThis as unknown as {
+  __freshmintAuthNonces?: Map<string, MemoryNonce>;
+};
+
+function memoryNonces(): Map<string, MemoryNonce> {
+  if (!nonceGlobal.__freshmintAuthNonces) {
+    nonceGlobal.__freshmintAuthNonces = new Map();
+  }
+  return nonceGlobal.__freshmintAuthNonces;
+}
+
+function nonceKey(chain: AuthChain, address: string): string {
+  return `${chain}:${address}`;
+}
+
+async function useMemoryAuth(): Promise<boolean> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  return mode === "memory" || isMemoryMode();
+}
+
 export async function issueNonce(chain: AuthChain, address: string) {
   const normalized = normalizeAddress(chain, address);
   const nonce = randomBytes(16).toString("hex");
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  await prisma.authNonce.upsert({
-    where: { chain_address: { chain, address: normalized } },
-    create: { chain, address: normalized, nonce, expiresAt },
-    update: { nonce, expiresAt },
-  });
+
+  if (await useMemoryAuth()) {
+    memoryNonces().set(nonceKey(chain, normalized), {
+      nonce,
+      expiresAt: expiresAt.getTime(),
+    });
+  } else {
+    await prisma.authNonce.upsert({
+      where: { chain_address: { chain, address: normalized } },
+      create: { chain, address: normalized, nonce, expiresAt },
+      update: { nonce, expiresAt },
+    });
+  }
+
   return {
     nonce,
     message: buildSignMessage({
@@ -57,6 +90,18 @@ export async function issueNonce(chain: AuthChain, address: string) {
 
 export async function consumeNonce(chain: AuthChain, address: string) {
   const normalized = normalizeAddress(chain, address);
+
+  if (await useMemoryAuth()) {
+    const key = nonceKey(chain, normalized);
+    const row = memoryNonces().get(key);
+    if (!row || row.expiresAt < Date.now()) {
+      memoryNonces().delete(key);
+      return null;
+    }
+    memoryNonces().delete(key);
+    return row.nonce;
+  }
+
   const row = await prisma.authNonce.findUnique({
     where: { chain_address: { chain, address: normalized } },
   });
@@ -127,26 +172,67 @@ function verifyBoingSignature(
   }
 }
 
+function shortAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
 export async function upsertUserFromWallet(input: {
   chain: AuthChain;
   address: string;
   displayName?: string;
 }) {
   const address = normalizeAddress(input.chain, input.address);
+
+  if (await useMemoryAuth()) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const state = getMemoryState();
+    for (const creator of state.creators.values()) {
+      if (
+        creator.wallets.some((w) => w.chain === input.chain && w.address === address)
+      ) {
+        return {
+          id: creator.id,
+          displayName: creator.displayName,
+          curatorScore: creator.curatorScore,
+          wallets: creator.wallets,
+        };
+      }
+    }
+    const userId = `user-${randomBytes(8).toString("hex")}`;
+    const created = {
+      id: userId,
+      displayName: input.displayName ?? `Creator ${shortAddress(address)}`,
+      wallets: [{ chain: input.chain, address }],
+      firstListingAt: null,
+      lifetimePrimaryVolumeUsd: 0,
+      completedSales: 0,
+      flagged: false,
+      washCluster: false,
+      verifiedCreator: false,
+      walletCreatedAt: Date.now(),
+      risingEntriesThisWeek: 0,
+      openLaneListingsToday: 0,
+      curatorScore: 25,
+      establishedBadge: false,
+    };
+    state.creators.set(userId, created);
+    return {
+      id: created.id,
+      displayName: created.displayName,
+      curatorScore: created.curatorScore,
+      wallets: created.wallets,
+    };
+  }
+
   const existing = await prisma.wallet.findUnique({
     where: { chain_address: { chain: input.chain, address } },
     include: { user: { include: { wallets: true } } },
   });
   if (existing) return existing.user;
 
-  const short =
-    input.chain === "evm"
-      ? `${address.slice(0, 6)}…${address.slice(-4)}`
-      : `${address.slice(0, 6)}…${address.slice(-4)}`;
-
   return prisma.user.create({
     data: {
-      displayName: input.displayName ?? `Creator ${short}`,
+      displayName: input.displayName ?? `Creator ${shortAddress(address)}`,
       curatorScore: 25,
       wallets: {
         create: { chain: input.chain, address },
@@ -162,6 +248,29 @@ export async function linkWalletToUser(input: {
   address: string;
 }) {
   const address = normalizeAddress(input.chain, input.address);
+
+  if (await useMemoryAuth()) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const state = getMemoryState();
+    for (const creator of state.creators.values()) {
+      const match = creator.wallets.find(
+        (w) => w.chain === input.chain && w.address === address,
+      );
+      if (match && creator.id !== input.userId) {
+        throw new Error("wallet_already_linked");
+      }
+      if (match) return { chain: input.chain, address, userId: creator.id };
+    }
+    const creator = state.creators.get(input.userId);
+    if (!creator) throw new Error("user_not_found");
+    const wallet = { chain: input.chain, address };
+    state.creators.set(input.userId, {
+      ...creator,
+      wallets: [...creator.wallets, wallet],
+    });
+    return { ...wallet, userId: input.userId };
+  }
+
   const taken = await prisma.wallet.findUnique({
     where: { chain_address: { chain: input.chain, address } },
   });

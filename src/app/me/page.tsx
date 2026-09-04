@@ -1,7 +1,10 @@
+import { ProfileSettings } from "@/components/ProfileSettings";
 import { PuzzleRail } from "@/components/PuzzleRail";
+import { WalletLinkPanel } from "@/components/WalletLinkPanel";
 import { WorkCard } from "@/components/WorkCard";
-import { getNetwork, isNetworkId } from "@/lib/chains/registry";
+import { isGoogleAuthConfigured } from "@/lib/auth/google";
 import { getSessionUser } from "@/lib/auth/session";
+import { getNetwork, isNetworkId } from "@/lib/chains/registry";
 import { getUserAssetProfile } from "@/lib/marketplace/profile";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -10,19 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MePage() {
   const user = await getSessionUser();
-  if (!user) {
-    return (
-      <div className="page-wrap">
-        <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.2rem" }}>
-          Account
-        </h1>
-        <p style={{ color: "var(--ink-muted)" }}>
-          Sign in with a wallet or demo persona to view your assets and security
-          settings.
-        </p>
-      </div>
-    );
-  }
+  if (!user) redirect("/sign-in?next=/me");
 
   const profile = await getUserAssetProfile(user.id);
   if (!profile) redirect("/");
@@ -52,21 +43,35 @@ export default async function MePage() {
         </div>
       </div>
       <p style={{ color: "var(--ink-muted)", margin: "0 0 1.75rem", maxWidth: "52ch" }}>
-        Your FreshMint assets — created works, collected pieces, shelves, wallets,
-        and recent bridges. Role: {profile.role} · curator score{" "}
-        {profile.curatorScore}
+        Your FreshMint profile — sign-in methods, linked wallets, created works,
+        collected pieces, shelves, and bridges. Role: {profile.role} · curator
+        score {profile.curatorScore}
         {profile.verifiedCreator ? " · verified" : ""}
         {profile.establishedBadge ? " · established" : ""}.
       </p>
+
+      <ProfileSettings
+        displayName={profile.displayName}
+        email={profile.email}
+        hasPassword={profile.hasPassword}
+        googleLinked={profile.googleLinked}
+        googleEnabled={isGoogleAuthConfigured()}
+      />
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
           Wallets
         </h2>
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 0.85rem", maxWidth: "48ch" }}>
+          Link a wallet by signing a message. That proves you control the key —
+          no gas is spent. One address can only belong to one profile.
+        </p>
         {profile.wallets.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>No wallets linked yet.</p>
+          <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem" }}>
+            No wallets linked yet.
+          </p>
         ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.45rem" }}>
+          <ul style={{ margin: "0 0 0.9rem", padding: 0, listStyle: "none", display: "grid", gap: "0.45rem" }}>
             {profile.wallets.map((w) => (
               <li
                 key={`${w.chain}-${w.address}`}
@@ -78,6 +83,7 @@ export default async function MePage() {
             ))}
           </ul>
         )}
+        <WalletLinkPanel linkedChains={profile.wallets.map((w) => w.chain)} />
       </section>
 
       <section style={{ marginBottom: "2.75rem" }}>

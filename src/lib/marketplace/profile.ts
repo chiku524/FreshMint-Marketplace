@@ -36,6 +36,10 @@ export type UserAssetProfile = {
   completedSales: number;
   lifetimePrimaryVolumeUsd: number;
   totpEnabled: boolean;
+  email: string | null;
+  googleLinked: boolean;
+  hasPassword: boolean;
+  avatarUrl: string | null;
   wallets: ProfileWallet[];
   created: Listing[];
   owned: Array<{
@@ -88,6 +92,8 @@ export async function getUserAssetProfile(
 
     const { getMemoryTotp } = await import("@/lib/auth/totp");
     const totp = getMemoryTotp(userId);
+    const { getMemoryAccount } = await import("@/lib/auth/account");
+    const account = getMemoryAccount(userId);
 
     return {
       userId,
@@ -103,6 +109,10 @@ export async function getUserAssetProfile(
       completedSales: creator.completedSales,
       lifetimePrimaryVolumeUsd: creator.lifetimePrimaryVolumeUsd,
       totpEnabled: totp.totpEnabled,
+      email: account?.email ?? null,
+      googleLinked: Boolean(account?.googleId),
+      hasPassword: Boolean(account?.passwordHash),
+      avatarUrl: account?.avatarUrl ?? null,
       wallets: creator.wallets.map((w) => ({
         chain: w.chain,
         network: (w.network as NetworkId | null) ?? null,
@@ -145,6 +155,10 @@ export async function getUserAssetProfile(
     completedSales: user.completedSales,
     lifetimePrimaryVolumeUsd: user.lifetimePrimaryVolumeUsd,
     totpEnabled: user.totpEnabled,
+    email: user.email,
+    googleLinked: Boolean(user.googleId),
+    hasPassword: Boolean(user.passwordHash),
+    avatarUrl: user.avatarUrl,
     wallets: user.wallets.map((w) => ({
       chain: w.chain,
       network: w.network,

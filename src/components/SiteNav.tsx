@@ -42,6 +42,8 @@ const GROUPS: NavGroup[] = [
     id: "account",
     label: "Account",
     items: [
+      { href: "/sign-in", label: "Sign in" },
+      { href: "/sign-up", label: "Create profile" },
       { href: "/me", label: "Profile & assets" },
       { href: "/me/security", label: "Security (2FA)" },
     ],

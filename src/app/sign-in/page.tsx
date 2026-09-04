@@ -1,0 +1,48 @@
+import { AccountAuthForm } from "@/components/AccountAuthForm";
+import { isGoogleAuthConfigured } from "@/lib/auth/google";
+import { safeNextPath } from "@/lib/auth/paths";
+import { getSessionUser } from "@/lib/auth/session";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    next?: string;
+    error?: string;
+    challenge?: string;
+    name?: string;
+  }>;
+}) {
+  const params = await searchParams;
+  const nextPath = safeNextPath(params.next);
+  const user = await getSessionUser();
+  if (user && !params.challenge) redirect(nextPath);
+
+  return (
+    <div className="page-wrap">
+      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.2rem" }}>
+        Sign in
+      </h1>
+      <p style={{ color: "var(--ink-muted)", margin: "0 0 1.5rem", maxWidth: "48ch" }}>
+        Use Google or email to open your profile, then link EVM, Solana, or Boing
+        wallets. Wallet-only sign-in still works from the header.
+      </p>
+      <AccountAuthForm
+        mode="sign-in"
+        nextPath={nextPath}
+        googleEnabled={isGoogleAuthConfigured()}
+        initialError={params.error}
+        initialChallenge={params.challenge}
+        initialName={params.name}
+      />
+      <p style={{ margin: "1.25rem 0 0", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+        Prefer a demo persona? Use the header selector, or{" "}
+        <Link href="/">browse without an account</Link>.
+      </p>
+    </div>
+  );
+}

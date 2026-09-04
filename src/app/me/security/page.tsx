@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MeSecurityPage() {
   const user = await getSessionUser();
-  if (!user) redirect("/create");
+  if (!user) redirect("/sign-in?next=/me/security");
 
   return (
     <div className="page-wrap">

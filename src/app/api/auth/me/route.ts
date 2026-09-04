@@ -37,6 +37,10 @@ export async function GET() {
       emerging: emerging.emerging,
       emergingReasons: emerging.reasons,
       totpEnabled: user.totpEnabled,
+      email: user.email,
+      googleLinked: user.googleLinked,
+      hasPassword: user.hasPassword,
+      avatarUrl: user.avatarUrl,
     },
   });
 }
