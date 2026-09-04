@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   AccountError,
   getMemoryAccount,
@@ -8,7 +8,7 @@ import {
   upsertUserFromGoogle,
 } from "@/lib/auth/account";
 import { hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth/password";
-import { safeNextPath } from "@/lib/auth/paths";
+import { appBaseUrl, safeNextPath } from "@/lib/auth/paths";
 import {
   enableMemoryMode,
   getMemoryState,
@@ -41,6 +41,31 @@ describe("safeNextPath", () => {
     expect(safeNextPath("https://evil.example")).toBe("/me");
     expect(safeNextPath("//evil.example")).toBe("/me");
     expect(safeNextPath(null)).toBe("/me");
+  });
+});
+
+describe("appBaseUrl", () => {
+  const prev = {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
+    VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  };
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(prev)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  it("prefers the Vercel production host over localhost request urls", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+    process.env.VERCEL_ENV = "production";
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "fresh-mint-marketplace.vercel.app";
+    expect(appBaseUrl("http://localhost:3000/api/auth/google")).toBe(
+      "https://fresh-mint-marketplace.vercel.app",
+    );
   });
 });
 
