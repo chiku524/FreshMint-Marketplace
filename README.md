@@ -81,6 +81,9 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 | `npm test` | Discovery unit tests |
 | `npm run db:seed` | Reset cold-start catalog |
 | `npm run db:studio` | Browse Postgres |
+| `npm run remotion` | Remotion Studio for the `LogoIntro` brand film |
+
+The homepage plays a 7.5s FreshMint logo intro on first visit (skip, or `?intro=1` / footer **Replay intro**). Composition source lives in `src/remotion/`.
 
 ## API highlights
 

@@ -34,6 +34,8 @@ next-env.d.ts
 *.db
 /prisma/dev.db
 /src/generated/prisma
+/out
+
 /public/uploads/*
 !/public/uploads/.gitkeep
 .env.vercel
