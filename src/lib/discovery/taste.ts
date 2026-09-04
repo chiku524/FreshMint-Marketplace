@@ -8,7 +8,7 @@ export interface ViewerTaste {
 }
 
 export function normalizeTaste(input: Partial<ViewerTaste> | null | undefined): ViewerTaste {
-  const allowed = new Set(DISCOVERY_CONFIG.taste.seedTags);
+  const allowed = new Set<string>(DISCOVERY_CONFIG.taste.seedTags);
   const styleTags = (input?.styleTags ?? [])
     .map((t) => t.trim().toLowerCase())
     .filter((t) => t.length > 0 && (allowed.has(t) || t.length <= 24))

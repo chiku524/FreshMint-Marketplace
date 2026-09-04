@@ -9,9 +9,16 @@ const globalReady = globalThis as unknown as {
 
 async function canQuery(url: string): Promise<boolean> {
   try {
-    const { PrismaClient } = await import("@prisma/client");
+    const { PrismaPg } = await import("@prisma/adapter-pg");
+    const { PrismaClient } = await import("@/generated/prisma/client");
     const client = new PrismaClient({
-      datasources: { db: { url } },
+      adapter: new PrismaPg({
+        connectionString: url,
+        ssl:
+          url.includes("sslmode=require") || url.includes("prisma.io")
+            ? { rejectUnauthorized: false }
+            : undefined,
+      }),
     });
     await client.$connect();
     await client.user.count();
