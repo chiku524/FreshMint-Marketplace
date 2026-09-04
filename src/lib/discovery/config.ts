@@ -104,7 +104,7 @@ export const DISCOVERY_CONFIG = {
   viewerSession: {
     cookieName: "freshmint_discovery_seen",
     tasteCookieName: "freshmint_taste",
-    maxIds: 80,
+    maxIds: 32,
     ttlSeconds: 60 * 60 * 24,
   },
 

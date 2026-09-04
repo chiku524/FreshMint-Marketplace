@@ -8,6 +8,7 @@ import {
   upsertUserFromGoogle,
 } from "@/lib/auth/account";
 import { hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth/password";
+import { authUsesMemoryStore } from "@/lib/auth/session";
 import { absoluteAppUrl, appBaseUrl, safeNextPath } from "@/lib/auth/paths";
 import {
   enableMemoryMode,
@@ -69,6 +70,25 @@ describe("appBaseUrl", () => {
     expect(
       absoluteAppUrl("/me", "http://localhost:3000/api/auth/google/callback").href,
     ).toBe("https://fresh-mint-marketplace.vercel.app/me");
+  });
+});
+
+describe("authUsesMemoryStore", () => {
+  const prev = process.env.DATABASE_URL;
+
+  afterEach(() => {
+    if (prev === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prev;
+  });
+
+  it("uses durable auth when Postgres is configured", () => {
+    process.env.DATABASE_URL = "postgresql://freshmint:freshmint@127.0.0.1:5433/freshmint";
+    expect(authUsesMemoryStore()).toBe(false);
+  });
+
+  it("uses memory auth only without Postgres", () => {
+    delete process.env.DATABASE_URL;
+    expect(authUsesMemoryStore()).toBe(true);
   });
 });
 

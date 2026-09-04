@@ -2,9 +2,16 @@ import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ user: null });
+  if (!user) {
+    return NextResponse.json(
+      { user: null },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   const emerging = isEmergingCreator({
     id: user.id,
@@ -26,21 +33,24 @@ export async function GET() {
     establishedBadge: user.establishedBadge,
   });
 
-  return NextResponse.json({
-    user: {
-      id: user.id,
-      displayName: user.displayName,
-      wallets: user.wallets,
-      curatorScore: user.curatorScore,
-      verifiedCreator: user.verifiedCreator,
-      role: user.role,
-      emerging: emerging.emerging,
-      emergingReasons: emerging.reasons,
-      totpEnabled: user.totpEnabled,
-      email: user.email,
-      googleLinked: user.googleLinked,
-      hasPassword: user.hasPassword,
-      avatarUrl: user.avatarUrl,
+  return NextResponse.json(
+    {
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        wallets: user.wallets,
+        curatorScore: user.curatorScore,
+        verifiedCreator: user.verifiedCreator,
+        role: user.role,
+        emerging: emerging.emerging,
+        emergingReasons: emerging.reasons,
+        totpEnabled: user.totpEnabled,
+        email: user.email,
+        googleLinked: user.googleLinked,
+        hasPassword: user.hasPassword,
+        avatarUrl: user.avatarUrl,
+      },
     },
-  });
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

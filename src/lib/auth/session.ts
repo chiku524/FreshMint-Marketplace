@@ -1,4 +1,4 @@
-import "@/lib/env";
+import { isPostgresConfigured } from "@/lib/env";
 import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
@@ -99,7 +99,13 @@ export function sessionCookieOptions(expiresAt: Date) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
+    maxAge: 7 * 24 * 60 * 60,
   };
+}
+
+/** Auth stays on Postgres whenever a DB URL exists — catalog memory fallback must not log people out. */
+export function authUsesMemoryStore(): boolean {
+  return !isPostgresConfigured();
 }
 
 export function applySessionCookie(
@@ -120,10 +126,7 @@ export async function createSession(userId: string): Promise<{
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const tokenHash = hashToken(token);
 
-  const { ensureDatabaseReady } = await import("@/lib/db-ready");
-  const { isMemoryMode } = await import("@/lib/data/memory-store");
-  const mode = await ensureDatabaseReady();
-  const memory = mode === "memory" || isMemoryMode();
+  const memory = authUsesMemoryStore();
 
   if (!memory) {
     await prisma.session.create({
@@ -169,6 +172,70 @@ export async function destroySession(): Promise<void> {
   jar.set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
+async function sessionUserFromMemory(userId: string): Promise<SessionUser | null> {
+  const { getMemoryState } = await import("@/lib/data/memory-store");
+  const creator = getMemoryState().creators.get(userId);
+  if (!creator) return null;
+  const session = creatorToSession(creator);
+  const { getMemoryTotp } = await import("@/lib/auth/totp");
+  session.totpEnabled = getMemoryTotp(userId).totpEnabled;
+  const { getMemoryAccount } = await import("@/lib/auth/account");
+  const account = getMemoryAccount(userId);
+  if (account) {
+    session.email = account.email;
+    session.googleLinked = Boolean(account.googleId);
+    session.hasPassword = Boolean(account.passwordHash);
+    session.avatarUrl = account.avatarUrl;
+  }
+  return session;
+}
+
+function sessionUserFromDbUser(u: {
+  id: string;
+  displayName: string;
+  wallets: { chain: string; address: string }[];
+  curatorScore: number;
+  verifiedCreator: boolean;
+  role: string;
+  flagged: boolean;
+  washCluster: boolean;
+  firstListingAt: Date | null;
+  lifetimePrimaryVolumeUsd: number;
+  completedSales: number;
+  walletCreatedAt: Date;
+  risingEntriesThisWeek: number;
+  openLaneListingsToday: number;
+  establishedBadge: boolean;
+  totpEnabled: boolean;
+  email: string | null;
+  googleId: string | null;
+  passwordHash: string | null;
+  avatarUrl: string | null;
+}): SessionUser {
+  return {
+    id: u.id,
+    displayName: u.displayName,
+    wallets: u.wallets,
+    curatorScore: u.curatorScore,
+    verifiedCreator: u.verifiedCreator,
+    role: u.role,
+    flagged: u.flagged,
+    washCluster: u.washCluster,
+    firstListingAt: u.firstListingAt,
+    lifetimePrimaryVolumeUsd: u.lifetimePrimaryVolumeUsd,
+    completedSales: u.completedSales,
+    walletCreatedAt: u.walletCreatedAt,
+    risingEntriesThisWeek: u.risingEntriesThisWeek,
+    openLaneListingsToday: u.openLaneListingsToday,
+    establishedBadge: u.establishedBadge,
+    totpEnabled: u.totpEnabled,
+    email: u.email,
+    googleLinked: Boolean(u.googleId),
+    hasPassword: Boolean(u.passwordHash),
+    avatarUrl: u.avatarUrl,
+  };
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   const jar = await cookies();
   const jwt = jar.get(COOKIE)?.value;
@@ -179,28 +246,17 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const tokenHash = String(payload.t ?? "");
     if (!userId || !tokenHash) return null;
 
-    const { ensureDatabaseReady } = await import("@/lib/db-ready");
-    const { getMemoryState, isMemoryMode } = await import(
-      "@/lib/data/memory-store"
-    );
-    const mode = await ensureDatabaseReady();
-    const memory = mode === "memory" || isMemoryMode() || payload.mem === 1;
+    if (authUsesMemoryStore()) {
+      return sessionUserFromMemory(userId);
+    }
 
-    if (memory) {
-      const creator = getMemoryState().creators.get(userId);
-      if (!creator) return null;
-      const session = creatorToSession(creator);
-      const { getMemoryTotp } = await import("@/lib/auth/totp");
-      session.totpEnabled = getMemoryTotp(userId).totpEnabled;
-      const { getMemoryAccount } = await import("@/lib/auth/account");
-      const account = getMemoryAccount(userId);
-      if (account) {
-        session.email = account.email;
-        session.googleLinked = Boolean(account.googleId);
-        session.hasPassword = Boolean(account.passwordHash);
-        session.avatarUrl = account.avatarUrl;
-      }
-      return session;
+    if (payload.mem === 1) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { wallets: true },
+      });
+      if (user) return sessionUserFromDbUser(user);
+      return sessionUserFromMemory(userId);
     }
 
     const session = await prisma.session.findUnique({
@@ -211,29 +267,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       return null;
     }
     if (session.userId !== userId) return null;
-    const u = session.user;
-    return {
-      id: u.id,
-      displayName: u.displayName,
-      wallets: u.wallets,
-      curatorScore: u.curatorScore,
-      verifiedCreator: u.verifiedCreator,
-      role: u.role,
-      flagged: u.flagged,
-      washCluster: u.washCluster,
-      firstListingAt: u.firstListingAt,
-      lifetimePrimaryVolumeUsd: u.lifetimePrimaryVolumeUsd,
-      completedSales: u.completedSales,
-      walletCreatedAt: u.walletCreatedAt,
-      risingEntriesThisWeek: u.risingEntriesThisWeek,
-      openLaneListingsToday: u.openLaneListingsToday,
-      establishedBadge: u.establishedBadge,
-      totpEnabled: u.totpEnabled,
-      email: u.email,
-      googleLinked: Boolean(u.googleId),
-      hasPassword: Boolean(u.passwordHash),
-      avatarUrl: u.avatarUrl,
-    };
+    return sessionUserFromDbUser(session.user);
   } catch {
     return null;
   }
@@ -244,10 +278,7 @@ export async function completeLoginOrChallenge(userId: string): Promise<
   | { ok: true; requires2fa: false; jwt: string; expiresAt: Date }
   | { ok: true; requires2fa: true; pendingToken: string; displayName: string }
 > {
-  const { ensureDatabaseReady } = await import("@/lib/db-ready");
-  const { isMemoryMode } = await import("@/lib/data/memory-store");
-  const mode = await ensureDatabaseReady();
-  const memory = mode === "memory" || isMemoryMode();
+  const memory = authUsesMemoryStore();
 
   let totpEnabled = false;
   let displayName = userId;

@@ -62,11 +62,26 @@ export function appendSeenFromFeed(
 }
 
 export function serializeSeenCookie(session: SessionContext): string {
-  return JSON.stringify({
-    artistIds: session.seenArtistIds,
-    listingIds: session.seenListingIds,
-    collectionIds: session.seenCollectionIds,
-  });
+  const cap = DISCOVERY_CONFIG.viewerSession.maxIds;
+  let artistIds = session.seenArtistIds.slice(-cap);
+  let listingIds = session.seenListingIds.slice(-cap);
+  let collectionIds = session.seenCollectionIds.slice(-cap);
+  let raw = JSON.stringify({ artistIds, listingIds, collectionIds });
+  // Browsers drop cookies over ~4KB; a large seen-list can evict the auth cookie.
+  while (
+    raw.length > 3500 &&
+    (artistIds.length || listingIds.length || collectionIds.length)
+  ) {
+    if (listingIds.length >= artistIds.length && listingIds.length > 0) {
+      listingIds = listingIds.slice(1);
+    } else if (artistIds.length > 0) {
+      artistIds = artistIds.slice(1);
+    } else {
+      collectionIds = collectionIds.slice(1);
+    }
+    raw = JSON.stringify({ artistIds, listingIds, collectionIds });
+  }
+  return raw;
 }
 
 export function parseSeenCookie(
