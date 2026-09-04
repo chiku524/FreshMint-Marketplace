@@ -67,8 +67,8 @@ model ModerationAction {
 model Wallet {
   id        String   @id @default(cuid())
   userId    String
-  chain     String // evm | solana
-  /// ethereum | base | arbitrum | optimism | solana
+  chain     String // evm | solana | boing
+  /// ethereum | base | arbitrum | optimism | solana | boing
   network   String?
   address   String
   createdAt DateTime @default(now())
@@ -108,8 +108,8 @@ model Listing {
   description      String   @default("")
   creatorId        String
   type             String // single | collection | open_edition | auction
-  chain            String // evm | solana
-  /// ethereum | base | arbitrum | optimism | solana
+  chain            String // evm | solana | boing
+  /// ethereum | base | arbitrum | optimism | solana | boing
   network          String   @default("ethereum")
   stage            String   @default("draft")
   priceUsd         Float?

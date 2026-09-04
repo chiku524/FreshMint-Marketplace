@@ -1,13 +1,19 @@
 import { randomBytes } from "node:crypto";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { blake3 } from "@noble/hashes/blake3";
 import { verifyMessage } from "viem";
 import { prisma } from "@/lib/db";
+import {
+  isBoingNativeAccountIdHex,
+  normalizeBoingAccountId,
+} from "@/lib/onchain/boing";
 
-export type AuthChain = "evm" | "solana";
+export type AuthChain = "evm" | "solana" | "boing";
 
 export function normalizeAddress(chain: AuthChain, address: string): string {
   if (chain === "evm") return address.toLowerCase();
+  if (chain === "boing") return normalizeBoingAccountId(address);
   return address.trim();
 }
 
@@ -78,12 +84,44 @@ export async function verifyWalletSignature(input: {
     });
   }
 
+  if (input.chain === "boing") {
+    return verifyBoingSignature(normalized, input.message, input.signature);
+  }
+
   // Solana: ed25519 over UTF-8 message bytes
   try {
     const publicKey = bs58.decode(normalized);
     const signature = bs58.decode(input.signature);
     const msg = new TextEncoder().encode(input.message);
     return nacl.sign.detached.verify(msg, signature, publicKey);
+  } catch {
+    return false;
+  }
+}
+
+function decodeSigBytes(signature: string): Uint8Array {
+  const raw = signature.trim();
+  if (/^(0x)?[0-9a-fA-F]+$/.test(raw) && raw.replace(/^0x/, "").length % 2 === 0) {
+    return Uint8Array.from(Buffer.from(raw.replace(/^0x/, ""), "hex"));
+  }
+  return bs58.decode(raw);
+}
+
+function verifyBoingSignature(
+  address: string,
+  message: string,
+  signature: string,
+): boolean {
+  if (!isBoingNativeAccountIdHex(address)) return false;
+  try {
+    const publicKey = Uint8Array.from(Buffer.from(address.slice(2), "hex"));
+    const sig = decodeSigBytes(signature);
+    const utf8 = new TextEncoder().encode(message);
+    const hashed = blake3(utf8);
+    return (
+      nacl.sign.detached.verify(hashed, sig, publicKey) ||
+      nacl.sign.detached.verify(utf8, sig, publicKey)
+    );
   } catch {
     return false;
   }
@@ -104,7 +142,7 @@ export async function upsertUserFromWallet(input: {
   const short =
     input.chain === "evm"
       ? `${address.slice(0, 6)}…${address.slice(-4)}`
-      : `${address.slice(0, 4)}…${address.slice(-4)}`;
+      : `${address.slice(0, 6)}…${address.slice(-4)}`;
 
   return prisma.user.create({
     data: {

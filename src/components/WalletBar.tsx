@@ -127,6 +127,86 @@ export function WalletBar() {
     }
   }
 
+  function getBoingProvider() {
+    const provider = (
+      window as unknown as {
+        boing?: {
+          request: (args: {
+            method: string;
+            params?: unknown[];
+          }) => Promise<unknown>;
+        };
+      }
+    ).boing;
+    if (!provider?.request) {
+      throw new Error("No Boing Express wallet found — install Boing Express");
+    }
+    return provider;
+  }
+
+  function encodeBoingSignature(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (value instanceof Uint8Array) return bs58.encode(value);
+    if (value && typeof value === "object") {
+      const rec = value as { signature?: unknown; result?: unknown };
+      if (typeof rec.signature === "string") return rec.signature;
+      if (rec.signature instanceof Uint8Array) return bs58.encode(rec.signature);
+      if (typeof rec.result === "string") return rec.result;
+    }
+    throw new Error("boing_signature_missing");
+  }
+
+  async function connectBoing() {
+    setBusy(true);
+    setError(null);
+    try {
+      const provider = getBoingProvider();
+      const accounts = (await provider.request({
+        method: "boing_requestAccounts",
+      })) as string[];
+      const address = Array.isArray(accounts) ? accounts[0] : undefined;
+      if (!address) throw new Error("no_account");
+
+      const nonceRes = await fetch("/api/auth/nonce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chain: "boing", address }),
+      });
+      const { message } = await nonceRes.json();
+      let signed: unknown;
+      try {
+        signed = await provider.request({
+          method: "boing_signMessage",
+          params: [message],
+        });
+      } catch {
+        signed = await provider.request({
+          method: "personal_sign",
+          params: [message, address],
+        });
+      }
+      const signature = encodeBoingSignature(signed);
+
+      const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
+      const verifyRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chain: "boing", address, signature }),
+      });
+      const data = await verifyRes.json();
+      if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
+      if (endpoint === "/api/auth/verify") {
+        handleAuthResponse(data);
+      } else {
+        await refresh();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "boing_connect_failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function connectSolana() {
     setBusy(true);
     setError(null);
@@ -233,6 +313,7 @@ export function WalletBar() {
 
   const hasEvm = user?.wallets.some((w) => w.chain === "evm");
   const hasSol = user?.wallets.some((w) => w.chain === "solana");
+  const hasBoing = user?.wallets.some((w) => w.chain === "boing");
 
   return (
     <>
@@ -291,6 +372,17 @@ export function WalletBar() {
                 Link Solana
               </button>
             ) : null}
+            {!hasBoing ? (
+              <button
+                type="button"
+                className="badge"
+                disabled={busy}
+                onClick={() => void connectBoing()}
+                style={{ cursor: "pointer", background: "transparent" }}
+              >
+                Link Boing
+              </button>
+            ) : null}
             <button
               type="button"
               className="badge"
@@ -319,6 +411,15 @@ export function WalletBar() {
               style={{ cursor: "pointer", background: "transparent" }}
             >
               Connect Solana
+            </button>
+            <button
+              type="button"
+              className="badge"
+              disabled={busy}
+              onClick={() => void connectBoing()}
+              style={{ cursor: "pointer", background: "transparent" }}
+            >
+              Connect Boing
             </button>
             <select
               disabled={busy}

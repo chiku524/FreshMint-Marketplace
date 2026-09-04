@@ -14,7 +14,7 @@ import {
 let configured = false;
 
 /** Relay numeric chain ids used by the protocol (Solana uses a custom id). */
-const RELAY_CHAIN_ID: Record<NetworkId, number> = {
+const RELAY_CHAIN_ID: Partial<Record<NetworkId, number>> = {
   ethereum: chainMode() === "mainnet" ? 1 : 11155111,
   base: chainMode() === "mainnet" ? 8453 : 84532,
   arbitrum: chainMode() === "mainnet" ? 42161 : 421614,
@@ -44,7 +44,11 @@ export function ensureRelayClient() {
 }
 
 export function relayChainId(network: NetworkId): number {
-  return RELAY_CHAIN_ID[network];
+  const id = RELAY_CHAIN_ID[network];
+  if (id == null) {
+    throw new Error(`relay_unsupported_network:${network}`);
+  }
+  return id;
 }
 
 export function bridgeableNetworks() {
@@ -105,6 +109,9 @@ export async function quoteNativeBridge(
   ensureRelayClient();
   const from = getNetwork(input.fromNetwork);
   const to = getNetwork(input.toNetwork);
+  if (from.vm === "boing" || to.vm === "boing") {
+    throw new Error("boing_not_on_relay");
+  }
   if (input.fromNetwork === input.toNetwork) {
     throw new Error("same_network");
   }

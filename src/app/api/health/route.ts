@@ -8,6 +8,7 @@ import { relayApiBase } from "@/lib/bridge/relay";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import { isMemoryMode } from "@/lib/data/memory-store";
 import { getDatabaseUrl, isPostgresConfigured } from "@/lib/env";
+import { probeBoingNetwork } from "@/lib/onchain/boing";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -17,6 +18,7 @@ export async function GET() {
   for (const id of EVM_NETWORK_IDS) {
     markets[id] = marketAddressFor(id as NetworkId);
   }
+  const boing = await probeBoingNetwork();
   return NextResponse.json({
     ok: true,
     mode: isMemoryMode() ? "memory" : mode,
@@ -33,6 +35,10 @@ export async function GET() {
     evmMarket:
       markets.ethereum ?? process.env.NEXT_PUBLIC_EVM_MARKET_ADDRESS ?? null,
     solanaMintMode: process.env.SOLANA_MINT_MODE ?? "metaplex",
+    boing: {
+      collection: marketAddressFor("boing"),
+      rpc: boing,
+    },
     timestamp: new Date().toISOString(),
   });
 }

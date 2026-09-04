@@ -49,6 +49,9 @@ export function OpenLaneFilters({
         <Link className="badge" href={link({ chain: "solana", network: "solana" })}>
           Solana
         </Link>
+        <Link className="badge" href={link({ chain: "boing", network: "boing" })}>
+          Boing
+        </Link>
         <Link className="badge" href={link({ network: "ethereum", chain: "evm" })}>
           Ethereum
         </Link>

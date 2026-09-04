@@ -37,6 +37,11 @@ import {
   sendSolanaMetaplexMintWithServerKey,
   verifySolanaTx,
 } from "@/lib/onchain/solana";
+import {
+  buildBoingMintIntent,
+  buildBoingPurchaseIntent,
+  verifyBoingTx,
+} from "@/lib/onchain/boing";
 import { hashTextMedia } from "@/lib/media/upload";
 import { parseEther } from "viem";
 
@@ -209,10 +214,7 @@ export async function createListingForUser(input: {
     };
     mem.state.listings.set(id, listing);
     if (input.publishSoftLaunch) {
-      const advanced = mem.transitionListing(id, "soft_launch");
-      if (advanced.ok && advanced.listing) {
-        return { ok: true as const, listing: advanced.listing, errors: [] as string[] };
-      }
+      return transitionListingStage(id, "soft_launch");
     }
     return { ok: true as const, listing, errors: [] as string[] };
   }
@@ -354,6 +356,36 @@ export async function transitionListingStage(
             contractAddress: mint.contractAddress,
             tokenId: mint.tokenId,
             network,
+          });
+        }
+      }
+    } else if (listing.chain === "boing") {
+      const mint = buildBoingMintIntent({
+        creatorAddress,
+        metadataUri: tokenUri,
+        listingId,
+        title: listing.title,
+      });
+      walletTx = mint.walletTx;
+      if (!memory) {
+        await prisma.listing.update({
+          where: { id: listingId },
+          data: {
+            mintTxHash: mint.txHash || null,
+            contractAddress: mint.contractAddress,
+            tokenId: mint.tokenId,
+            network: "boing",
+          },
+        });
+      } else {
+        const row = engine.state.listings.get(listingId);
+        if (row) {
+          engine.state.listings.set(listingId, {
+            ...row,
+            mintTxHash: mint.txHash || null,
+            contractAddress: mint.contractAddress,
+            tokenId: mint.tokenId,
+            network: "boing",
           });
         }
       }
@@ -698,6 +730,12 @@ export async function confirmOnchainTx(input: {
       return { ok: false as const, error: verified.error ?? "verify_failed" };
     }
     if (verified.tokenId) verifiedTokenId = verified.tokenId;
+  } else if (listing.chain === "boing") {
+    const live = Boolean(marketAddressFor("boing"));
+    const verified = await verifyBoingTx(input.txHash);
+    if (!verified && live && !input.txHash.startsWith("pending:")) {
+      return { ok: false as const, error: "verify_failed" };
+    }
   } else {
     const verified = await verifySolanaTx(input.txHash);
     if (
@@ -1048,12 +1086,20 @@ export async function purchaseListing(input: {
           network: listing.network,
           amountUsd: input.amountUsd,
         })
-      : buildSolanaPurchaseIntent({
-          buyerAddress,
-          mintAddress: listing.contractAddress ?? "unknown",
-          priceLamports: Math.round(input.amountUsd * 1_000_000),
-          listingId: listing.id,
-        });
+      : listing.chain === "boing"
+        ? buildBoingPurchaseIntent({
+            buyerAddress,
+            listingId: listing.id,
+            collection: listing.contractAddress,
+            tokenId: listing.tokenId,
+            amountUsd: input.amountUsd,
+          })
+        : buildSolanaPurchaseIntent({
+            buyerAddress,
+            mintAddress: listing.contractAddress ?? "unknown",
+            priceLamports: Math.round(input.amountUsd * 1_000_000),
+            listingId: listing.id,
+          });
 
   let txHash = purchaseIntent.txHash;
   let walletTx =
@@ -1070,7 +1116,11 @@ export async function purchaseListing(input: {
       txHash = server.txHash;
       walletTx = undefined;
     }
-  } else if (!memory && "message" in purchaseIntent) {
+  } else if (
+    !memory &&
+    listing.chain === "solana" &&
+    "message" in purchaseIntent
+  ) {
     const server = await sendSolanaMemoWithServerKey(purchaseIntent.message);
     if (server) {
       txHash = server.txHash;

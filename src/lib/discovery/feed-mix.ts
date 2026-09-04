@@ -313,7 +313,7 @@ export function composeHomepageFeed(input: ComposeFeedInput): RankedListing[] {
 export function filterOpenLane(
   listings: Listing[],
   filters: {
-    chain?: "evm" | "solana";
+    chain?: "evm" | "solana" | "boing";
     network?: Listing["network"];
     medium?: string;
     style?: string;

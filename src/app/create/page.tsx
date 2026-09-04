@@ -9,8 +9,9 @@ export default function CreatePage() {
       <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.5rem" }}>
         Sign in with a wallet or demo persona, pick a mint network, then soft-launch
         to Open Lane. EVM networks mint real ERC-721s when a market address is
-        configured; Solana uses Metaplex Core on Devnet. Need gas on another chain?{" "}
-        <a href="/bridge">Bridge natives</a>.
+        configured; Solana uses Metaplex Core on Devnet; Boing Testnet deploys
+        via Boing Express. Need gas on EVM or Solana?{" "}
+        <a href="/bridge">Bridge natives</a> (Boing is not on Relay).
       </p>
       <CreateListingForm />
     </div>

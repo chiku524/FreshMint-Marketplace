@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const schema = z.object({
-  chain: z.enum(["evm", "solana"]),
+  chain: z.enum(["evm", "solana", "boing"]),
   address: z.string().min(8),
   signature: z.string().min(8),
   displayName: z.string().min(1).max(64).optional(),

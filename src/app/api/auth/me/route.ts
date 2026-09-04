@@ -10,7 +10,7 @@ export async function GET() {
     id: user.id,
     displayName: user.displayName,
     wallets: user.wallets.map((w) => ({
-      chain: w.chain as "evm" | "solana",
+      chain: w.chain as "evm" | "solana" | "boing",
       address: w.address,
     })),
     firstListingAt: user.firstListingAt?.getTime() ?? null,

@@ -21,6 +21,26 @@ export type SolanaWalletTx = {
   serialized?: string;
 };
 
+export type BoingWalletTx = {
+  chain: "boing";
+  network?: "boing";
+  chainId?: number;
+  method?: "boing_sendTransaction";
+  tx: Record<string, unknown>;
+};
+
+type BoingProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
+
+function getBoingProvider(): BoingProvider {
+  const provider = (window as unknown as { boing?: BoingProvider }).boing;
+  if (!provider?.request) {
+    throw new Error("No Boing Express wallet found");
+  }
+  return provider;
+}
+
 const CHAIN_PARAMS: Record<
   number,
   { chainId: string; chainName: string; rpcUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number }; blockExplorerUrls: string[] }
@@ -162,6 +182,28 @@ export async function sendSolanaWalletTx(
   return result.signature;
 }
 
+export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
+  const provider = getBoingProvider();
+  await provider.request({ method: "boing_requestAccounts" });
+  try {
+    await provider.request({
+      method: "boing_switchChain",
+      params: [{ chainId: "0x1b01" }],
+    });
+  } catch {
+    // Wallet may already be on testnet or omit switch.
+  }
+  const result = await provider.request({
+    method: "boing_sendTransaction",
+    params: [tx.tx],
+  });
+  if (typeof result === "string") return result;
+  if (result && typeof result === "object" && "hash" in result) {
+    return String((result as { hash: unknown }).hash);
+  }
+  throw new Error("boing_tx_hash_missing");
+}
+
 /** Prepare + send Solana mint/buy via wallet. */
 export async function sendSolanaMintFromWallet(
   listingId: string,
@@ -194,6 +236,7 @@ export async function maybeSendWalletTx(input: {
   const wt = input.walletTx as
     | (EvmWalletTx & { chain: string })
     | (SolanaWalletTx & { chain: string })
+    | (BoingWalletTx & { chain: string })
     | null
     | undefined;
   if (!wt || typeof wt !== "object") return null;
@@ -211,6 +254,9 @@ export async function maybeSendWalletTx(input: {
       input.amountUsd,
     );
     return result.signature;
+  }
+  if (wt.chain === "boing" && "tx" in wt && wt.tx) {
+    return sendBoingWalletTx(wt as BoingWalletTx);
   }
   return null;
 }

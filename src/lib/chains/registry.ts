@@ -17,7 +17,8 @@ export type NetworkId =
   | "base"
   | "arbitrum"
   | "optimism"
-  | "solana";
+  | "solana"
+  | "boing";
 
 export type ChainMode = "testnet" | "mainnet";
 
@@ -25,7 +26,7 @@ export interface NetworkDef {
   id: NetworkId;
   label: string;
   vm: Chain;
-  nativeSymbol: "ETH" | "SOL";
+  nativeSymbol: "ETH" | "SOL" | "BOING";
   /** Relay / display decimals for native. */
   decimals: number;
   /** viem chain when vm === evm */
@@ -128,6 +129,19 @@ const NETWORKS_TESTNET: Record<NetworkId, NetworkDef> = {
     rpcEnvKey: "SOLANA_RPC_URL",
     defaultRpc: "https://api.devnet.solana.com",
   },
+  boing: {
+    id: "boing",
+    label: "Boing Testnet",
+    vm: "boing",
+    nativeSymbol: "BOING",
+    decimals: 18,
+    chainId: 6913,
+    explorerTx: (hash) => `https://boing.observer/tx/${hash}`,
+    explorerAddress: (address) => `https://boing.observer/account/${address}`,
+    rpcEnvKey: "BOING_RPC_URL",
+    marketEnvKey: "NEXT_PUBLIC_BOING_NFT_COLLECTION",
+    defaultRpc: "https://testnet-rpc.boing.network/",
+  },
 };
 
 const NETWORKS_MAINNET: Record<NetworkId, NetworkDef> = {
@@ -174,6 +188,10 @@ const NETWORKS_MAINNET: Record<NetworkId, NetworkDef> = {
       `https://explorer.solana.com/address/${address}`,
     defaultRpc: "https://api.mainnet-beta.solana.com",
   },
+  boing: {
+    ...NETWORKS_TESTNET.boing,
+    label: "Boing",
+  },
 };
 
 const TABLE = MODE === "mainnet" ? NETWORKS_MAINNET : NETWORKS_TESTNET;
@@ -184,6 +202,7 @@ export const NETWORK_IDS: NetworkId[] = [
   "arbitrum",
   "optimism",
   "solana",
+  "boing",
 ];
 
 export const EVM_NETWORK_IDS: NetworkId[] = [
@@ -202,7 +221,7 @@ export function listNetworks(): NetworkDef[] {
 }
 
 export function listBridgeNetworks(): NetworkDef[] {
-  return listNetworks();
+  return listNetworks().filter((n) => n.vm !== "boing");
 }
 
 export function isNetworkId(value: string): value is NetworkId {
@@ -220,6 +239,7 @@ export function resolveNetwork(
 ): NetworkId {
   if (network && isNetworkId(network)) return network;
   if (chain === "solana") return "solana";
+  if (chain === "boing") return "boing";
   return "ethereum";
 }
 

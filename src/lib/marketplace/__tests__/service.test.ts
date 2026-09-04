@@ -146,6 +146,30 @@ describe("marketplace service (memory mode)", () => {
     expect(shelf.shelf.listingIds.length).toBe(listingIds.length);
   });
 
+  it("soft-launches a Boing listing with a wallet mint intent", async () => {
+    const created = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Boing Work",
+      description: "native L1 mint",
+      type: "single",
+      network: "boing",
+      priceUsd: 18,
+      medium: "digital_ink",
+      styleTags: ["boing"],
+      mediaContent: `boing-media-${Date.now()}`,
+      publishSoftLaunch: true,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.listing.chain).toBe("boing");
+    expect(created.listing.network).toBe("boing");
+    expect("walletTx" in created).toBe(true);
+    expect("walletTx" in created && created.walletTx).toMatchObject({
+      chain: "boing",
+      method: "boing_sendTransaction",
+    });
+  });
+
   it("advances stage and confirms on-chain tx", async () => {
     const created = await createListingForUser({
       creatorId: "artist-fresh",

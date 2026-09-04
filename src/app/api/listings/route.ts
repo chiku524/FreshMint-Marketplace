@@ -21,9 +21,9 @@ const createSchema = z
     title: z.string().min(1).max(120),
     description: z.string().max(2000).default(""),
     type: z.enum(["single", "collection", "open_edition", "auction"]),
-    chain: z.enum(["evm", "solana"]).optional(),
+    chain: z.enum(["evm", "solana", "boing"]).optional(),
     network: z
-      .enum(["ethereum", "base", "arbitrum", "optimism", "solana"])
+      .enum(["ethereum", "base", "arbitrum", "optimism", "solana", "boing"])
       .optional(),
     priceUsd: z.number().nonnegative().nullable().optional(),
     medium: z.string().min(1).max(64),

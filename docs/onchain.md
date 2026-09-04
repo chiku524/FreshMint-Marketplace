@@ -11,13 +11,17 @@ FreshMint settles art on the same networks it can fund via the bridge.
 | arbitrum   | EVM    | ETH    | Arbitrum Sepolia    | Arbitrum One           |
 | optimism   | EVM    | ETH    | OP Sepolia          | Optimism               |
 | solana     | Solana | SOL    | Devnet              | Mainnet                |
+| boing      | Boing  | BOING  | Testnet (chain 6913)| Not on Relay           |
 
 Set `NEXT_PUBLIC_CHAIN_MODE=testnet` (default) or `mainnet`.
+
+**Boing is a native L1**, not an EVM chain. Do not add it via MetaMask `wallet_addEthereumChain`. Use [Boing Express](https://boing.express) (`window.boing`) and 32-byte account ids (`0x` + 64 hex). Public RPC: `https://testnet-rpc.boing.network/`. Explorer: `https://boing.observer`. Boing is **not** on Relay — `/bridge` excludes it.
 
 ## Minting
 
 - **EVM:** `FreshMintERC721.safeMint` — real ERC-721; token URI should point at media/metadata (Blob URL).
 - **Solana:** Metaplex Core asset; Phantom signs (or server key on Devnet).
+- **Boing:** Boing Express signs a native `contract_deploy_meta` (`purpose_category: "nft"`). If `NEXT_PUBLIC_BOING_NFT_COLLECTION` is set, mint uses `contract_call` against that collection instead. No server-side Boing minter key in this slice.
 - Soft-launch prepares a wallet tx; `/api/onchain/confirm` stores the hash and verifies when a live market/RPC is configured.
 - Listings show **Minted** + explorer links when `mintTxHash` is set.
 
@@ -55,4 +59,5 @@ On EVM, `FreshMintERC721.buy` enforces the split on-chain and emits `FeesDistrib
 
 - MetaMask / Rabby for EVM (auto chain-switch per listing network)
 - Phantom for Solana auth, mint, and Solana bridge legs
-- Link both under one FreshMint session via Connect / Link buttons
+- Boing Express for Boing Testnet auth and NFT deploy (`boing_requestAccounts`, `boing_signMessage`, `boing_sendTransaction`)
+- Link wallets under one FreshMint session via Connect / Link buttons

@@ -175,6 +175,7 @@ export function CreateListingForm() {
             <option value="arbitrum">Arbitrum (Sepolia)</option>
             <option value="optimism">Optimism (Sepolia)</option>
             <option value="solana">Solana (Devnet)</option>
+            <option value="boing">Boing Testnet</option>
           </select>
         </label>
       </div>

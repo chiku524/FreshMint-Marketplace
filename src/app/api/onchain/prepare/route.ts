@@ -5,6 +5,10 @@ import { ensureDatabaseReady } from "@/lib/db-ready";
 import type { Chain } from "@/lib/discovery/types";
 import { buildEvmMintIntent, buildEvmPurchaseIntent } from "@/lib/onchain/evm";
 import {
+  buildBoingMintIntent,
+  buildBoingPurchaseIntent,
+} from "@/lib/onchain/boing";
+import {
   buildSolanaMintIntent,
   buildSolanaMintTransactionBase64,
   buildSolanaPurchaseIntent,
@@ -59,6 +63,15 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, intent: mint });
     }
+    if (listing.chain === "boing") {
+      const mint = buildBoingMintIntent({
+        creatorAddress: wallet,
+        metadataUri: tokenUri,
+        listingId: listing.id,
+        title: listing.title,
+      });
+      return NextResponse.json({ ok: true, intent: mint });
+    }
     const mint = buildSolanaMintIntent({
       creatorAddress: wallet,
       metadataUri: tokenUri,
@@ -106,6 +119,16 @@ export async function POST(req: NextRequest) {
       contractAddress: listing.contractAddress,
       tokenId: listing.tokenId ?? "0",
       network,
+      amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
+    });
+    return NextResponse.json({ ok: true, intent: buy });
+  }
+  if (listing.chain === "boing") {
+    const buy = buildBoingPurchaseIntent({
+      buyerAddress: wallet,
+      listingId: listing.id,
+      collection: listing.contractAddress,
+      tokenId: listing.tokenId,
       amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
     });
     return NextResponse.json({ ok: true, intent: buy });

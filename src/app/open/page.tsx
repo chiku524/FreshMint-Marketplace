@@ -25,7 +25,10 @@ export default async function OpenLanePage({
 
   const engine = await getDiscoveryEngine();
   const ranked = engine.rankOpenLane({
-    chain: chain === "evm" || chain === "solana" ? chain : undefined,
+    chain:
+      chain === "evm" || chain === "solana" || chain === "boing"
+        ? chain
+        : undefined,
     network,
     query: q,
     medium,

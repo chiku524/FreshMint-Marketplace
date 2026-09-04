@@ -22,7 +22,7 @@ export function toCreatorProfile(user: UserWithWallets): CreatorProfile {
     id: user.id,
     displayName: user.displayName,
     wallets: user.wallets.map((w) => ({
-      chain: w.chain as "evm" | "solana",
+      chain: w.chain as "evm" | "solana" | "boing",
       address: w.address,
       network: (w.network as NetworkId | null) ?? null,
     })),

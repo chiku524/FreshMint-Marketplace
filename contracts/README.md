@@ -37,6 +37,20 @@ Primary mints use **Metaplex Core** on Devnet (`createV1`). Set `SOLANA_MINTER_S
 
 Fallback: `SOLANA_MINT_MODE=memo` uses Memo program attestations only.
 
+## Boing Testnet
+
+Boing is a native L1 (chain id **6913** / `0x1b01`), not EVM. Marketplace deploys use Boing Express:
+
+1. Creator selects **Boing Testnet** on Create.
+2. Soft-launch returns a `boing_sendTransaction` payload:
+   - `contract_deploy_meta` with `purpose_category: "nft"` when no collection is configured
+   - `contract_call` against `NEXT_PUBLIC_BOING_NFT_COLLECTION` when set
+3. Confirm via `/api/onchain/confirm` + `boing_getTransactionReceipt`.
+
+RPC: `BOING_RPC_URL` (default `https://testnet-rpc.boing.network/`). Explorer: `https://boing.observer`. Do not vendor Boing NFT bytecode in this repo; pin a collection address after you deploy one with Boing Express.
+
+Boing is excluded from the Relay bridge.
+
 ## Bridge
 
 Native gas bridging (ETH on each EVM chain + SOL) goes through **Relay** (`TESTNET_RELAY_API` when `NEXT_PUBLIC_CHAIN_MODE=testnet`). See `/bridge` in the app.

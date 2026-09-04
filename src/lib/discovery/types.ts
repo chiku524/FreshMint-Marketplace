@@ -1,6 +1,6 @@
 /** Shared domain types for the fair-discovery marketplace. */
 
-export type Chain = "evm" | "solana";
+export type Chain = "evm" | "solana" | "boing";
 
 /** Settlement network (mint + native bridge). */
 export type NetworkId =
@@ -8,7 +8,8 @@ export type NetworkId =
   | "base"
   | "arbitrum"
   | "optimism"
-  | "solana";
+  | "solana"
+  | "boing";
 
 export type ListingType = "single" | "collection" | "open_edition" | "auction";
 
@@ -32,7 +33,7 @@ export type AppealStatus = "none" | "pending" | "approved" | "rejected";
 export interface CreatorProfile {
   id: string;
   displayName: string;
-  /** Linked wallets across EVM + Solana (unified identity). */
+  /** Linked wallets across EVM, Solana, and Boing (unified identity). */
   wallets: { chain: Chain; address: string; network?: NetworkId | null }[];
   firstListingAt: number | null;
   lifetimePrimaryVolumeUsd: number;
