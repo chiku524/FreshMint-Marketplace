@@ -34,7 +34,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${syne.variable} ${literata.variable} h-full`}>
+    <html
+      lang="en"
+      className={`${syne.variable} ${literata.variable} h-full`}
+      suppressHydrationWarning
+    >
       <body className="min-h-full">
         <Script id="fm-intro-boot" strategy="beforeInteractive">
           {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(sessionStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending");setTimeout(function(){document.documentElement.classList.remove("fm-intro-pending")},8000)}}catch(e){}`}
