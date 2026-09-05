@@ -187,10 +187,10 @@ function NavDropdown({
   );
 }
 
-export function SiteNav() {
+export function SiteNav({ signedIn: signedInInitial = false }: { signedIn?: boolean }) {
   const pathname = usePathname() || "/";
   const [closeSignal, setCloseSignal] = useState(0);
-  const [signedIn, setSignedIn] = useState(false);
+  const [signedIn, setSignedIn] = useState(signedInInitial);
 
   useEffect(() => {
     setCloseSignal((n) => n + 1);
@@ -199,7 +199,7 @@ export function SiteNav() {
   useEffect(() => {
     let cancelled = false;
     function refreshAuth() {
-      void fetch("/api/auth/me")
+      void fetch("/api/auth/me", { credentials: "include" })
         .then((res) => res.json())
         .then((data: { user?: { id?: string } | null }) => {
           if (!cancelled) setSignedIn(Boolean(data.user?.id));

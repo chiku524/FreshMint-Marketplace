@@ -117,6 +117,16 @@ export function applySessionCookie(
   return res;
 }
 
+export function jsonWithSessionCookie(
+  body: unknown,
+  session: { jwt: string; expiresAt: Date } | null | undefined,
+  init?: { status?: number },
+) {
+  const res = NextResponse.json(body, init);
+  if (session?.jwt) applySessionCookie(res, session.jwt, session.expiresAt);
+  return res;
+}
+
 /** Persist session cookie. In memory mode, JWT-only (no Session table). */
 export async function createSession(userId: string): Promise<{
   jwt: string;
@@ -127,29 +137,39 @@ export async function createSession(userId: string): Promise<{
   const tokenHash = hashToken(token);
 
   const memory = authUsesMemoryStore();
+  let persisted = false;
 
   if (!memory) {
-    await prisma.session.create({
-      data: {
-        userId,
-        tokenHash,
-        expiresAt,
-      },
-    });
+    try {
+      await prisma.session.create({
+        data: {
+          userId,
+          tokenHash,
+          expiresAt,
+        },
+      });
+      persisted = true;
+    } catch {
+      // JWT still authenticates the user if the Session row cannot be written.
+    }
   }
 
   const jwt = await new SignJWT({
     uid: userId,
     t: tokenHash,
-    mem: memory ? 1 : 0,
+    mem: memory || !persisted ? 1 : 0,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("7d")
     .setIssuedAt()
     .sign(secretKey());
 
-  const jar = await cookies();
-  jar.set(COOKIE, jwt, sessionCookieOptions(expiresAt));
+  try {
+    const jar = await cookies();
+    jar.set(COOKIE, jwt, sessionCookieOptions(expiresAt));
+  } catch {
+    // Route handlers should also call applySessionCookie on the Response.
+  }
 
   return { jwt, expiresAt };
 }
@@ -236,38 +256,53 @@ function sessionUserFromDbUser(u: {
   };
 }
 
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const jar = await cookies();
-  const jwt = jar.get(COOKIE)?.value;
-  if (!jwt) return null;
+async function resolveSessionUser(jwt: string): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(jwt, secretKey());
     const userId = String(payload.uid ?? "");
     const tokenHash = String(payload.t ?? "");
-    if (!userId || !tokenHash) return null;
+    if (!userId) return null;
 
-    if (authUsesMemoryStore()) {
-      return sessionUserFromMemory(userId);
+    if (!authUsesMemoryStore()) {
+      try {
+        if (payload.mem !== 1 && tokenHash) {
+          const session = await prisma.session.findUnique({
+            where: { tokenHash },
+            include: { user: { include: { wallets: true } } },
+          });
+          if (
+            session &&
+            session.userId === userId &&
+            session.expiresAt.getTime() >= Date.now()
+          ) {
+            return sessionUserFromDbUser(session.user);
+          }
+        }
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          include: { wallets: true },
+        });
+        if (user) return sessionUserFromDbUser(user);
+      } catch {
+        // Fall through to the in-memory catalog.
+      }
     }
 
-    if (payload.mem === 1) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { wallets: true },
-      });
-      if (user) return sessionUserFromDbUser(user);
-      return sessionUserFromMemory(userId);
-    }
+    return sessionUserFromMemory(userId);
+  } catch {
+    return null;
+  }
+}
 
-    const session = await prisma.session.findUnique({
-      where: { tokenHash },
-      include: { user: { include: { wallets: true } } },
-    });
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-    if (session.userId !== userId) return null;
-    return sessionUserFromDbUser(session.user);
+export async function getSessionUser(req?: {
+  cookies: { get: (name: string) => { value: string } | undefined };
+}): Promise<SessionUser | null> {
+  const fromRequest = req?.cookies.get(COOKIE)?.value;
+  if (fromRequest) return resolveSessionUser(fromRequest);
+  try {
+    const jwt = (await cookies()).get(COOKIE)?.value;
+    if (!jwt) return null;
+    return resolveSessionUser(jwt);
   } catch {
     return null;
   }

@@ -2,6 +2,7 @@ import { AccountError, registerWithPassword } from "@/lib/auth/account";
 import {
   completeLoginOrChallenge,
   getSessionUser,
+  jsonWithSessionCookie,
   publicSession,
 } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
@@ -31,11 +32,14 @@ export async function POST(req: NextRequest) {
       });
     }
     const user = await getSessionUser();
-    return NextResponse.json({
-      ok: true,
-      requires2fa: false,
-      user: user ? publicSession(user) : null,
-    });
+    return jsonWithSessionCookie(
+      {
+        ok: true,
+        requires2fa: false,
+        user: user ? publicSession(user) : null,
+      },
+      login,
+    );
   } catch (e) {
     if (e instanceof AccountError) {
       return NextResponse.json({ error: e.message }, { status: e.status });

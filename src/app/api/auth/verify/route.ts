@@ -1,4 +1,8 @@
-import { completeLoginOrChallenge, getSessionUser } from "@/lib/auth/session";
+import {
+  completeLoginOrChallenge,
+  getSessionUser,
+  jsonWithSessionCookie,
+} from "@/lib/auth/session";
 import {
   buildSignMessage,
   consumeNonce,
@@ -64,15 +68,18 @@ export async function POST(req: NextRequest) {
   }
 
   const sessionUser = await getSessionUser();
-  return NextResponse.json({
-    ok: true,
-    requires2fa: false,
-    user: {
-      id: user.id,
-      displayName: user.displayName,
-      wallets: user.wallets,
-      curatorScore: user.curatorScore,
-      totpEnabled: sessionUser?.totpEnabled ?? false,
+  return jsonWithSessionCookie(
+    {
+      ok: true,
+      requires2fa: false,
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        wallets: user.wallets,
+        curatorScore: user.curatorScore,
+        totpEnabled: sessionUser?.totpEnabled ?? false,
+      },
     },
-  });
+    login,
+  );
 }

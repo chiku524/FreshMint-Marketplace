@@ -1,4 +1,4 @@
-import { createSession } from "@/lib/auth/session";
+import { createSession, jsonWithSessionCookie } from "@/lib/auth/session";
 import {
   decryptSecret,
   getMemoryTotp,
@@ -105,15 +105,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_code" }, { status: 401 });
   }
 
-  await createSession(pending.userId);
-  return NextResponse.json({
-    ok: true,
-    user: {
-      id: pending.userId,
-      displayName,
-      wallets,
-      curatorScore,
-      totpEnabled: true,
+  const session = await createSession(pending.userId);
+  return jsonWithSessionCookie(
+    {
+      ok: true,
+      user: {
+        id: pending.userId,
+        displayName,
+        wallets,
+        curatorScore,
+        totpEnabled: true,
+      },
     },
-  });
+    session,
+  );
 }

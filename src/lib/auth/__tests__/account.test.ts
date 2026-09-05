@@ -8,7 +8,11 @@ import {
   upsertUserFromGoogle,
 } from "@/lib/auth/account";
 import { hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth/password";
-import { authUsesMemoryStore } from "@/lib/auth/session";
+import {
+  authUsesMemoryStore,
+  jsonWithSessionCookie,
+  SESSION_COOKIE,
+} from "@/lib/auth/session";
 import { absoluteAppUrl, appBaseUrl, safeNextPath } from "@/lib/auth/paths";
 import {
   enableMemoryMode,
@@ -70,6 +74,17 @@ describe("appBaseUrl", () => {
     expect(
       absoluteAppUrl("/me", "http://localhost:3000/api/auth/google/callback").href,
     ).toBe("https://fresh-mint-marketplace.vercel.app/me");
+  });
+});
+
+describe("jsonWithSessionCookie", () => {
+  it("sets the session cookie on the JSON response", () => {
+    const expiresAt = new Date(Date.now() + 60_000);
+    const res = jsonWithSessionCookie(
+      { ok: true },
+      { jwt: "test.jwt.token", expiresAt },
+    );
+    expect(res.cookies.get(SESSION_COOKIE)?.value).toBe("test.jwt.token");
   });
 });
 

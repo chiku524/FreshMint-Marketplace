@@ -8,6 +8,7 @@ import { PageEngraveBackground } from "@/components/PageEngraveBackground";
 import { ReplayIntroButton } from "@/components/ReplayIntroButton";
 import { SiteNav } from "@/components/SiteNav";
 import { WalletBar } from "@/components/WalletBar";
+import { getSessionUser, publicSession } from "@/lib/auth/session";
 import "./globals.css";
 
 const syne = Syne({
@@ -28,11 +29,13 @@ export const metadata: Metadata = {
     "NFT marketplace for EVM and Solana with Emerging quotas, composed feeds, and anti-congestion discovery.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getSessionUser();
+  const initialUser = session ? publicSession(session) : null;
   return (
     <html
       lang="en"
@@ -61,9 +64,9 @@ export default function RootLayout({
               <Link href="/" style={{ fontSize: "1.3rem" }}>
                 <BrandMark size={32} />
               </Link>
-              <SiteNav />
+              <SiteNav signedIn={Boolean(initialUser)} />
             </div>
-            <WalletBar />
+            <WalletBar initialUser={initialUser} />
           </header>
           <main style={{ flex: 1 }}>{children}</main>
           <footer className="site-footer">

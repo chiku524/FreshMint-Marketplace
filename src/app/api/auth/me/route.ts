@@ -1,11 +1,11 @@
 import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const user = await getSessionUser();
+export async function GET(req: NextRequest) {
+  const user = await getSessionUser(req);
   if (!user) {
     return NextResponse.json(
       { user: null },

@@ -32,8 +32,12 @@ const DEMO_PERSONAS = [
   { id: "mod-ops", label: "Ops Moderator" },
 ];
 
-export function WalletBar() {
-  const [user, setUser] = useState<SessionUser | null>(null);
+export function WalletBar({
+  initialUser = null,
+}: {
+  initialUser?: SessionUser | null;
+}) {
+  const [user, setUser] = useState<SessionUser | null>(initialUser);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<{
@@ -45,7 +49,7 @@ export function WalletBar() {
   );
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/auth/me");
+    const res = await fetch("/api/auth/me", { credentials: "include" });
     const data = await res.json();
     setUser(data.user);
   }, []);
@@ -67,7 +71,10 @@ export function WalletBar() {
       });
       return;
     }
-    if (data.user) setUser(data.user);
+    if (data.user) {
+      setUser(data.user);
+      window.dispatchEvent(new Event("fm-auth-changed"));
+    }
   }
 
   async function demoLogin(userId: string) {
@@ -76,6 +83,7 @@ export function WalletBar() {
     try {
       const res = await fetch("/api/auth/demo", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),
       });
@@ -110,6 +118,7 @@ export function WalletBar() {
       const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
       const verifyRes = await fetch(endpoint, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(proof),
       });
@@ -130,7 +139,7 @@ export function WalletBar() {
   }
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setUser(null);
     window.dispatchEvent(new Event("fm-auth-changed"));
   }

@@ -3,13 +3,15 @@ import { purchaseListing } from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const schema = z.object({
   listingId: z.string(),
   amountUsd: z.number().positive(),
 });
 
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser();
+  const user = await getSessionUser(req);
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

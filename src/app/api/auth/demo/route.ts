@@ -1,4 +1,8 @@
-import { completeLoginOrChallenge, getSessionUser } from "@/lib/auth/session";
+import {
+  completeLoginOrChallenge,
+  getSessionUser,
+  jsonWithSessionCookie,
+} from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import { getMemoryState, isMemoryMode } from "@/lib/data/memory-store";
@@ -44,18 +48,21 @@ export async function POST(req: NextRequest) {
         displayName: login.displayName,
       });
     }
-    return NextResponse.json({
-      ok: true,
-      mode: "memory",
-      requires2fa: false,
-      user: {
-        id: creator.id,
-        displayName: creator.displayName,
-        wallets: creator.wallets,
-        curatorScore: creator.curatorScore,
-        totpEnabled: (await getSessionUser())?.totpEnabled ?? false,
+    return jsonWithSessionCookie(
+      {
+        ok: true,
+        mode: "memory",
+        requires2fa: false,
+        user: {
+          id: creator.id,
+          displayName: creator.displayName,
+          wallets: creator.wallets,
+          curatorScore: creator.curatorScore,
+          totpEnabled: (await getSessionUser())?.totpEnabled ?? false,
+        },
       },
-    });
+      login,
+    );
   }
 
   try {
@@ -78,18 +85,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      ok: true,
-      mode: "prisma",
-      requires2fa: false,
-      user: {
-        id: user.id,
-        displayName: user.displayName,
-        wallets: user.wallets,
-        curatorScore: user.curatorScore,
-        totpEnabled: user.totpEnabled,
+    return jsonWithSessionCookie(
+      {
+        ok: true,
+        mode: "prisma",
+        requires2fa: false,
+        user: {
+          id: user.id,
+          displayName: user.displayName,
+          wallets: user.wallets,
+          curatorScore: user.curatorScore,
+          totpEnabled: user.totpEnabled,
+        },
       },
-    });
+      login,
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: "auth_failed", detail: message }, { status: 500 });
