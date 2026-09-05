@@ -7,7 +7,6 @@ import { LogoIntroSplash } from "@/components/LogoIntroSplashLoader";
 import { PageEngraveBackground } from "@/components/PageEngraveBackground";
 import { ReplayIntroButton } from "@/components/ReplayIntroButton";
 import { SiteNav } from "@/components/SiteNav";
-import { WalletBar } from "@/components/WalletBar";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
 import "./globals.css";
 
@@ -68,7 +67,7 @@ export default async function RootLayout({
               </Link>
               <SiteNav signedIn={Boolean(initialUser)} />
             </div>
-            <WalletBar initialUser={initialUser} />
+            <SiteNav signedIn={Boolean(initialUser)} area="account" />
           </header>
           <main style={{ flex: 1 }}>{children}</main>
           <footer className="site-footer">

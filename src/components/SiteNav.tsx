@@ -48,6 +48,15 @@ const GROUPS: NavGroup[] = [
     items: [{ href: "/bridge", label: "Bridge" }],
   },
   {
+    id: "ops",
+    label: "Ops",
+    items: [
+      { href: "/moderate", label: "Moderate" },
+      { href: "/metrics", label: "Metrics" },
+      { href: "/docs", label: "Docs" },
+    ],
+  },
+  {
     id: "account",
     label: "Account",
     items: [
@@ -55,15 +64,6 @@ const GROUPS: NavGroup[] = [
       { href: "/sign-up", label: "Create profile" },
       { href: "/me", label: "Profile" },
       { action: "logout", label: "Sign out" },
-    ],
-  },
-  {
-    id: "ops",
-    label: "Ops",
-    items: [
-      { href: "/moderate", label: "Moderate" },
-      { href: "/metrics", label: "Metrics" },
-      { href: "/docs", label: "Docs" },
     ],
   },
 ];
@@ -194,7 +194,13 @@ function NavDropdown({
   );
 }
 
-export function SiteNav({ signedIn: signedInInitial = false }: { signedIn?: boolean }) {
+export function SiteNav({
+  signedIn: signedInInitial = false,
+  area = "primary",
+}: {
+  signedIn?: boolean;
+  area?: "primary" | "account";
+}) {
   const pathname = usePathname() || "/";
   const [closeSignal, setCloseSignal] = useState(0);
   const [signedIn, setSignedIn] = useState(signedInInitial);
@@ -229,9 +235,16 @@ export function SiteNav({ signedIn: signedInInitial = false }: { signedIn?: bool
     });
   }
 
+  const groups = GROUPS.filter((group) =>
+    area === "account" ? group.id === "account" : group.id !== "account",
+  );
+
   return (
-    <nav className="site-nav" aria-label="Primary">
-      {GROUPS.map((group) => {
+    <nav
+      className={`site-nav${area === "account" ? " site-nav--end" : ""}`}
+      aria-label={area === "account" ? "Account" : "Primary"}
+    >
+      {groups.map((group) => {
         const items =
           group.id === "account"
             ? group.items.filter((item) =>

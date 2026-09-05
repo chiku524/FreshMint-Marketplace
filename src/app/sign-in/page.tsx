@@ -32,7 +32,7 @@ export default async function SignInPage({
       </h1>
       <p style={{ color: "var(--ink-muted)", margin: "0 0 1.5rem", maxWidth: "48ch" }}>
         Use Google or email to open your profile, then link EVM, Solana, or Boing
-        wallets. Wallet-only sign-in still works from the header.
+        wallets from Settings.
       </p>
       {user && (params.error || params.switch === "1") ? (
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", maxWidth: "48ch" }}>
@@ -52,8 +52,9 @@ export default async function SignInPage({
         initialName={params.name}
       />
       <p style={{ margin: "1.25rem 0 0", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-        Prefer a demo persona? Use the header selector, or{" "}
-        <Link href="/">browse without an account</Link>.
+        No account yet?{" "}
+        <Link href={`/sign-up?next=${encodeURIComponent(nextPath)}`}>Create a profile</Link>, or{" "}
+        <Link href="/">browse without one</Link>.
       </p>
     </div>
   );

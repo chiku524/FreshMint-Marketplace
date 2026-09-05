@@ -749,6 +749,11 @@ html.fm-intro-pending .fm-intro-cover {
   color: var(--ink-muted);
 }
 
+.site-nav--end .site-nav__menu {
+  left: auto;
+  right: 0;
+}
+
 .site-nav__dropdown {
   position: relative;
 }
