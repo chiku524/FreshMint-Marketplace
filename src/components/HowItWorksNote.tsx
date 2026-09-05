@@ -11,11 +11,11 @@ const NOTES: Record<
   { href: string; text: string }
 > = {
   home: {
-    href: "/docs#settlement",
+    href: "/docs#flow",
     text: `Collect on FreshMint — no gas on buys. ${PLATFORM_FEE_PERCENT.total}% treasury.`,
   },
   create: {
-    href: "/docs#settlement",
+    href: "/docs#flow",
     text: "Drops stay on the platform. Gas only if someone later withdraws the NFT.",
   },
   buy: {

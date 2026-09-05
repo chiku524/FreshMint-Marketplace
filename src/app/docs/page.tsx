@@ -1,3 +1,4 @@
+import { NftLifecycleDiagram } from "@/components/NftLifecycleDiagram";
 import { DISCOVERY_CONFIG, getDailySlotBudgets } from "@/lib/discovery";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import Link from "next/link";
@@ -5,7 +6,7 @@ import Link from "next/link";
 export const metadata = {
   title: "How FreshMint works — FreshMint Marketplace",
   description:
-    "Off-chain collecting, 3% treasury fee, optional NFT withdraw, and how discovery allocates attention.",
+    "Follow a work from collection and drop through sale, collecting, and optional mint — plus fees and discovery.",
 };
 
 function pct(n: number) {
@@ -52,12 +53,17 @@ export default function DocsPage() {
           NFT or move ETH, SOL, or Boing.
         </p>
         <nav className="docs-toc" aria-label="On this page">
+          <Link href="#flow">The life of a work</Link>
           <Link href="#settlement">Settlement</Link>
           <Link href="#fees">Fees</Link>
           <Link href="#withdraw">Withdraw</Link>
           <Link href="#discovery">Discovery</Link>
         </nav>
       </header>
+
+      <section id="flow">
+        <NftLifecycleDiagram />
+      </section>
 
       <section id="settlement" style={{ maxWidth: "48rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
