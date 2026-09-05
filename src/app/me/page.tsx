@@ -1,3 +1,4 @@
+import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WalletNftCard } from "@/components/WalletNftCard";
 import { WithdrawCollectedButton } from "@/components/WithdrawCollectedButton";
@@ -53,10 +54,11 @@ export default async function MeCollectionPage() {
 
   return (
     <>
-      <p style={{ color: "var(--ink-muted)", margin: "0 0 1.75rem", maxWidth: "52ch" }}>
+      <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem", maxWidth: "52ch" }}>
         Works you created, collected, hold in a linked wallet, curated, and
-        bridged. Platform collects stay off-chain until you withdraw them.
+        bridged.
       </p>
+      <HowItWorksNote kind="collect" />
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>

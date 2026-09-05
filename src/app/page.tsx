@@ -1,4 +1,5 @@
 import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
+import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { BrandMark } from "@/components/MintLeaf";
 import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
 import { PuzzleRail } from "@/components/PuzzleRail";
@@ -72,6 +73,7 @@ export default async function HomePage() {
             {Math.round(mix.featured * 100)}% Featured ·{" "}
             {Math.round(mix.auctions_live * 100)}% Live auctions.
           </p>
+          <HowItWorksNote kind="home" />
           <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <Link
               href="/open"

@@ -1,3 +1,4 @@
+import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
@@ -16,11 +17,10 @@ export default async function CollectionsPage() {
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Collections
       </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.75rem" }}>
-        Creator-owned sets on FreshMint. Pieces stay on the platform until a
-        collector withdraws them.{" "}
-        <Link href="/create">Start a collection</Link>.
+      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "0.75rem" }}>
+        Creator-owned sets. <Link href="/create">Start a collection</Link>.
       </p>
+      <HowItWorksNote kind="create" />
       {collections.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>No collections yet.</p>
       ) : null}

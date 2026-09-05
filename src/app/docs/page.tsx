@@ -1,10 +1,11 @@
 import { DISCOVERY_CONFIG, getDailySlotBudgets } from "@/lib/discovery";
+import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import Link from "next/link";
 
 export const metadata = {
-  title: "Discovery docs — FreshMint Marketplace",
+  title: "How FreshMint works — FreshMint Marketplace",
   description:
-    "How FreshMint allocates attention: Rising, Emerging quotas, staging, and feed mix.",
+    "Off-chain collecting, 0.25% treasury fee, optional NFT withdraw, and how discovery allocates attention.",
 };
 
 function pct(n: number) {
@@ -36,7 +37,7 @@ export default function DocsPage() {
             lineHeight: 0.95,
           }}
         >
-          Discovery
+          How it works
         </p>
         <p
           style={{
@@ -47,23 +48,109 @@ export default function DocsPage() {
             maxWidth: "42ch",
           }}
         >
+          Collect and create without gas. Pay a chain only when you withdraw an
+          NFT or move ETH, SOL, or Boing.
+        </p>
+        <nav className="docs-toc" aria-label="On this page">
+          <Link href="#settlement">Settlement</Link>
+          <Link href="#fees">Fees</Link>
+          <Link href="#withdraw">Withdraw</Link>
+          <Link href="#discovery">Discovery</Link>
+        </nav>
+      </header>
+
+      <section id="settlement" style={{ maxWidth: "48rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+          Settlement
+        </h2>
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+          FreshMint is a platform ledger first. That keeps everyday activity
+          cheap and leaves the chain for moments that need a wallet.
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gap: "1.25rem 2rem",
+            gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+          }}
+        >
+          <div>
+            <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+              On FreshMint
+            </h3>
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+              Create a collection or scheduled drop, buy, save, follow, nominate,
+              and browse. No wallet prompt and no gas.
+            </p>
+          </div>
+          <div>
+            <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+              On-chain, when you choose
+            </h3>
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+              Withdraw a collected NFT to EVM, Solana, or Boing. Deposit,
+              withdraw, or <Link href="/bridge">bridge</Link> ETH, SOL, or Boing.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="fees" style={{ maxWidth: "48rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+          Treasury fee
+        </h2>
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+          Every primary sale takes{" "}
+          <strong style={{ color: "var(--ink)" }}>
+            {PLATFORM_FEE_PERCENT.total}%
+          </strong>{" "}
+          for the marketplace treasury. The seller keeps{" "}
+          <strong style={{ color: "var(--ink)" }}>
+            {PLATFORM_FEE_PERCENT.sellerNet}%
+          </strong>
+          . You still pay the listed USD price.
+        </p>
+        <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
+          That cut funds community events, future updates, and running the
+          market — not a hidden operator take on top. You can see the split
+          before you confirm a buy.
+        </p>
+      </section>
+
+      <section id="withdraw" style={{ maxWidth: "48rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+          Withdraw an NFT
+        </h2>
+        <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
+          Collected work stays in your FreshMint profile until you want it in a
+          wallet. Open{" "}
+          <Link href="/me">your collection</Link>, choose{" "}
+          <strong style={{ color: "var(--ink)" }}>Withdraw to wallet</strong>, and
+          sign the mint for that network. Link a matching wallet in{" "}
+          <Link href="/me/settings">Settings</Link> first. Gas is yours only on
+          that step.
+        </p>
+      </section>
+
+      <section id="discovery" style={{ maxWidth: "52rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+          Discovery
+        </h2>
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
           FreshMint treats attention as scarce inventory. These rules are loaded
           from live product config — the same constants the ranker enforces.
         </p>
-        <p style={{ margin: "1rem 0 0", fontSize: "0.9rem", color: "var(--ink-muted)" }}>
-          Deep reference for contributors:{" "}
-          <code style={{ color: "var(--accent-soft)" }}>docs/discovery.md</code>{" "}
-          in the repo ·{" "}
+        <p style={{ margin: "0 0 1.25rem", fontSize: "0.9rem", color: "var(--ink-muted)" }}>
+          Deep reference:{" "}
+          <code style={{ color: "var(--accent-soft)" }}>docs/discovery.md</code>
+          {" · "}
           <Link href="/metrics" style={{ color: "var(--emergent)" }}>
             live wedge metrics
           </Link>
         </p>
-      </header>
-
-      <section style={{ maxWidth: "52rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+        <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
           Surfaces
-        </h2>
+        </h3>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
           Four jobs, not one firehose. Anyone can list; only a fraction earns
           high-visibility slots.
@@ -332,6 +419,9 @@ export default function DocsPage() {
           </Link>
           <Link href="/calendar" className="badge">
             Calendar
+          </Link>
+          <Link href="/collections" className="badge">
+            Collections
           </Link>
           <Link href="/metrics" className="badge">
             Metrics

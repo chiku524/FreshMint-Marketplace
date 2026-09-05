@@ -313,6 +313,73 @@ a {
   font-size: 0.9rem;
 }
 
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.1rem;
+}
+
+.how-it-works-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  max-width: 52ch;
+  margin: 0 0 1.15rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.how-it-works-note__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  white-space: nowrap;
+}
+
+.how-it-works-note a {
+  color: var(--accent-soft);
+}
+
+.how-it-works-note__dismiss {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.how-it-works-note__dismiss:hover,
+.how-it-works-note__dismiss:focus-visible {
+  color: var(--ink);
+}
+
+.docs-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  margin: 1.15rem 0 0;
+  font-size: 0.88rem;
+}
+
+.docs-toc a {
+  color: var(--accent-soft);
+}
+
+#settlement,
+#fees,
+#withdraw,
+#discovery {
+  scroll-margin-top: 5.5rem;
+}
+
 .fm-intro-replay {
   appearance: none;
   background: none;

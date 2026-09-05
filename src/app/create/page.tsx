@@ -1,5 +1,6 @@
 import { CreateCollectionForm } from "@/components/CreateCollectionForm";
 import { CreateListingForm } from "@/components/CreateListingForm";
+import { HowItWorksNote } from "@/components/HowItWorksNote";
 
 export default function CreatePage() {
   return (
@@ -7,12 +8,10 @@ export default function CreatePage() {
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Create collection & drop
       </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "56ch", marginBottom: "1.5rem" }}>
-        Collections, drops, and sales stay on FreshMint — no gas until someone
-        withdraws an NFT or moves ETH / SOL / Boing. Pick a mint network for
-        later withdrawal, then soft-launch to Open Lane. Need gas for a
-        withdraw? <a href="/bridge">Bridge natives</a> (Boing is not on Relay).
+      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "0.85rem" }}>
+        Pick a mint network for later withdrawal, then soft-launch to Open Lane.
       </p>
+      <HowItWorksNote kind="create" />
       <div
         style={{
           display: "grid",

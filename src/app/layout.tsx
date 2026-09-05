@@ -74,7 +74,11 @@ export default async function RootLayout({
               Attention is scarce. Emerging artists get a coded quota — not a
               slogan.
             </span>
-            <ReplayIntroButton />
+            <span className="site-footer__links">
+              <Link href="/docs#settlement">How it works</Link>
+              <Link href="/docs#discovery">Discovery</Link>
+              <ReplayIntroButton />
+            </span>
           </footer>
         </div>
       </body>

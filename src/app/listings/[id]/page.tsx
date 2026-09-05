@@ -1,4 +1,5 @@
 import { FollowButton } from "@/components/FollowButton";
+import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { ListingActions } from "@/components/ListingActions";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
@@ -163,6 +164,7 @@ export default async function ListingDetailPage({
               initiallyFollowing={following}
             />
           </div>
+          <HowItWorksNote kind="buy" />
 
           <ListingActions
             listingId={listing.id}

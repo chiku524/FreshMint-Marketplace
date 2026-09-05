@@ -30,6 +30,7 @@ const GROUPS: NavGroup[] = [
       { href: "/calendar", label: "Calendar" },
       { href: "/collections", label: "Collections" },
       { href: "/shelves", label: "Shelves" },
+      { href: "/docs", label: "How it works" },
     ],
   },
   {
