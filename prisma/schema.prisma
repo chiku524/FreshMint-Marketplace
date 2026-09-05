@@ -149,6 +149,7 @@ model Listing {
   uniqueViewers      Int   @default(0)
   impressionsToday   Int   @default(0)
   impressionsThisWeek Int  @default(0)
+  pageViews          Int   @default(0)
   reportRate         Float @default(0)
   nominationScore    Int   @default(0)
 
@@ -309,7 +310,7 @@ model Purchase {
   buyerId   String
   /// Gross sale price paid by the buyer (listed price).
   amountUsd Float
-  /// Platform fee split (0.25% treasury).
+  /// Platform fee split (3% treasury).
   feeTotalUsd    Float @default(0)
   feeTreasuryUsd Float @default(0)
   feeOperatorUsd Float @default(0)

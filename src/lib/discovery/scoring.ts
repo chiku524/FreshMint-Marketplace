@@ -40,6 +40,13 @@ export function computeQualitySignal(listing: Listing): number {
     q.priorNominationRate,
     priorN,
   );
+  const impressionTrials = Math.max(s.impressionsThisWeek, s.pageViews, 0);
+  const pageViewRate = bayesianRate(
+    s.pageViews,
+    impressionTrials,
+    q.priorPageViewRate,
+    priorN,
+  );
 
   let saveW = 4;
   let followW = 5;
@@ -48,7 +55,14 @@ export function computeQualitySignal(listing: Listing): number {
     followW *= 0.35;
   }
 
-  return 1 + saveRate * saveW + followRate * followW + dwellRate * 3 + nomRate * 2.5;
+  return (
+    1 +
+    saveRate * saveW +
+    followRate * followW +
+    dwellRate * 3 +
+    nomRate * 2.5 +
+    pageViewRate * 3.5
+  );
 }
 
 export function computeNoveltyBoost(
@@ -195,6 +209,11 @@ export function scoreListing(
   if (spamInverse < 0.7) reasons.push("elevated_spam_risk");
   if (listing.type === "open_edition") reasons.push("oe_temporal");
   if (listing.type === "auction") reasons.push("auction_temporal");
+  if (listing.signals.pageViews > 0 && listing.signals.impressionsThisWeek > 0) {
+    const ctr =
+      listing.signals.pageViews / listing.signals.impressionsThisWeek;
+    if (ctr >= 0.2) reasons.push("strong_page_views");
+  }
   if (temporal > 1.05 && listing.type !== "open_edition" && listing.type !== "auction") {
     reasons.push("rising_age_burst");
   }

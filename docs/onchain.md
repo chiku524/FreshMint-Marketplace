@@ -29,12 +29,12 @@ Creates, collections, drops, and buys stay on FreshMint. Gas is paid only when a
 
 ## Platform fees (primary sales)
 
-Every purchase takes a **0.25%** treasury fee from the listed price (buyer still pays the listed amount):
+Every purchase takes a **3%** treasury fee from the listed price (buyer still pays the listed amount):
 
 | Share | BPS | Recipient |
 |-------|-----|-----------|
-| 0.25% | 25  | Marketplace treasury — community, events, and future updates (EVM Safe 2-of-3 + Solana Squads vault) |
-| 99.75% | —  | Seller |
+| 3%    | 300 | Marketplace treasury — community, events, and future updates (EVM Safe 2-of-3 + Solana Squads vault) |
+| 97%   | —   | Seller |
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 
@@ -47,7 +47,7 @@ npm run wallets:deploy-squads
 
 Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
-Platform sales record the 0.25% split on each `Purchase` row. The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; prefer platform settlement so collectors skip gas until they withdraw.
+Platform sales record the 3% split on each `Purchase` row. The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; prefer platform settlement so collectors skip gas until they withdraw.
 
 ## Bridge
 

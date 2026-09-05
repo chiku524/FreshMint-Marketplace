@@ -48,6 +48,7 @@ function signalsFromListing(listing: DbListing): ListingSignals {
     uniqueViewers: listing.uniqueViewers,
     impressionsToday: listing.impressionsToday,
     impressionsThisWeek: listing.impressionsThisWeek,
+    pageViews: listing.pageViews,
     reportRate: listing.reportRate,
     nominationScore: listing.nominationScore,
   };

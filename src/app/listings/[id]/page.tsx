@@ -1,6 +1,7 @@
 import { FollowButton } from "@/components/FollowButton";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { ListingActions } from "@/components/ListingActions";
+import { PageViewTracker } from "@/components/PageViewTracker";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
 import { getSessionUser } from "@/lib/auth/session";
@@ -54,6 +55,7 @@ export default async function ListingDetailPage({
 
   return (
     <div className="page-wrap">
+      <PageViewTracker listingId={listing.id} />
       <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
         <Link href="/open">Open Lane</Link>
         {" · "}
@@ -190,6 +192,8 @@ export default async function ListingDetailPage({
             <dd style={{ margin: 0 }}>{listing.signals.saves}</dd>
             <dt>Unique viewers</dt>
             <dd style={{ margin: 0 }}>{listing.signals.uniqueViewers}</dd>
+            <dt>Page views</dt>
+            <dd style={{ margin: 0 }}>{listing.signals.pageViews}</dd>
             <dt>Nominations</dt>
             <dd style={{ margin: 0 }}>{listing.signals.nominationScore}</dd>
             <dt>Impressions (week)</dt>

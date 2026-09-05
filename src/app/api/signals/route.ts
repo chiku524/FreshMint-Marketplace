@@ -5,7 +5,14 @@ import { z } from "zod";
 
 const schema = z.object({
   listingId: z.string(),
-  type: z.enum(["impression", "meaningful_view", "save", "follow", "dwell"]),
+  type: z.enum([
+    "impression",
+    "page_view",
+    "meaningful_view",
+    "save",
+    "follow",
+    "dwell",
+  ]),
   dwellMs: z.number().int().nonnegative().optional(),
   bucket: z.string().optional(),
 });

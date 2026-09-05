@@ -148,6 +148,34 @@ describe("marketplace service (memory mode)", () => {
     expect(follow.followedArtistIds).toContain(listing.creatorId);
   });
 
+  it("counts listing page views without treating them as feed impressions", async () => {
+    const listing = getMemoryEngine().state.listings.get("listing-fresh-1");
+    expect(listing).toBeTruthy();
+    if (!listing) return;
+    const beforeImp = listing.signals.impressionsThisWeek;
+    const beforeViews = listing.signals.pageViews;
+
+    const viewed = await recordSignal({
+      listingId: listing.id,
+      viewerId: "collector-mira",
+      type: "page_view",
+    });
+    expect(viewed.ok).toBe(true);
+    const after = getMemoryEngine().state.listings.get(listing.id)!;
+    expect(after.signals.pageViews).toBe(beforeViews + 1);
+    expect(after.signals.impressionsThisWeek).toBe(beforeImp);
+
+    const self = await recordSignal({
+      listingId: listing.id,
+      viewerId: listing.creatorId,
+      type: "page_view",
+    });
+    expect(self.ok).toBe(true);
+    expect(
+      getMemoryEngine().state.listings.get(listing.id)!.signals.pageViews,
+    ).toBe(beforeViews + 1);
+  });
+
   it("purchases a listing in memory mode", async () => {
     const engine = getMemoryEngine();
     const { getMemoryPurchases } = await import("@/lib/data/memory-store");
@@ -172,10 +200,10 @@ describe("marketplace service (memory mode)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.txHash).toBeTruthy();
-    expect(result.fees.feeTotalUsd).toBeCloseTo(listing.priceUsd * 0.0025, 5);
-    expect(result.fees.feeTreasuryUsd).toBeCloseTo(listing.priceUsd * 0.0025, 5);
+    expect(result.fees.feeTotalUsd).toBeCloseTo(listing.priceUsd * 0.03, 5);
+    expect(result.fees.feeTreasuryUsd).toBeCloseTo(listing.priceUsd * 0.03, 5);
     expect(result.fees.feeOperatorUsd).toBe(0);
-    expect(result.fees.sellerNetUsd).toBeCloseTo(listing.priceUsd * 0.9975, 5);
+    expect(result.fees.sellerNetUsd).toBeCloseTo(listing.priceUsd * 0.97, 5);
     expect(
       engine.state.creators.get(listing.creatorId)?.completedSales,
     ).toBe(beforeSales + 1);

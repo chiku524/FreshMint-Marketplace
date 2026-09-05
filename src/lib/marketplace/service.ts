@@ -182,6 +182,7 @@ export async function createListingForUser(input: {
       uniqueViewers: 0,
       impressionsToday: 0,
       impressionsThisWeek: 0,
+      pageViews: 0,
       reportRate: 0,
       nominationScore: 0,
     },
@@ -686,7 +687,7 @@ async function inMemoryMode(): Promise<boolean> {
 export async function recordSignal(input: {
   listingId: string;
   viewerId?: string | null;
-  type: "impression" | "meaningful_view" | "save" | "follow" | "dwell";
+  type: "impression" | "meaningful_view" | "save" | "follow" | "dwell" | "page_view";
   dwellMs?: number;
   bucket?: string;
 }) {
@@ -713,11 +714,15 @@ export async function recordSignal(input: {
       s.impressionsToday += 1;
       s.impressionsThisWeek += 1;
     }
+    if (input.type === "page_view" && w >= 0.3) {
+      s.pageViews += 1;
+    }
     if (input.dwellMs) s.dwellMsTotal += Math.round(input.dwellMs * w);
     if (
       (input.type === "impression" ||
         input.type === "dwell" ||
-        input.type === "meaningful_view") &&
+        input.type === "meaningful_view" ||
+        input.type === "page_view") &&
       w >= 0.5 &&
       input.viewerId &&
       engine.markUniqueViewer(listing.id, input.viewerId)
@@ -727,7 +732,11 @@ export async function recordSignal(input: {
     if (input.type === "save" && w >= 0.4) s.saves += 1;
     if (input.type === "follow" && w >= 0.4) s.follows += 1;
     engine.state.listings.set(listing.id, { ...listing, signals: s });
-    if (input.type === "impression" || input.type === "meaningful_view") {
+    if (
+      input.type === "impression" ||
+      input.type === "meaningful_view" ||
+      input.type === "page_view"
+    ) {
       engine.metrics.record({
         type: input.type,
         listingId: listing.id,
@@ -774,10 +783,14 @@ export async function recordSignal(input: {
     data.impressionsToday = listing.impressionsToday + 1;
     data.impressionsThisWeek = listing.impressionsThisWeek + 1;
   }
+  if (input.type === "page_view" && w >= 0.3) {
+    data.pageViews = listing.pageViews + 1;
+  }
   if (
     (input.type === "impression" ||
       input.type === "dwell" ||
-      input.type === "meaningful_view") &&
+      input.type === "meaningful_view" ||
+      input.type === "page_view") &&
     w >= 0.5 &&
     input.viewerId
   ) {
@@ -785,7 +798,7 @@ export async function recordSignal(input: {
       where: {
         listingId: listing.id,
         viewerId: input.viewerId,
-        type: { in: ["impression", "dwell", "meaningful_view"] },
+        type: { in: ["impression", "dwell", "meaningful_view", "page_view"] },
       },
       select: { id: true },
     });

@@ -109,6 +109,7 @@ export async function persistListingSignals(listingId: string, signals: {
   uniqueViewers?: number;
   impressionsToday?: number;
   impressionsThisWeek?: number;
+  pageViews?: number;
   reportRate?: number;
   nominationScore?: number;
   delisted?: boolean;

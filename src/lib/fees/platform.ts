@@ -1,20 +1,20 @@
 /**
  * FreshMint platform fees on primary sales.
  * Buyer pays the listed price; proceeds are split:
- *   0.25% → marketplace treasury (community, events, future updates)
- *   99.75% → seller
+ *   3% → marketplace treasury (community, events, future updates)
+ *   97% → seller
  */
 export const PLATFORM_FEE_BPS = {
-  treasury: 25,
+  treasury: 300,
   operator: 0,
-  total: 25,
+  total: 300,
 } as const;
 
 export const PLATFORM_FEE_PERCENT = {
-  treasury: 0.25,
+  treasury: 3,
   operator: 0,
-  total: 0.25,
-  sellerNet: 99.75,
+  total: 3,
+  sellerNet: 97,
 } as const;
 
 export type SaleFeeSplit = {

@@ -5,7 +5,7 @@ import Link from "next/link";
 export const metadata = {
   title: "How FreshMint works — FreshMint Marketplace",
   description:
-    "Off-chain collecting, 0.25% treasury fee, optional NFT withdraw, and how discovery allocates attention.",
+    "Off-chain collecting, 3% treasury fee, optional NFT withdraw, and how discovery allocates attention.",
 };
 
 function pct(n: number) {
@@ -339,7 +339,8 @@ export default function DocsPage() {
         </p>
         <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
           Quality is a Bayesian engagement <em>rate</em> (saves, follows, dwell,
-          nominations per unique viewer), not a raw popularity sum. Saves from
+          listing-page views versus feed impressions, and nominations per unique
+          viewer), not a raw popularity sum. Saves from
           listings with fewer than {cfg.sybil.minUniqueViewersForSaveTrust} unique
           viewers are discounted. Novelty lifts low-exposure artists and applies
           listing-type weights. Diversity blocks the same artist from flooding a

@@ -93,6 +93,7 @@ describe("Rate-based quality", () => {
         uniqueViewers: 2_000,
         impressionsToday: 8_000,
         impressionsThisWeek: 10_000,
+        pageViews: 80,
         reportRate: 0,
         nominationScore: 1,
       },
@@ -108,6 +109,7 @@ describe("Rate-based quality", () => {
         uniqueViewers: 50,
         impressionsToday: 80,
         impressionsThisWeek: 80,
+        pageViews: 18,
       },
     };
     expect(computeQualitySignal(intimate)).toBeGreaterThan(
@@ -125,6 +127,7 @@ describe("Rate-based quality", () => {
         uniqueViewers: 1,
         impressionsToday: 6,
         impressionsThisWeek: 6,
+        pageViews: 0,
         reportRate: 0,
         nominationScore: 0,
       },
@@ -135,6 +138,30 @@ describe("Rate-based quality", () => {
     };
     expect(computeQualitySignal(trusted)).toBeGreaterThan(
       computeQualitySignal(untrusted),
+    );
+  });
+
+  it("prefers listing-page opens over scroll-only impressions", () => {
+    const base: Listing = {
+      ...buildSeedState().listings.get("listing-fresh-1")!,
+      signals: {
+        saves: 2,
+        follows: 1,
+        dwellMsTotal: 12_000,
+        uniqueViewers: 40,
+        impressionsToday: 200,
+        impressionsThisWeek: 200,
+        pageViews: 4,
+        reportRate: 0,
+        nominationScore: 0,
+      },
+    };
+    const opened = {
+      ...base,
+      signals: { ...base.signals, pageViews: 48 },
+    };
+    expect(computeQualitySignal(opened)).toBeGreaterThan(
+      computeQualitySignal(base),
     );
   });
 });

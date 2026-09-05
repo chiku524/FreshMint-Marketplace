@@ -55,6 +55,8 @@ export interface ListingSignals {
   uniqueViewers: number;
   impressionsToday: number;
   impressionsThisWeek: number;
+  /** Intentional listing-page opens (not feed card impressions). */
+  pageViews: number;
   reportRate: number;
   nominationScore: number;
 }
@@ -170,6 +172,7 @@ export interface RankedListing {
 export interface MetricEvent {
   type:
     | "impression"
+    | "page_view"
     | "meaningful_view"
     | "first_purchase"
     | "purchase"

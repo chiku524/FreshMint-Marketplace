@@ -19,6 +19,7 @@ function signals(partial: Partial<ListingSignals> = {}): ListingSignals {
     uniqueViewers: 0,
     impressionsToday: 0,
     impressionsThisWeek: 0,
+    pageViews: 0,
     reportRate: 0,
     nominationScore: 0,
     ...partial,

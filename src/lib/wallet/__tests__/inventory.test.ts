@@ -56,6 +56,7 @@ function listing(partial: Partial<Listing> & Pick<Listing, "id">): Listing {
       uniqueViewers: 0,
       impressionsToday: 0,
       impressionsThisWeek: 0,
+      pageViews: 0,
       reportRate: 0,
       nominationScore: 0,
     },

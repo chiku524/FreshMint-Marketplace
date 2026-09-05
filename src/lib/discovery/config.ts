@@ -86,6 +86,8 @@ export const DISCOVERY_CONFIG = {
     priorFollowRate: 0.02,
     priorMeaningfulViewRate: 0.15,
     priorNominationRate: 0.05,
+    /** Typical share of feed impressions that become listing-page opens. */
+    priorPageViewRate: 0.08,
   },
 
   /** Two-stage retrieve: score at most this many Rising candidates. */
