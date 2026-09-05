@@ -442,6 +442,54 @@ a {
   animation: rise-in 420ms ease both;
 }
 
+.docs-discovery {
+  max-width: 52rem;
+}
+
+.docs-discovery__lead {
+  margin: 0 0 0.5rem;
+  padding: 0 0 2.25rem;
+}
+
+.docs-discovery__block {
+  margin: 0.35rem 0 0;
+  padding: 2.25rem 0 2.1rem;
+  border-top: 1px solid rgba(244, 244, 245, 0.16);
+}
+
+.docs-discovery__block:last-child {
+  padding-bottom: 0.5rem;
+}
+
+.docs-discovery__block ul {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.docs-discovery__surfaces {
+  display: grid;
+  gap: 1.15rem 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.docs-discovery__surfaces > div {
+  padding: 1.05rem 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  background: rgba(244, 244, 245, 0.02);
+}
+
+.docs-discovery__trust {
+  display: grid;
+  gap: 1.1rem 1.35rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.docs-discovery__trust > div {
+  padding: 1.05rem 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  background: rgba(244, 244, 245, 0.02);
+}
+
 @media (min-width: 900px) {
   .docs-guide {
     grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);

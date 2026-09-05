@@ -217,15 +217,16 @@ export function DocsGuide() {
           ) : null}
 
           {active === "discovery" ? (
-          <section id="discovery">
+          <section id="discovery" className="docs-discovery">
+            <header className="docs-discovery__lead">
             <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
               Discovery
             </h2>
-            <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
+            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", maxWidth: "48ch" }}>
               FreshMint treats attention as scarce inventory. These rules are loaded
               from live product config — the same constants the ranker enforces.
             </p>
-            <p style={{ margin: "0 0 1.75rem", fontSize: "0.9rem", color: "var(--ink-muted)" }}>
+            <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-muted)" }}>
               Deep reference:{" "}
               <code style={{ color: "var(--accent-soft)" }}>docs/discovery.md</code>
               {" · "}
@@ -233,7 +234,9 @@ export function DocsGuide() {
                 live wedge metrics
               </Link>
             </p>
+            </header>
 
+            <div className="docs-discovery__block">
             <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
               Surfaces
             </h3>
@@ -241,14 +244,7 @@ export function DocsGuide() {
               Four jobs, not one firehose. Anyone can list; only a fraction earns
               high-visibility slots.
             </p>
-            <div
-              style={{
-                display: "grid",
-                gap: "1.25rem 2rem",
-                gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-                marginBottom: "2rem",
-              }}
-            >
+            <div className="docs-discovery__surfaces">
               {[
                 {
                   name: "Open Lane",
@@ -285,7 +281,9 @@ export function DocsGuide() {
                 </div>
               ))}
             </div>
+            </div>
 
+            <div className="docs-discovery__block">
             <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
               Homepage mix
             </h3>
@@ -325,13 +323,15 @@ export function DocsGuide() {
                 </div>
               ))}
             </div>
-            <p style={{ margin: "0 0 2rem", color: "var(--ink-muted)", fontSize: "0.92rem" }}>
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem" }}>
               Max {cfg.maxArtistPerScreen} artist per screen · collection flood capped
               at {cfg.maxCollectionFloodPerSession} per session · one chain ≤{" "}
               {pct(cfg.maxChainSharePerPage)} of a page. Guest Emerging uses a taste
               seed, not a demo follow graph.
             </p>
+            </div>
 
+            <div className="docs-discovery__block">
             <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
               Listing stages
             </h3>
@@ -360,7 +360,7 @@ export function DocsGuide() {
                 </li>
               ))}
             </ol>
-            <ul style={{ margin: "0 0 2rem", paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.6 }}>
+            <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.7 }}>
               <li>
                 <strong style={{ color: "var(--ink)" }}>Soft launch</strong> — Open
                 Lane + profile only; gather early signals
@@ -375,7 +375,9 @@ export function DocsGuide() {
                 editorial inventory; nomination + Studio controls
               </li>
             </ul>
+            </div>
 
+            <div className="docs-discovery__block">
             <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
               Emerging
             </h3>
@@ -396,12 +398,14 @@ export function DocsGuide() {
                 First {cfg.emerging.maxDaysSinceFirstListing} days since first listing
               </li>
             </ul>
-            <p style={{ margin: "1rem 0 2rem", color: "var(--emergent)" }}>
+            <p style={{ margin: "1.15rem 0 0", color: "var(--emergent)" }}>
               Rising reserves {pct(cfg.emergingRisingQuota)} of its daily slots for
               Emerging works ({budgets.risingEmergingReserved} of {budgets.risingTotal}{" "}
               today) and {budgets.risingExplore} low-exposure explore slots.
             </p>
+            </div>
 
+            <div className="docs-discovery__block">
             <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
               How works are scored
             </h3>
@@ -416,7 +420,7 @@ export function DocsGuide() {
             >
               quality × novelty × diversity × spam⁻¹ × decay × temporal
             </p>
-            <p style={{ color: "var(--ink-muted)", margin: "0 0 2rem", lineHeight: 1.6 }}>
+            <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.65 }}>
               Quality is a Bayesian engagement <em>rate</em> (saves, follows, dwell,
               listing-page views versus feed impressions, and nominations per unique
               viewer), not a raw popularity sum. Saves from
@@ -428,18 +432,13 @@ export function DocsGuide() {
               winners cannot monopolize Rising forever. Singles get a short Rising-age
               burst; open editions and auctions keep their own clocks.
             </p>
+            </div>
 
-            <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
+            <div className="docs-discovery__block">
+            <h3 className="display" style={{ margin: "0 0 0.85rem", fontSize: "1.15rem" }}>
               Congestion & trust
             </h3>
-            <div
-              style={{
-                display: "grid",
-                gap: "1rem 2rem",
-                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
-                marginBottom: "2rem",
-              }}
-            >
+            <div className="docs-discovery__trust">
               <div>
                 <h4 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
                   Caps
@@ -480,8 +479,10 @@ export function DocsGuide() {
                 </p>
               </div>
             </div>
+            </div>
 
-            <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
+            <div className="docs-discovery__block">
+            <h3 className="display" style={{ margin: "0 0 0.85rem", fontSize: "1.15rem" }}>
               Explore
             </h3>
             <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: 0 }}>
@@ -507,6 +508,7 @@ export function DocsGuide() {
                 Soft-launch a work
               </Link>
             </p>
+            </div>
           </section>
           ) : null}
         </div>
