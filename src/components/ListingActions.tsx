@@ -13,7 +13,7 @@ import {
 } from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 async function confirmTx(
   listingId: string,
@@ -56,10 +56,44 @@ export function ListingActions({
   const [confirmBuy, setConfirmBuy] = useState(false);
   const [buying, setBuying] = useState(false);
   const [justSold, setJustSold] = useState(false);
+  const [payNetwork, setPayNetwork] = useState<"native" | "ethereum" | "solana">(
+    "native",
+  );
+  const [liveQuote, setLiveQuote] = useState<{
+    settle: { formatted: string; usdPerNative: number; symbol: string; source: string };
+    pay: { formatted: string; usdPerNative: number; symbol: string };
+    bridged: boolean;
+  } | null>(null);
   const feePreview =
     priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
-  const nativeQuote =
+  const fallbackQuote =
     priceUsd != null && priceUsd > 0 ? quoteNativeFromUsd(priceUsd, chain) : null;
+  const nativeQuote = liveQuote?.settle ?? fallbackQuote;
+
+  useEffect(() => {
+    if (!confirmBuy || priceUsd == null || !(priceUsd > 0)) return;
+    const pay =
+      payNetwork === "native"
+        ? chain === "solana"
+          ? "solana"
+          : chain === "boing"
+            ? "boing"
+            : "ethereum"
+        : payNetwork;
+    const ac = new AbortController();
+    void fetch(
+      `/api/onchain/quote?amountUsd=${priceUsd}&chain=${chain}&payNetwork=${pay}`,
+      { signal: ac.signal, credentials: "include" },
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.ok) setLiveQuote(data);
+      })
+      .catch(() => {
+        // Keep the fallback quote if CoinGecko is unreachable.
+      });
+    return () => ac.abort();
+  }, [confirmBuy, priceUsd, chain, payNetwork]);
   const uniqueSold = sold || justSold;
   const canBuy = priceUsd != null && !uniqueSold;
 
@@ -316,15 +350,59 @@ export function ListingActions({
                 lineHeight: 1.45,
               }}
             >
-              Wallet pays {nativeQuote?.formatted ?? "the listed price"} at $
-              {nativeQuote?.usdPerNative.toLocaleString()}/{nativeQuote?.symbol}{" "}
-              so it matches ${priceUsd}. {PLATFORM_FEE_PERCENT.total}% platform
-              fee ({PLATFORM_FEE_PERCENT.treasury}% treasury ·{" "}
+              Settles on {CHAIN_WALLET_LABEL[chain]} as{" "}
+              {nativeQuote?.formatted ?? "the listed price"} at $
+              {Number(nativeQuote?.usdPerNative ?? 0).toLocaleString()}/
+              {nativeQuote?.symbol}
+              {nativeQuote && "source" in nativeQuote && nativeQuote.source === "live"
+                ? " (live)"
+                : ""}
+              .{" "}
+              {liveQuote?.bridged
+                ? `Pay with ${liveQuote.pay.symbol}: ${liveQuote.pay.formatted} at $${liveQuote.pay.usdPerNative.toLocaleString()}/${liveQuote.pay.symbol}, then bridge to ${nativeQuote?.symbol}. `
+                : ""}
+              {PLATFORM_FEE_PERCENT.total}% platform fee (
+              {PLATFORM_FEE_PERCENT.treasury}% treasury ·{" "}
               {PLATFORM_FEE_PERCENT.operator}% operator). Seller receives $
               {feePreview.sellerNetUsd.toFixed(2)}; marketplace $
               {feePreview.feeTreasuryUsd.toFixed(2)}; operator $
               {feePreview.feeOperatorUsd.toFixed(2)}.
             </p>
+          ) : null}
+          {chain !== "boing" ? (
+            <label
+              style={{
+                display: "block",
+                margin: "0 0 0.75rem",
+                color: "var(--ink-muted)",
+                fontSize: "0.8rem",
+              }}
+            >
+              Pay with
+              <select
+                value={payNetwork}
+                onChange={(e) =>
+                  setPayNetwork(e.target.value as "native" | "ethereum" | "solana")
+                }
+                style={{
+                  display: "block",
+                  marginTop: "0.35rem",
+                  background: "var(--panel)",
+                  border: "1px solid var(--line)",
+                  color: "var(--ink)",
+                  padding: "0.3rem 0.5rem",
+                }}
+              >
+                <option value="native">
+                  {chain === "solana" ? "SOL on Solana" : "ETH on the listing network"}
+                </option>
+                {chain === "solana" ? (
+                  <option value="ethereum">ETH (quoted, then bridged to SOL)</option>
+                ) : (
+                  <option value="solana">SOL (quoted, then bridged to ETH)</option>
+                )}
+              </select>
+            </label>
           ) : null}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
             <button

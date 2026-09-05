@@ -43,7 +43,7 @@ import {
   buildBoingPurchaseIntent,
   verifyBoingTx,
 } from "@/lib/onchain/boing";
-import { quoteNativeFromUsd } from "@/lib/onchain/fx";
+import { fetchLiveUsdRates, quoteNativeFromUsdLive } from "@/lib/onchain/fx";
 import { hashTextMedia } from "@/lib/media/upload";
 import { parseEther } from "viem";
 
@@ -1182,6 +1182,7 @@ export async function purchaseListing(input: {
 
   const tokenUri =
     listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
+  await fetchLiveUsdRates();
   const purchaseIntent =
     listing.chain === "evm"
       ? buildEvmPurchaseIntent({
@@ -1207,7 +1208,7 @@ export async function purchaseListing(input: {
             buyerAddress,
             mintAddress: listing.contractAddress ?? "unknown",
             priceLamports: Number(
-              quoteNativeFromUsd(amountUsd, "solana").baseUnits,
+              (await quoteNativeFromUsdLive(amountUsd, "solana")).baseUnits,
             ),
             listingId: listing.id,
           });

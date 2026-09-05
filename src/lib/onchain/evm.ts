@@ -71,7 +71,7 @@ export function buildEvmMintIntent(input: {
   const priceWei =
     (input.priceUsd ?? 0) > 0
       ? quoteNativeFromUsd(input.priceUsd!, "evm").baseUnits
-      : 0n;
+      : BigInt(0);
 
   const provisionalTokenId = String(
     BigInt(
@@ -168,7 +168,7 @@ export function buildEvmPurchaseIntent(input: {
   const valueWei =
     (input.amountUsd ?? 0) > 0
       ? quoteNativeFromUsd(input.amountUsd!, "evm").baseUnits
-      : 1n;
+      : BigInt(1);
   const from = isAddress(input.buyerAddress) ? input.buyerAddress : undefined;
 
   if (!minted && !liveMarket) {

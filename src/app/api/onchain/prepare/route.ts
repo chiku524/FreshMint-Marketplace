@@ -21,7 +21,7 @@ import {
   buildSolanaPurchaseTransactionBase64,
   isValidSolanaAddress,
 } from "@/lib/onchain/solana";
-import { publicNativeQuote, quoteNativeFromUsd } from "@/lib/onchain/fx";
+import { publicNativeQuote, quoteNativeFromUsdLive } from "@/lib/onchain/fx";
 import { platformFeeRecipients } from "@/lib/fees/platform";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -230,7 +230,9 @@ export async function POST(req: NextRequest) {
 
   // buy
   const amountUsd = body.data.amountUsd ?? listing.priceUsd ?? 0;
-  const quote = publicNativeQuote(quoteNativeFromUsd(amountUsd, listing.chain));
+  const quote = publicNativeQuote(
+    await quoteNativeFromUsdLive(amountUsd, listing.chain),
+  );
 
   if (listing.chain === "evm") {
     const buy = buildEvmPurchaseIntent({
