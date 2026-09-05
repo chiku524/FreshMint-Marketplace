@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && node scripts/migrate-deploy.mjs && next build",
+    "db:migrate-deploy": "node scripts/migrate-deploy.mjs",
     "start": "next start",
     "lint": "eslint",
     "remotion": "remotion studio src/remotion/index.ts",
