@@ -1149,6 +1149,160 @@ html.fm-intro-pending .fm-intro-cover {
   }
 }
 
+.collections-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.collections-views {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+}
+
+.collections-views button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.collections-views button:last-child {
+  border-right: 0;
+}
+
+.collections-views button:hover,
+.collections-views button:focus-visible {
+  color: var(--ink);
+}
+
+.collections-views button.is-active {
+  color: var(--ink);
+  background: rgba(110, 207, 154, 0.1);
+}
+
+.collections-view-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.collections-gallery-block + .collections-gallery-block {
+  margin-top: 2.5rem;
+}
+
+.collections-grid {
+  display: grid;
+  gap: 1.15rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.collections-card {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--bg-lift);
+  color: inherit;
+  text-decoration: none;
+}
+
+.collections-card:hover,
+.collections-card:focus-visible {
+  border-color: rgba(110, 207, 154, 0.35);
+}
+
+.collections-card__cover {
+  aspect-ratio: 4 / 3;
+  background: var(--bg-mid);
+}
+
+.collections-card__body {
+  padding: 0.95rem 1rem 1.05rem;
+}
+
+.collections-card__body h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.2rem;
+}
+
+.collections-card__body p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+}
+
+.collections-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.collections-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.55rem 0.7rem 0.55rem 0.55rem;
+  border: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.collections-row:hover,
+.collections-row:focus-visible {
+  border-color: rgba(110, 207, 154, 0.35);
+  background: rgba(244, 244, 245, 0.02);
+}
+
+.collections-row__thumb {
+  width: 3.5rem;
+  height: 3.5rem;
+  background: var(--bg-mid);
+}
+
+.collections-row strong {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.collections-row em {
+  display: block;
+  margin-top: 0.15rem;
+  font-style: normal;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+}
+
+.collections-row__count {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .collections-row {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+  }
+
+  .collections-row__count {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 /* Life of a work — animated journey on /docs */
 .nft-flow {
   max-width: 58rem;
