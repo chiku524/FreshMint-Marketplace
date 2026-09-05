@@ -3,6 +3,10 @@ import { resolveNetwork } from "@/lib/chains/registry";
 import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import type { Chain } from "@/lib/discovery/types";
+import {
+  prepareBodySchema,
+  readJsonBody,
+} from "@/lib/marketplace/purchase-request";
 import { buildEvmMintIntent, buildEvmPurchaseIntent } from "@/lib/onchain/evm";
 import {
   buildBoingMintIntent,
@@ -17,13 +21,6 @@ import {
   isValidSolanaAddress,
 } from "@/lib/onchain/solana";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-
-const schema = z.object({
-  listingId: z.string(),
-  action: z.enum(["mint", "buy"]),
-  amountUsd: z.number().nonnegative().optional(),
-});
 
 type PrepareListing = {
   id: string;
@@ -63,30 +60,51 @@ async function loadListing(listingId: string): Promise<{
     };
   }
 
-  const row = await prisma.listing.findUnique({ where: { id: listingId } });
-  if (!row) return null;
+  try {
+    const row = await prisma.listing.findUnique({ where: { id: listingId } });
+    if (row) {
+      return {
+        memory: false,
+        listing: {
+          id: row.id,
+          title: row.title,
+          chain: row.chain as Chain,
+          network: row.network,
+          contractAddress: row.contractAddress,
+          tokenId: row.tokenId,
+          priceUsd: row.priceUsd,
+          mediaUrl: row.mediaUrl,
+        },
+      };
+    }
+  } catch {
+    // Catalog may still be in memory if Postgres dropped mid-request.
+  }
+
+  const fallback = getMemoryEngine().state.listings.get(listingId);
+  if (!fallback) return null;
   return {
-    memory: false,
+    memory: true,
     listing: {
-      id: row.id,
-      title: row.title,
-      chain: row.chain as Chain,
-      network: row.network,
-      contractAddress: row.contractAddress,
-      tokenId: row.tokenId,
-      priceUsd: row.priceUsd,
-      mediaUrl: row.mediaUrl,
+      id: fallback.id,
+      title: fallback.title,
+      chain: fallback.chain,
+      network: fallback.network,
+      contractAddress: fallback.contractAddress ?? null,
+      tokenId: fallback.tokenId ?? null,
+      priceUsd: fallback.priceUsd,
+      mediaUrl: fallback.mediaUrl ?? null,
     },
   };
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser();
+  const user = await getSessionUser(req);
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = schema.safeParse(await req.json());
+  const body = prepareBodySchema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
@@ -98,7 +116,9 @@ export async function POST(req: NextRequest) {
   const { listing, memory } = loaded;
 
   const network = resolveNetwork(listing.network, listing.chain);
-  const wallet = user.wallets.find((w) => w.chain === listing.chain)?.address;
+  const wallet =
+    body.data.buyerAddress ??
+    user.wallets.find((w) => w.chain === listing.chain)?.address;
   if (!wallet) {
     return NextResponse.json(
       { error: "wallet_required", chain: listing.chain },
@@ -209,8 +229,13 @@ export async function POST(req: NextRequest) {
       tokenId: listing.tokenId ?? "0",
       network,
       amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
+      tokenUri,
     });
-    return NextResponse.json({ ok: true, intent: buy });
+    return NextResponse.json({
+      ok: true,
+      intent: buy,
+      walletTx: buy.walletTx,
+    });
   }
   if (listing.chain === "boing") {
     const buy = buildBoingPurchaseIntent({
@@ -219,8 +244,14 @@ export async function POST(req: NextRequest) {
       collection: listing.contractAddress,
       tokenId: listing.tokenId,
       amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
+      metadataUri: tokenUri,
+      title: listing.title,
     });
-    return NextResponse.json({ ok: true, intent: buy });
+    return NextResponse.json({
+      ok: true,
+      intent: buy,
+      walletTx: buy.walletTx,
+    });
   }
 
   const buy = buildSolanaPurchaseIntent({
@@ -242,5 +273,13 @@ export async function POST(req: NextRequest) {
       serialized = null;
     }
   }
-  return NextResponse.json({ ok: true, intent: buy, serialized });
+  const walletTx = buy.walletTx
+    ? { ...buy.walletTx, serialized: serialized ?? undefined }
+    : undefined;
+  return NextResponse.json({
+    ok: true,
+    intent: buy,
+    serialized,
+    walletTx,
+  });
 }

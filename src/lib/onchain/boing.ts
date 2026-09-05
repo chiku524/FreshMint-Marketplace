@@ -243,6 +243,8 @@ export function buildBoingPurchaseIntent(input: {
   collection?: string | null;
   tokenId?: string | null;
   amountUsd: number;
+  metadataUri?: string;
+  title?: string;
 }): {
   txHash: string;
   status: "simulated" | "pending_wallet";
@@ -261,10 +263,25 @@ export function buildBoingPurchaseIntent(input: {
     "",
   );
 
-  if (!configured || !buyerIsBoing) {
+  if (!buyerIsBoing) {
     return {
       txHash: simulatedBoingHash(),
       status: "simulated",
+    };
+  }
+
+  if (!configured) {
+    const mint = buildBoingMintIntent({
+      creatorAddress: buyer,
+      metadataUri:
+        input.metadataUri ?? `https://freshmint.local/metadata/${input.listingId}`,
+      listingId: input.listingId,
+      title: input.title ?? input.listingId,
+    });
+    return {
+      txHash: "",
+      status: "pending_wallet",
+      walletTx: mint.walletTx,
     };
   }
 

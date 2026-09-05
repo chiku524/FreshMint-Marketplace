@@ -44,6 +44,20 @@ describe("boing purchase intent", () => {
     expect(buy.walletTx).toBeUndefined();
   });
 
+  it("asks the buyer wallet to mint when no collection is configured", () => {
+    const previous = process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION;
+    delete process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION;
+    const buy = buildBoingPurchaseIntent({
+      buyerAddress: ACCOUNT,
+      listingId: "listing-boing-1",
+      amountUsd: 32,
+      title: "Spring Latch",
+    });
+    if (previous) process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION = previous;
+    expect(buy.status).toBe("pending_wallet");
+    expect(buy.walletTx?.tx.type).toBe("contract_deploy_meta");
+  });
+
   it("builds transfer_nft calldata when buyer and collection are native", () => {
     const collection = `0x${"22".repeat(32)}`;
     const buy = buildBoingPurchaseIntent({

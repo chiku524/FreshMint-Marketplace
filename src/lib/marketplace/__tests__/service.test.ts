@@ -169,6 +169,16 @@ describe("marketplace service (memory mode)", () => {
     expect(oe2.ok).toBe(true);
   });
 
+  it("uses the listing price when amountUsd is omitted", async () => {
+    const result = await purchaseListing({
+      listingId: "listing-whale-featured",
+      buyerId: "collector-mira",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.fees.amountUsd).toBe(4200);
+  });
+
   it("lets a signed-in buyer missing from the seed catalog purchase", async () => {
     const result = await purchaseListing({
       listingId: "listing-boing-1",

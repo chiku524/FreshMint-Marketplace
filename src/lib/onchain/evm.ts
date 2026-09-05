@@ -135,12 +135,23 @@ export function buildEvmMintIntent(input: {
   };
 }
 
+function isOnchainTokenId(tokenId: string | null | undefined): boolean {
+  if (tokenId == null || tokenId === "") return false;
+  try {
+    BigInt(tokenId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function buildEvmPurchaseIntent(input: {
   buyerAddress: string;
   tokenId: string;
   network: NetworkId;
   contractAddress?: string | null;
   amountUsd?: number | null;
+  tokenUri?: string;
 }): MintIntent & { walletTx?: WalletTxRequest } {
   const network = input.network;
   const def = getNetwork(network);
@@ -148,13 +159,21 @@ export function buildEvmPurchaseIntent(input: {
     throw new Error(`evm_buy_requires_evm_network:${network}`);
   }
 
-  const market = (input.contractAddress || marketAddressFor(network) ||
+  const liveMarket = marketAddressFor(network);
+  const listingContract =
+    input.contractAddress && isAddress(input.contractAddress)
+      ? input.contractAddress
+      : null;
+  const minted = Boolean(listingContract && isOnchainTokenId(input.tokenId));
+  const market = (listingContract ||
+    liveMarket ||
     "0x0000000000000000000000000000000000000000") as Hex;
   const valueWei = BigInt(
     Math.max(1, Math.floor((input.amountUsd ?? 1) * 1e15)),
   );
+  const from = isAddress(input.buyerAddress) ? input.buyerAddress : undefined;
 
-  if (!hasLiveMarket(network) && !input.contractAddress) {
+  if (!minted && !liveMarket) {
     return {
       chain: "evm",
       network,
@@ -165,6 +184,36 @@ export function buildEvmPurchaseIntent(input: {
       status: "simulated",
       to: market,
       value: valueWei.toString(),
+    };
+  }
+
+  if (!minted && liveMarket) {
+    const toAddress = (from ??
+      "0x0000000000000000000000000000000000000001") as Hex;
+    const calldata = encodeFunctionData({
+      abi: freshMintErc721Abi,
+      functionName: "safeMint",
+      args: [toAddress, input.tokenUri ?? "", valueWei],
+    });
+    return {
+      chain: "evm",
+      network,
+      contractAddress: liveMarket,
+      tokenId: input.tokenId,
+      txHash: "",
+      calldata,
+      value: "0x0",
+      status: "pending_wallet",
+      to: liveMarket as Hex,
+      walletTx: {
+        chain: "evm",
+        network,
+        chainId: def.chainId,
+        to: liveMarket,
+        data: calldata,
+        value: "0x0",
+        from,
+      },
     };
   }
 
@@ -191,7 +240,7 @@ export function buildEvmPurchaseIntent(input: {
       to: market,
       data: calldata,
       value: `0x${valueWei.toString(16)}`,
-      from: isAddress(input.buyerAddress) ? input.buyerAddress : undefined,
+      from,
     },
   };
 }

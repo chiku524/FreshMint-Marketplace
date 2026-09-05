@@ -4,7 +4,12 @@ import {
   PLATFORM_FEE_PERCENT,
   splitSaleProceeds,
 } from "@/lib/fees/platform";
-import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
+import type { Chain } from "@/lib/discovery/types";
+import {
+  browserWalletAvailable,
+  maybeSendWalletTx,
+  requestBuyerAddress,
+} from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,10 +21,17 @@ async function confirmTx(
 ) {
   await fetch("/api/onchain/confirm", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ listingId, action, txHash }),
   });
 }
+
+const CHAIN_WALLET_LABEL: Record<Chain, string> = {
+  evm: "EVM",
+  solana: "Solana",
+  boing: "Boing",
+};
 
 export function ListingActions({
   listingId,
@@ -28,6 +40,7 @@ export function ListingActions({
   stage,
   sold = false,
   listingType,
+  chain = "evm",
 }: {
   listingId: string;
   creatorId?: string;
@@ -35,6 +48,7 @@ export function ListingActions({
   stage: string;
   sold?: boolean;
   listingType?: string;
+  chain?: Chain;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
@@ -70,7 +84,11 @@ export function ListingActions({
               ? "This work isn't available to buy"
               : raw === "wash_blocked" || raw === "high_velocity_low_dwell"
                 ? "Purchase blocked"
-                : raw;
+                : raw === "invalid_body"
+                  ? "Couldn't start this purchase. Try again."
+                  : raw === "wallet_required"
+                    ? `Connect a ${CHAIN_WALLET_LABEL[chain]} wallet to buy this on-chain`
+                    : raw;
       setMsg(error);
       return { error };
     }
@@ -78,12 +96,86 @@ export function ListingActions({
   }
 
   async function completePurchase() {
-    if (priceUsd == null || buying) return;
+    const amount = Number(priceUsd);
+    if (!Number.isFinite(amount) || amount <= 0 || buying) return;
     setBuying(true);
     try {
+      let buyerAddress: string | null = null;
+      if (browserWalletAvailable(chain)) {
+        try {
+          buyerAddress = await requestBuyerAddress(chain);
+        } catch (e) {
+          setMsg(
+            e instanceof Error
+              ? e.message
+              : `Connect a ${CHAIN_WALLET_LABEL[chain]} wallet to buy`,
+          );
+          return;
+        }
+        if (!buyerAddress) {
+          setMsg(
+            `Connect a ${CHAIN_WALLET_LABEL[chain]} wallet to receive this NFT on-chain`,
+          );
+          return;
+        }
+      }
+
+      if (buyerAddress) {
+        const prep = await post("/api/onchain/prepare", {
+          listingId,
+          action: "buy",
+          amountUsd: amount,
+          buyerAddress,
+        });
+        if (!prep || "error" in prep) return;
+        const preparedTx =
+          prep.walletTx ??
+          (prep.intent &&
+          typeof prep.intent === "object" &&
+          prep.intent !== null &&
+          "walletTx" in prep.intent
+            ? (prep.intent as { walletTx: unknown }).walletTx
+            : undefined);
+        try {
+          const hash = await maybeSendWalletTx({
+            walletTx: preparedTx,
+            listingId,
+            action: "buy",
+            amountUsd: amount,
+          });
+          if (hash) {
+            const data = await post("/api/purchase", {
+              listingId,
+              amountUsd: amount,
+              txHash: hash,
+              buyerAddress,
+            });
+            if (!data || "error" in data) {
+              if (data && data.error === "already_sold") {
+                setJustSold(true);
+                setConfirmBuy(false);
+              }
+              return;
+            }
+            await confirmTx(listingId, "buy", hash);
+            finishPurchase(
+              data,
+              `On-chain buy · ${hash.slice(0, 14)}…`,
+            );
+            return;
+          }
+        } catch (e) {
+          setMsg(
+            e instanceof Error ? e.message : "Wallet rejected the buy",
+          );
+          return;
+        }
+      }
+
       const data = await post("/api/purchase", {
         listingId,
-        amountUsd: priceUsd,
+        amountUsd: amount,
+        buyerAddress: buyerAddress ?? undefined,
       });
       if (!data || "error" in data) {
         if (data && data.error === "already_sold") {
@@ -92,35 +184,43 @@ export function ListingActions({
         }
         return;
       }
-      const feeNote =
-        data.fees &&
-        typeof data.fees === "object" &&
-        data.fees !== null &&
-        "sellerNetUsd" in data.fees
-          ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
-          : "";
-      let note = `Collected · ${String(data.txHash).slice(0, 14)}…${feeNote}`;
-      try {
-        const hash = await maybeSendWalletTx({
-          walletTx: data.walletTx,
-          listingId,
-          action: "buy",
-          amountUsd: priceUsd,
-        });
-        if (hash) {
-          await confirmTx(listingId, "buy", hash);
-          note = `On-chain buy · ${hash.slice(0, 14)}…${feeNote}`;
+      let note = `Collected · ${String(data.txHash).slice(0, 14)}…`;
+      if (!buyerAddress) {
+        note += ` · connect a ${CHAIN_WALLET_LABEL[chain]} wallet to receive the NFT on-chain`;
+      } else if (data.walletTx) {
+        try {
+          const hash = await maybeSendWalletTx({
+            walletTx: data.walletTx,
+            listingId,
+            action: "buy",
+            amountUsd: amount,
+          });
+          if (hash) {
+            await confirmTx(listingId, "buy", hash);
+            note = `On-chain buy · ${hash.slice(0, 14)}…`;
+          }
+        } catch (e) {
+          note += ` · on-chain skipped: ${e instanceof Error ? e.message : "wallet"}`;
         }
-      } catch (e) {
-        note += ` · on-chain skipped: ${e instanceof Error ? e.message : "wallet"}`;
       }
-      setConfirmBuy(false);
-      if (listingType !== "open_edition") setJustSold(true);
-      setMsg(note);
-      router.refresh();
+      finishPurchase(data, note);
     } finally {
       setBuying(false);
     }
+  }
+
+  function finishPurchase(data: Record<string, unknown>, prefix: string) {
+    const feeNote =
+      data.fees &&
+      typeof data.fees === "object" &&
+      data.fees !== null &&
+      "sellerNetUsd" in data.fees
+        ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
+        : "";
+    setConfirmBuy(false);
+    if (listingType !== "open_edition") setJustSold(true);
+    setMsg(`${prefix}${feeNote}`);
+    router.refresh();
   }
 
   return (

@@ -988,13 +988,13 @@ export async function reportListingForUser(input: {
 export async function purchaseListing(input: {
   listingId: string;
   buyerId: string;
-  amountUsd: number;
+  amountUsd?: number;
+  txHash?: string;
+  buyerAddress?: string;
 }) {
   const { splitSaleProceeds, platformFeeRecipients } = await import(
     "@/lib/fees/platform"
   );
-  const fees = splitSaleProceeds(input.amountUsd);
-  const feeRecipients = platformFeeRecipients();
 
   const engine = await getDiscoveryEngine();
   let memory = await inMemoryMode();
@@ -1009,6 +1009,7 @@ export async function purchaseListing(input: {
     contractAddress: string | null;
     tokenId: string | null;
     priceUsd: number | null;
+    mediaUrl: string | null;
   } | null = null;
 
   const { getMemoryEngine, ensureMemoryCreator } = await import(
@@ -1032,6 +1033,7 @@ export async function purchaseListing(input: {
         contractAddress: l.contractAddress ?? null,
         tokenId: l.tokenId ?? null,
         priceUsd: l.priceUsd,
+        mediaUrl: l.mediaUrl ?? null,
       };
     }
   }
@@ -1053,6 +1055,7 @@ export async function purchaseListing(input: {
           contractAddress: listing.contractAddress,
           tokenId: listing.tokenId,
           priceUsd: listing.priceUsd,
+          mediaUrl: listing.mediaUrl,
         };
       }
     } catch {
@@ -1074,10 +1077,17 @@ export async function purchaseListing(input: {
       contractAddress: l.contractAddress ?? null,
       tokenId: l.tokenId ?? null,
       priceUsd: l.priceUsd,
+      mediaUrl: l.mediaUrl ?? null,
     };
   }
 
   const listing = listingRow;
+  const amountUsd = input.amountUsd ?? listing.priceUsd ?? 0;
+  if (!(amountUsd > 0)) {
+    return { ok: false as const, error: "unavailable" };
+  }
+  const fees = splitSaleProceeds(amountUsd);
+  const feeRecipients = platformFeeRecipients();
 
   if (!allowsRepeatPrimaryPurchase(listing.type)) {
     const alreadySold = memory
@@ -1165,7 +1175,12 @@ export async function purchaseListing(input: {
       buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
       "unknown";
   }
+  if (input.buyerAddress) {
+    buyerAddress = input.buyerAddress;
+  }
 
+  const tokenUri =
+    listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
   const purchaseIntent =
     listing.chain === "evm"
       ? buildEvmPurchaseIntent({
@@ -1173,7 +1188,8 @@ export async function purchaseListing(input: {
           contractAddress: listing.contractAddress,
           tokenId: listing.tokenId ?? "0",
           network: listing.network,
-          amountUsd: input.amountUsd,
+          amountUsd,
+          tokenUri,
         })
       : listing.chain === "boing"
         ? buildBoingPurchaseIntent({
@@ -1181,18 +1197,24 @@ export async function purchaseListing(input: {
             listingId: listing.id,
             collection: listing.contractAddress,
             tokenId: listing.tokenId,
-            amountUsd: input.amountUsd,
+            amountUsd,
+            metadataUri: tokenUri,
+            title:
+              engine.state.listings.get(listing.id)?.title ?? listing.id,
           })
         : buildSolanaPurchaseIntent({
             buyerAddress,
             mintAddress: listing.contractAddress ?? "unknown",
-            priceLamports: Math.round(input.amountUsd * 1_000_000),
+            priceLamports: Math.round(amountUsd * 1_000_000),
             listingId: listing.id,
           });
 
-  let txHash = purchaseIntent.txHash;
-  let walletTx =
-    "walletTx" in purchaseIntent ? purchaseIntent.walletTx : undefined;
+  let txHash = input.txHash || purchaseIntent.txHash;
+  let walletTx = input.txHash
+    ? undefined
+    : "walletTx" in purchaseIntent
+      ? purchaseIntent.walletTx
+      : undefined;
 
   if (
     !memory &&
@@ -1217,7 +1239,7 @@ export async function purchaseListing(input: {
   engine.recordPurchase({
     listingId: input.listingId,
     buyerId: input.buyerId,
-    amountUsd: input.amountUsd,
+    amountUsd,
     isFirstPurchaseForBuyerOnArtifact: isFirst,
   });
 
@@ -1240,7 +1262,7 @@ export async function purchaseListing(input: {
     recordMemoryPurchase({
       listingId: listing.id,
       buyerId: input.buyerId,
-      amountUsd: input.amountUsd,
+      amountUsd,
       feeTotalUsd: fees.feeTotalUsd,
       feeTreasuryUsd: fees.feeTreasuryUsd,
       feeOperatorUsd: fees.feeOperatorUsd,
@@ -1254,7 +1276,7 @@ export async function purchaseListing(input: {
       data: {
         listingId: input.listingId,
         buyerId: input.buyerId,
-        amountUsd: input.amountUsd,
+        amountUsd,
         feeTotalUsd: fees.feeTotalUsd,
         feeTreasuryUsd: fees.feeTreasuryUsd,
         feeOperatorUsd: fees.feeOperatorUsd,
@@ -1269,7 +1291,7 @@ export async function purchaseListing(input: {
       where: { id: listing.creatorId },
       data: {
         completedSales: { increment: 1 },
-        lifetimePrimaryVolumeUsd: { increment: input.amountUsd },
+        lifetimePrimaryVolumeUsd: { increment: amountUsd },
       },
     });
 
@@ -1281,7 +1303,7 @@ export async function purchaseListing(input: {
         viewerId: input.buyerId,
         emerging,
         metaJson: JSON.stringify({
-          amountUsd: input.amountUsd,
+          amountUsd,
           txHash,
           fees,
           feeRecipients,

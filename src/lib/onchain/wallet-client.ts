@@ -204,6 +204,46 @@ export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
   throw new Error("boing_tx_hash_missing");
 }
 
+export async function requestBuyerAddress(
+  chain: "evm" | "solana" | "boing" | string,
+): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+    };
+    solana?: {
+      connect: () => Promise<{ publicKey: { toString: () => string } }>;
+    };
+    boing?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+    };
+  };
+
+  if (chain === "evm") {
+    if (!w.ethereum) return null;
+    const accounts = (await w.ethereum.request({
+      method: "eth_requestAccounts",
+    })) as string[];
+    return accounts[0] ?? null;
+  }
+  if (chain === "solana") {
+    if (!w.solana) return null;
+    const session = await w.solana.connect();
+    return session.publicKey.toString();
+  }
+  if (chain === "boing") {
+    if (!w.boing?.request) return null;
+    const result = await w.boing.request({ method: "boing_requestAccounts" });
+    if (typeof result === "string") return result;
+    if (Array.isArray(result) && typeof result[0] === "string") return result[0];
+    if (result && typeof result === "object" && "address" in result) {
+      return String((result as { address: unknown }).address);
+    }
+  }
+  return null;
+}
+
 export function browserWalletAvailable(
   chain: "evm" | "solana" | "boing" | string,
 ): boolean {
@@ -227,6 +267,7 @@ export async function sendSolanaMintFromWallet(
 ): Promise<{ signature: string; assetAddress?: string }> {
   const res = await fetch("/api/onchain/prepare", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ listingId, action, amountUsd }),
   });

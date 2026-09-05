@@ -92,6 +92,7 @@ export function WorkCard({
           stage={listing.stage}
           sold={sold || bucket === "sold"}
           listingType={listing.type}
+          chain={listing.chain}
         />
       ) : null}
       {footer ? <div className="work-tile__footer">{footer}</div> : null}

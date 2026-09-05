@@ -162,6 +162,7 @@ export default async function ListingDetailPage({
             stage={listing.stage}
             sold={soldIds.has(listing.id)}
             listingType={listing.type}
+            chain={listing.chain}
           />
 
           <dl
