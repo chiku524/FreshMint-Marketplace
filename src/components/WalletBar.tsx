@@ -55,7 +55,16 @@ export function WalletBar({
   }, []);
 
   useEffect(() => {
+    if (initialUser) return;
     void refresh();
+  }, [initialUser, refresh]);
+
+  useEffect(() => {
+    const onAuth = () => {
+      void refresh();
+    };
+    window.addEventListener("fm-auth-changed", onAuth);
+    return () => window.removeEventListener("fm-auth-changed", onAuth);
   }, [refresh]);
 
   function handleAuthResponse(data: {

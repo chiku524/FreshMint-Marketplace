@@ -15,12 +15,15 @@ export default async function SignInPage({
     error?: string;
     challenge?: string;
     name?: string;
+    switch?: string;
   }>;
 }) {
   const params = await searchParams;
   const nextPath = safeNextPath(params.next);
   const user = await getSessionUser();
-  if (user && !params.challenge) redirect(nextPath);
+  if (user && !params.challenge && !params.error && params.switch !== "1") {
+    redirect(nextPath);
+  }
 
   return (
     <div className="page-wrap">
@@ -31,6 +34,15 @@ export default async function SignInPage({
         Use Google or email to open your profile, then link EVM, Solana, or Boing
         wallets. Wallet-only sign-in still works from the header.
       </p>
+      {user && (params.error || params.switch === "1") ? (
+        <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", maxWidth: "48ch" }}>
+          Still signed in as {user.displayName}.{" "}
+          <Link href={`/api/auth/logout?next=${encodeURIComponent(`/sign-in?next=${encodeURIComponent(nextPath)}`)}`}>
+            Sign out
+          </Link>{" "}
+          to use Google or another account.
+        </p>
+      ) : null}
       <AccountAuthForm
         mode="sign-in"
         nextPath={nextPath}

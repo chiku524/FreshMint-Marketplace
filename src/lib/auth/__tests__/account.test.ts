@@ -10,9 +10,11 @@ import {
 import { hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth/password";
 import {
   authUsesMemoryStore,
+  clearSessionCookie,
   jsonWithSessionCookie,
   SESSION_COOKIE,
 } from "@/lib/auth/session";
+import { NextResponse } from "next/server";
 import { absoluteAppUrl, appBaseUrl, safeNextPath } from "@/lib/auth/paths";
 import {
   enableMemoryMode,
@@ -78,6 +80,13 @@ describe("appBaseUrl", () => {
 });
 
 describe("jsonWithSessionCookie", () => {
+  it("clears the session cookie on a response", () => {
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set(SESSION_COOKIE, "stale.demo.jwt");
+    clearSessionCookie(res);
+    expect(res.cookies.get(SESSION_COOKIE)?.value).toBe("");
+  });
+
   it("sets the session cookie on the JSON response", () => {
     const expiresAt = new Date(Date.now() + 60_000);
     const res = jsonWithSessionCookie(

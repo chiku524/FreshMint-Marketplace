@@ -43,6 +43,7 @@ import {
   buildBoingPurchaseIntent,
   verifyBoingTx,
 } from "@/lib/onchain/boing";
+import { quoteNativeFromUsd } from "@/lib/onchain/fx";
 import { hashTextMedia } from "@/lib/media/upload";
 import { parseEther } from "viem";
 
@@ -1205,7 +1206,9 @@ export async function purchaseListing(input: {
         : buildSolanaPurchaseIntent({
             buyerAddress,
             mintAddress: listing.contractAddress ?? "unknown",
-            priceLamports: Math.round(amountUsd * 1_000_000),
+            priceLamports: Number(
+              quoteNativeFromUsd(amountUsd, "solana").baseUnits,
+            ),
             listingId: listing.id,
           });
 

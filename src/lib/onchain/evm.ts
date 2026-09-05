@@ -6,7 +6,6 @@ import {
   encodeFunctionData,
   http,
   isAddress,
-  parseEther,
   type Hex,
   type TransactionReceipt,
 } from "viem";
@@ -19,6 +18,7 @@ import {
 } from "@/lib/chains/registry";
 import type { Chain } from "@/lib/discovery/types";
 import { freshMintErc721Abi } from "./abi";
+import { quoteNativeFromUsd } from "./fx";
 
 export interface MintIntent {
   chain: Chain;
@@ -68,13 +68,10 @@ export function buildEvmMintIntent(input: {
     throw new Error(`evm_mint_requires_evm_network:${network}`);
   }
 
-  const priceWei = parseEther(
-    String(
-      Math.max(input.priceUsd ?? 0, 0) > 0
-        ? (input.priceUsd! / 3000).toFixed(6)
-        : "0",
-    ),
-  );
+  const priceWei =
+    (input.priceUsd ?? 0) > 0
+      ? quoteNativeFromUsd(input.priceUsd!, "evm").baseUnits
+      : 0n;
 
   const provisionalTokenId = String(
     BigInt(
@@ -168,9 +165,10 @@ export function buildEvmPurchaseIntent(input: {
   const market = (listingContract ||
     liveMarket ||
     "0x0000000000000000000000000000000000000000") as Hex;
-  const valueWei = BigInt(
-    Math.max(1, Math.floor((input.amountUsd ?? 1) * 1e15)),
-  );
+  const valueWei =
+    (input.amountUsd ?? 0) > 0
+      ? quoteNativeFromUsd(input.amountUsd!, "evm").baseUnits
+      : 1n;
   const from = isAddress(input.buyerAddress) ? input.buyerAddress : undefined;
 
   if (!minted && !liveMarket) {

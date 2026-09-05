@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
+import { isPostgresConfigured } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import type { Chain } from "@/lib/discovery/types";
@@ -17,14 +18,17 @@ import {
   buildSolanaMintIntent,
   buildSolanaMintTransactionBase64,
   buildSolanaPurchaseIntent,
-  buildSolanaMemoTransactionBase64,
+  buildSolanaPurchaseTransactionBase64,
   isValidSolanaAddress,
 } from "@/lib/onchain/solana";
+import { publicNativeQuote, quoteNativeFromUsd } from "@/lib/onchain/fx";
+import { platformFeeRecipients } from "@/lib/fees/platform";
 import { NextRequest, NextResponse } from "next/server";
 
 type PrepareListing = {
   id: string;
   title: string;
+  creatorId: string;
   chain: Chain;
   network: string | null;
   contractAddress: string | null;
@@ -50,6 +54,7 @@ async function loadListing(listingId: string): Promise<{
       listing: {
         id: row.id,
         title: row.title,
+        creatorId: row.creatorId,
         chain: row.chain,
         network: row.network,
         contractAddress: row.contractAddress ?? null,
@@ -68,6 +73,7 @@ async function loadListing(listingId: string): Promise<{
         listing: {
           id: row.id,
           title: row.title,
+          creatorId: row.creatorId,
           chain: row.chain as Chain,
           network: row.network,
           contractAddress: row.contractAddress,
@@ -88,6 +94,7 @@ async function loadListing(listingId: string): Promise<{
     listing: {
       id: fallback.id,
       title: fallback.title,
+      creatorId: fallback.creatorId,
       chain: fallback.chain,
       network: fallback.network,
       contractAddress: fallback.contractAddress ?? null,
@@ -222,19 +229,23 @@ export async function POST(req: NextRequest) {
   }
 
   // buy
+  const amountUsd = body.data.amountUsd ?? listing.priceUsd ?? 0;
+  const quote = publicNativeQuote(quoteNativeFromUsd(amountUsd, listing.chain));
+
   if (listing.chain === "evm") {
     const buy = buildEvmPurchaseIntent({
       buyerAddress: wallet,
       contractAddress: listing.contractAddress,
       tokenId: listing.tokenId ?? "0",
       network,
-      amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
+      amountUsd,
       tokenUri,
     });
     return NextResponse.json({
       ok: true,
       intent: buy,
       walletTx: buy.walletTx,
+      quote,
     });
   }
   if (listing.chain === "boing") {
@@ -243,7 +254,7 @@ export async function POST(req: NextRequest) {
       listingId: listing.id,
       collection: listing.contractAddress,
       tokenId: listing.tokenId,
-      amountUsd: body.data.amountUsd ?? listing.priceUsd ?? 0,
+      amountUsd,
       metadataUri: tokenUri,
       title: listing.title,
     });
@@ -251,24 +262,28 @@ export async function POST(req: NextRequest) {
       ok: true,
       intent: buy,
       walletTx: buy.walletTx,
+      quote,
     });
   }
 
   const buy = buildSolanaPurchaseIntent({
     buyerAddress: wallet,
     mintAddress: listing.contractAddress ?? "unknown",
-    priceLamports: Math.round(
-      (body.data.amountUsd ?? listing.priceUsd ?? 0) * 1_000_000,
-    ),
+    priceLamports: Number(quote.baseUnits),
     listingId: listing.id,
   });
   let serialized: string | null = null;
+  let paysNative = false;
   if (isValidSolanaAddress(wallet)) {
     try {
-      serialized = await buildSolanaMemoTransactionBase64({
+      const built = await buildSolanaPurchaseTransactionBase64({
         feePayer: wallet,
         memo: buy.message,
+        payoutAddress: await resolveSolanaPayout(listing.creatorId),
+        lamports: Number(quote.baseUnits),
       });
+      serialized = built.serialized;
+      paysNative = built.paysNative;
     } catch {
       serialized = null;
     }
@@ -281,5 +296,29 @@ export async function POST(req: NextRequest) {
     intent: buy,
     serialized,
     walletTx,
+    quote: { ...quote, paysNative },
   });
+}
+
+async function resolveSolanaPayout(creatorId: string): Promise<string | null> {
+  const fees = platformFeeRecipients();
+  const { getMemoryEngine } = await import("@/lib/data/memory-store");
+  const creator = getMemoryEngine().state.creators.get(creatorId);
+  const seller = creator?.wallets.find((w) => w.chain === "solana")?.address;
+  for (const address of [seller, fees.treasurySolana, fees.operatorSolana]) {
+    if (address && isValidSolanaAddress(address)) return address;
+  }
+  if (isPostgresConfigured()) {
+    try {
+      const row = await prisma.user.findUnique({
+        where: { id: creatorId },
+        include: { wallets: true },
+      });
+      const fromDb = row?.wallets.find((w) => w.chain === "solana")?.address;
+      if (fromDb && isValidSolanaAddress(fromDb)) return fromDb;
+    } catch {
+      // stay with env payouts
+    }
+  }
+  return null;
 }

@@ -3,6 +3,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction,
@@ -234,6 +235,48 @@ export async function sendSolanaMemoWithServerKey(memo: string): Promise<{
     commitment: "confirmed",
   });
   return { txHash: sig };
+}
+
+export async function buildSolanaPurchaseTransactionBase64(input: {
+  feePayer: string;
+  memo: string;
+  payoutAddress?: string | null;
+  lamports: number;
+}): Promise<{ serialized: string; paysNative: boolean; payoutAddress?: string }> {
+  const connection = new Connection(rpcUrl(), "confirmed");
+  const payer = new PublicKey(input.feePayer);
+  const memoIx = new TransactionInstruction({
+    keys: [{ pubkey: payer, isSigner: true, isWritable: false }],
+    programId: MEMO_PROGRAM_ID,
+    data: Buffer.from(input.memo, "utf8"),
+  });
+  const { blockhash } = await connection.getLatestBlockhash();
+  const tx = new Transaction({
+    feePayer: payer,
+    recentBlockhash: blockhash,
+  });
+  const payout =
+    input.payoutAddress && isValidSolanaAddress(input.payoutAddress)
+      ? new PublicKey(input.payoutAddress)
+      : null;
+  const paysNative = Boolean(payout && input.lamports > 0);
+  if (payout && input.lamports > 0) {
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: payer,
+        toPubkey: payout,
+        lamports: input.lamports,
+      }),
+    );
+  }
+  tx.add(memoIx);
+  return {
+    serialized: tx
+      .serialize({ requireAllSignatures: false, verifySignatures: false })
+      .toString("base64"),
+    paysNative,
+    payoutAddress: payout?.toBase58(),
+  };
 }
 
 export async function buildSolanaMemoTransactionBase64(input: {

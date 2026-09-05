@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   const state = await readGoogleOAuthState(stateToken);
   if (!state) return fail(req, "google_invalid");
 
-  const verifier = await readGooglePkce();
+  const verifier = await readGooglePkce(req);
   if (!verifier) return fail(req, "google_invalid");
 
   try {

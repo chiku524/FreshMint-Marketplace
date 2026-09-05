@@ -5,6 +5,7 @@ import {
   splitSaleProceeds,
 } from "@/lib/fees/platform";
 import type { Chain } from "@/lib/discovery/types";
+import { quoteNativeFromUsd } from "@/lib/onchain/fx";
 import {
   browserWalletAvailable,
   maybeSendWalletTx,
@@ -57,6 +58,8 @@ export function ListingActions({
   const [justSold, setJustSold] = useState(false);
   const feePreview =
     priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
+  const nativeQuote =
+    priceUsd != null && priceUsd > 0 ? quoteNativeFromUsd(priceUsd, chain) : null;
   const uniqueSold = sold || justSold;
   const canBuy = priceUsd != null && !uniqueSold;
 
@@ -302,6 +305,7 @@ export function ListingActions({
             style={{ margin: "0 0 0.35rem", fontSize: "1rem" }}
           >
             Confirm purchase · ${priceUsd}
+            {nativeQuote ? ` · ${nativeQuote.formatted}` : ""}
           </p>
           {feePreview ? (
             <p
@@ -312,8 +316,10 @@ export function ListingActions({
                 lineHeight: 1.45,
               }}
             >
-              {PLATFORM_FEE_PERCENT.total}% platform fee (
-              {PLATFORM_FEE_PERCENT.treasury}% treasury ·{" "}
+              Wallet pays {nativeQuote?.formatted ?? "the listed price"} at $
+              {nativeQuote?.usdPerNative.toLocaleString()}/{nativeQuote?.symbol}{" "}
+              so it matches ${priceUsd}. {PLATFORM_FEE_PERCENT.total}% platform
+              fee ({PLATFORM_FEE_PERCENT.treasury}% treasury ·{" "}
               {PLATFORM_FEE_PERCENT.operator}% operator). Seller receives $
               {feePreview.sellerNetUsd.toFixed(2)}; marketplace $
               {feePreview.feeTreasuryUsd.toFixed(2)}; operator $

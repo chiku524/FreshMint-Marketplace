@@ -7,7 +7,11 @@ import {
   isGoogleAuthConfigured,
 } from "@/lib/auth/google";
 import { absoluteAppUrl, safeNextPath } from "@/lib/auth/paths";
-import { getSessionUser } from "@/lib/auth/session";
+import {
+  clearSessionCookie,
+  destroySession,
+  getSessionUser,
+} from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +25,11 @@ export async function GET(req: NextRequest) {
 
   const next = safeNextPath(req.nextUrl.searchParams.get("next"));
   const link = req.nextUrl.searchParams.get("intent") === "link";
-  const user = link ? await getSessionUser() : null;
+  const user = link ? await getSessionUser(req) : null;
+
+  if (!link) {
+    await destroySession();
+  }
 
   const state = await createGoogleOAuthState({
     next,
@@ -34,6 +42,7 @@ export async function GET(req: NextRequest) {
     requestUrl: req.url,
   });
   const res = NextResponse.redirect(url);
+  if (!link) clearSessionCookie(res);
   res.cookies.set(GOOGLE_PKCE_COOKIE, verifier, googlePkceCookieOptions());
   return res;
 }

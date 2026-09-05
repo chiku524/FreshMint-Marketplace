@@ -15,7 +15,7 @@ export default async function SignUpPage({
   const params = await searchParams;
   const nextPath = safeNextPath(params.next);
   const user = await getSessionUser();
-  if (user) redirect(nextPath);
+  if (user && !params.error) redirect(nextPath);
 
   return (
     <div className="page-wrap">

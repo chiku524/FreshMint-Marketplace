@@ -82,9 +82,17 @@ export function createGooglePkce(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
-export async function readGooglePkce(): Promise<string | null> {
-  const jar = await cookies();
-  return jar.get(PKCE_COOKIE)?.value ?? null;
+export async function readGooglePkce(req?: {
+  cookies: { get: (name: string) => { value: string } | undefined };
+}): Promise<string | null> {
+  const fromRequest = req?.cookies.get(PKCE_COOKIE)?.value;
+  if (fromRequest) return fromRequest;
+  try {
+    const jar = await cookies();
+    return jar.get(PKCE_COOKIE)?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function googleAuthorizeUrl(input: {

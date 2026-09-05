@@ -192,6 +192,11 @@ export async function destroySession(): Promise<void> {
   jar.set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
+export function clearSessionCookie(res: NextResponse): NextResponse {
+  res.cookies.set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+  return res;
+}
+
 async function sessionUserFromMemory(userId: string): Promise<SessionUser | null> {
   const { getMemoryState } = await import("@/lib/data/memory-store");
   const creator = getMemoryState().creators.get(userId);
