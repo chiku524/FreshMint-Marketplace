@@ -7,6 +7,7 @@ import {
 } from "@/lib/data/memory-store";
 import {
   confirmOnchainTx,
+  createCollectionForUser,
   createListingForUser,
   followArtist,
   listPendingNominations,
@@ -15,6 +16,7 @@ import {
   recordSignal,
   settleNomination,
   transitionListingStage,
+  withdrawPurchaseToWallet,
 } from "@/lib/marketplace/service";
 import { createShelf } from "@/lib/marketplace/editorial";
 import { splitSaleProceeds } from "@/lib/fees/platform";
@@ -42,6 +44,84 @@ describe("marketplace service (memory mode)", () => {
     if (!result.ok) return;
     expect(result.listing.stage).toBe("soft_launch");
     expect(getMemoryEngine().state.listings.has(result.listing.id)).toBe(true);
+  });
+
+  it("creates a collection and attaches a scheduled drop", async () => {
+    const collection = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Dawn Set",
+      network: "solana",
+    });
+    expect(collection.ok).toBe(true);
+    if (!collection.ok) return;
+
+    const start = Date.now() + 2 * 60 * 60 * 1000;
+    const end = start + 3 * 60 * 60 * 1000;
+    const drop = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Dawn Drop",
+      description: "scheduled OE",
+      type: "open_edition",
+      network: "solana",
+      priceUsd: 18,
+      medium: "digital",
+      styleTags: ["dawn"],
+      mediaContent: `dawn-drop-${Date.now()}`,
+      collectionId: collection.collection.id,
+      isCollectionHero: true,
+      oeStartsAt: new Date(start).toISOString(),
+      oeEndsAt: new Date(end).toISOString(),
+      publishSoftLaunch: true,
+    });
+    expect(drop.ok).toBe(true);
+    if (!drop.ok) return;
+    expect(drop.listing.collectionId).toBe(collection.collection.id);
+    expect(drop.listing.isCollectionHero).toBe(true);
+    expect(drop.listing.oeStartsAt).toBeGreaterThan(Date.now());
+    const stored = getMemoryEngine().state.collections.get(
+      collection.collection.id,
+    );
+    expect(stored?.heroListingId).toBe(drop.listing.id);
+    expect(stored?.totalItems).toBe(1);
+  });
+
+  it("rejects a collection piece without a collection and foreign collections", async () => {
+    const missing = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Loose piece",
+      description: "",
+      type: "collection",
+      chain: "evm",
+      priceUsd: 20,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `loose-piece-${Date.now()}`,
+    });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.errors).toContain("collection_required");
+
+    const collection = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Owned Set",
+      chain: "evm",
+    });
+    expect(collection.ok).toBe(true);
+    if (!collection.ok) return;
+
+    const stolen = await createListingForUser({
+      creatorId: "artist-glitch",
+      title: "Not yours",
+      description: "",
+      type: "collection",
+      chain: "evm",
+      priceUsd: 22,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `stolen-piece-${Date.now()}`,
+      collectionId: collection.collection.id,
+    });
+    expect(stolen.ok).toBe(false);
+    if (!stolen.ok) expect(stolen.errors).toContain("collection_forbidden");
   });
 
   it("records signals and follow graph edges", async () => {
@@ -92,10 +172,10 @@ describe("marketplace service (memory mode)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.txHash).toBeTruthy();
-    expect(result.fees.feeTotalUsd).toBeCloseTo(listing.priceUsd * 0.025, 5);
-    expect(result.fees.feeTreasuryUsd).toBeCloseTo(listing.priceUsd * 0.015, 5);
-    expect(result.fees.feeOperatorUsd).toBeCloseTo(listing.priceUsd * 0.01, 5);
-    expect(result.fees.sellerNetUsd).toBeCloseTo(listing.priceUsd * 0.975, 5);
+    expect(result.fees.feeTotalUsd).toBeCloseTo(listing.priceUsd * 0.0025, 5);
+    expect(result.fees.feeTreasuryUsd).toBeCloseTo(listing.priceUsd * 0.0025, 5);
+    expect(result.fees.feeOperatorUsd).toBe(0);
+    expect(result.fees.sellerNetUsd).toBeCloseTo(listing.priceUsd * 0.9975, 5);
     expect(
       engine.state.creators.get(listing.creatorId)?.completedSales,
     ).toBe(beforeSales + 1);
@@ -294,7 +374,7 @@ describe("marketplace service (memory mode)", () => {
     expect(shelf.shelf.listingIds.length).toBe(listingIds.length);
   });
 
-  it("soft-launches a Boing listing with a wallet mint intent", async () => {
+  it("soft-launches a Boing listing without minting", async () => {
     const created = await createListingForUser({
       creatorId: "artist-fresh",
       title: "Boing Work",
@@ -311,11 +391,63 @@ describe("marketplace service (memory mode)", () => {
     if (!created.ok) return;
     expect(created.listing.chain).toBe("boing");
     expect(created.listing.network).toBe("boing");
-    expect("walletTx" in created).toBe(true);
-    expect("walletTx" in created && created.walletTx).toMatchObject({
+    expect(created.listing.mintTxHash).toBeFalsy();
+    expect("walletTx" in created && created.walletTx).toBeFalsy();
+  });
+
+  it("withdraws a collected listing to a wallet", async () => {
+    const created = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Withdraw Me",
+      description: "",
+      type: "single",
+      network: "boing",
+      priceUsd: 16,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `withdraw-media-${Date.now()}`,
+      publishSoftLaunch: true,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const bought = await purchaseListing({
+      listingId: created.listing.id,
+      buyerId: "collector-kai",
+      amountUsd: 16,
+    });
+    expect(bought.ok).toBe(true);
+
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    const purchase = getMemoryPurchases().find(
+      (p) => p.listingId === created.listing.id && p.buyerId === "collector-kai",
+    );
+    expect(purchase).toBeTruthy();
+    if (!purchase) return;
+
+    const withdrawn = await withdrawPurchaseToWallet({
+      purchaseId: purchase.id,
+      buyerId: "collector-kai",
+      destinationAddress: `0x${"ab".repeat(32)}`,
+    });
+    expect(withdrawn.ok).toBe(true);
+    if (!withdrawn.ok) return;
+    expect(withdrawn.txHash).toBeTruthy();
+    expect(withdrawn.walletTx).toMatchObject({
       chain: "boing",
       method: "boing_sendTransaction",
     });
+    expect(
+      getMemoryPurchases().find((p) => p.id === purchase.id)?.withdrawnAt,
+    ).toBeTruthy();
+
+    const again = await withdrawPurchaseToWallet({
+      purchaseId: purchase.id,
+      buyerId: "collector-kai",
+      destinationAddress: `0x${"ab".repeat(32)}`,
+    });
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.error).toBe("already_withdrawn");
   });
 
   it("advances stage and confirms on-chain tx", async () => {

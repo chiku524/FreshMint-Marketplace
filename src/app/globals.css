@@ -928,7 +928,8 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 @media (max-width: 800px) {
-  .listing-detail-grid {
+  .listing-detail-grid,
+  .create-split {
     grid-template-columns: 1fr !important;
   }
 }

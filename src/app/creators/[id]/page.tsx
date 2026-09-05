@@ -24,6 +24,9 @@ export default async function CreatorProfilePage({
   const works = [...engine.state.listings.values()]
     .filter((l) => l.creatorId === id && !l.delisted && l.stage !== "draft")
     .sort((a, b) => b.createdAt - a.createdAt);
+  const collections = [...engine.state.collections.values()].filter(
+    (c) => c.creatorId === id,
+  );
 
   const user = await getSessionUser();
   const soldIds = await listClosedPrimarySaleIds();
@@ -78,6 +81,21 @@ export default async function CreatorProfilePage({
         </div>
         <FollowButton artistId={id} initiallyFollowing={following} />
       </div>
+
+      {collections.length ? (
+        <section style={{ marginBottom: "2rem" }}>
+          <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.4rem" }}>
+            Collections ({collections.length})
+          </h2>
+          <p style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", margin: 0 }}>
+            {collections.map((collection) => (
+              <Link key={collection.id} href={`/collections/${collection.id}`} className="badge">
+                {collection.title} · {collection.totalItems}
+              </Link>
+            ))}
+          </p>
+        </section>
+      ) : null}
 
       <h2 className="display" style={{ margin: "0 0 1rem", fontSize: "1.4rem" }}>
         Works ({works.length})

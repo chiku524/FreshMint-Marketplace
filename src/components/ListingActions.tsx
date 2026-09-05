@@ -5,34 +5,9 @@ import {
   splitSaleProceeds,
 } from "@/lib/fees/platform";
 import type { Chain } from "@/lib/discovery/types";
-import { quoteNativeFromUsd } from "@/lib/onchain/fx";
-import {
-  browserWalletAvailable,
-  maybeSendWalletTx,
-  requestBuyerAddress,
-} from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-
-async function confirmTx(
-  listingId: string,
-  action: "mint" | "buy",
-  txHash: string,
-) {
-  await fetch("/api/onchain/confirm", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ listingId, action, txHash }),
-  });
-}
-
-const CHAIN_WALLET_LABEL: Record<Chain, string> = {
-  evm: "EVM",
-  solana: "Solana",
-  boing: "Boing",
-};
+import { useState } from "react";
 
 export function ListingActions({
   listingId,
@@ -56,44 +31,8 @@ export function ListingActions({
   const [confirmBuy, setConfirmBuy] = useState(false);
   const [buying, setBuying] = useState(false);
   const [justSold, setJustSold] = useState(false);
-  const [payNetwork, setPayNetwork] = useState<"native" | "ethereum" | "solana">(
-    "native",
-  );
-  const [liveQuote, setLiveQuote] = useState<{
-    settle: { formatted: string; usdPerNative: number; symbol: string; source: string };
-    pay: { formatted: string; usdPerNative: number; symbol: string };
-    bridged: boolean;
-  } | null>(null);
   const feePreview =
     priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
-  const fallbackQuote =
-    priceUsd != null && priceUsd > 0 ? quoteNativeFromUsd(priceUsd, chain) : null;
-  const nativeQuote = liveQuote?.settle ?? fallbackQuote;
-
-  useEffect(() => {
-    if (!confirmBuy || priceUsd == null || !(priceUsd > 0)) return;
-    const pay =
-      payNetwork === "native"
-        ? chain === "solana"
-          ? "solana"
-          : chain === "boing"
-            ? "boing"
-            : "ethereum"
-        : payNetwork;
-    const ac = new AbortController();
-    void fetch(
-      `/api/onchain/quote?amountUsd=${priceUsd}&chain=${chain}&payNetwork=${pay}`,
-      { signal: ac.signal, credentials: "include" },
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.ok) setLiveQuote(data);
-      })
-      .catch(() => {
-        // Keep the fallback quote if CoinGecko is unreachable.
-      });
-    return () => ac.abort();
-  }, [confirmBuy, priceUsd, chain, payNetwork]);
   const uniqueSold = sold || justSold;
   const canBuy = priceUsd != null && !uniqueSold;
 
@@ -123,9 +62,7 @@ export function ListingActions({
                 ? "Purchase blocked"
                 : raw === "invalid_body"
                   ? "Couldn't start this purchase. Try again."
-                  : raw === "wallet_required"
-                    ? `Connect a ${CHAIN_WALLET_LABEL[chain]} wallet to buy this on-chain`
-                    : raw;
+                  : raw;
       setMsg(error);
       return { error };
     }
@@ -137,82 +74,9 @@ export function ListingActions({
     if (!Number.isFinite(amount) || amount <= 0 || buying) return;
     setBuying(true);
     try {
-      let buyerAddress: string | null = null;
-      if (browserWalletAvailable(chain)) {
-        try {
-          buyerAddress = await requestBuyerAddress(chain);
-        } catch (e) {
-          setMsg(
-            e instanceof Error
-              ? e.message
-              : `Connect a ${CHAIN_WALLET_LABEL[chain]} wallet to buy`,
-          );
-          return;
-        }
-        if (!buyerAddress) {
-          setMsg(
-            `Connect a ${CHAIN_WALLET_LABEL[chain]} wallet to receive this NFT on-chain`,
-          );
-          return;
-        }
-      }
-
-      if (buyerAddress) {
-        const prep = await post("/api/onchain/prepare", {
-          listingId,
-          action: "buy",
-          amountUsd: amount,
-          buyerAddress,
-        });
-        if (!prep || "error" in prep) return;
-        const preparedTx =
-          prep.walletTx ??
-          (prep.intent &&
-          typeof prep.intent === "object" &&
-          prep.intent !== null &&
-          "walletTx" in prep.intent
-            ? (prep.intent as { walletTx: unknown }).walletTx
-            : undefined);
-        try {
-          const hash = await maybeSendWalletTx({
-            walletTx: preparedTx,
-            listingId,
-            action: "buy",
-            amountUsd: amount,
-          });
-          if (hash) {
-            const data = await post("/api/purchase", {
-              listingId,
-              amountUsd: amount,
-              txHash: hash,
-              buyerAddress,
-            });
-            if (!data || "error" in data) {
-              if (data && data.error === "already_sold") {
-                setJustSold(true);
-                setConfirmBuy(false);
-              }
-              return;
-            }
-            await confirmTx(listingId, "buy", hash);
-            finishPurchase(
-              data,
-              `On-chain buy · ${hash.slice(0, 14)}…`,
-            );
-            return;
-          }
-        } catch (e) {
-          setMsg(
-            e instanceof Error ? e.message : "Wallet rejected the buy",
-          );
-          return;
-        }
-      }
-
       const data = await post("/api/purchase", {
         listingId,
         amountUsd: amount,
-        buyerAddress: buyerAddress ?? undefined,
       });
       if (!data || "error" in data) {
         if (data && data.error === "already_sold") {
@@ -221,26 +85,7 @@ export function ListingActions({
         }
         return;
       }
-      let note = `Collected · ${String(data.txHash).slice(0, 14)}…`;
-      if (!buyerAddress) {
-        note += ` · connect a ${CHAIN_WALLET_LABEL[chain]} wallet to receive the NFT on-chain`;
-      } else if (data.walletTx) {
-        try {
-          const hash = await maybeSendWalletTx({
-            walletTx: data.walletTx,
-            listingId,
-            action: "buy",
-            amountUsd: amount,
-          });
-          if (hash) {
-            await confirmTx(listingId, "buy", hash);
-            note = `On-chain buy · ${hash.slice(0, 14)}…`;
-          }
-        } catch (e) {
-          note += ` · on-chain skipped: ${e instanceof Error ? e.message : "wallet"}`;
-        }
-      }
-      finishPurchase(data, note);
+      finishPurchase(data, "Collected on FreshMint");
     } finally {
       setBuying(false);
     }
@@ -339,7 +184,6 @@ export function ListingActions({
             style={{ margin: "0 0 0.35rem", fontSize: "1rem" }}
           >
             Confirm purchase · ${priceUsd}
-            {nativeQuote ? ` · ${nativeQuote.formatted}` : ""}
           </p>
           {feePreview ? (
             <p
@@ -350,59 +194,12 @@ export function ListingActions({
                 lineHeight: 1.45,
               }}
             >
-              Settles on {CHAIN_WALLET_LABEL[chain]} as{" "}
-              {nativeQuote?.formatted ?? "the listed price"} at $
-              {Number(nativeQuote?.usdPerNative ?? 0).toLocaleString()}/
-              {nativeQuote?.symbol}
-              {nativeQuote && "source" in nativeQuote && nativeQuote.source === "live"
-                ? " (live)"
-                : ""}
-              .{" "}
-              {liveQuote?.bridged
-                ? `Pay with ${liveQuote.pay.symbol}: ${liveQuote.pay.formatted} at $${liveQuote.pay.usdPerNative.toLocaleString()}/${liveQuote.pay.symbol}, then bridge to ${nativeQuote?.symbol}. `
-                : ""}
-              {PLATFORM_FEE_PERCENT.total}% platform fee (
-              {PLATFORM_FEE_PERCENT.treasury}% treasury ·{" "}
-              {PLATFORM_FEE_PERCENT.operator}% operator). Seller receives $
-              {feePreview.sellerNetUsd.toFixed(2)}; marketplace $
-              {feePreview.feeTreasuryUsd.toFixed(2)}; operator $
-              {feePreview.feeOperatorUsd.toFixed(2)}.
+              Settles on FreshMint — withdraw to a {chain} wallet later if you
+              want it on-chain. {PLATFORM_FEE_PERCENT.total}% treasury fee
+              funds community updates. Seller receives $
+              {feePreview.sellerNetUsd.toFixed(2)}; treasury $
+              {feePreview.feeTreasuryUsd.toFixed(2)}.
             </p>
-          ) : null}
-          {chain !== "boing" ? (
-            <label
-              style={{
-                display: "block",
-                margin: "0 0 0.75rem",
-                color: "var(--ink-muted)",
-                fontSize: "0.8rem",
-              }}
-            >
-              Pay with
-              <select
-                value={payNetwork}
-                onChange={(e) =>
-                  setPayNetwork(e.target.value as "native" | "ethereum" | "solana")
-                }
-                style={{
-                  display: "block",
-                  marginTop: "0.35rem",
-                  background: "var(--panel)",
-                  border: "1px solid var(--line)",
-                  color: "var(--ink)",
-                  padding: "0.3rem 0.5rem",
-                }}
-              >
-                <option value="native">
-                  {chain === "solana" ? "SOL on Solana" : "ETH on the listing network"}
-                </option>
-                {chain === "solana" ? (
-                  <option value="ethereum">ETH (quoted, then bridged to SOL)</option>
-                ) : (
-                  <option value="solana">SOL (quoted, then bridged to ETH)</option>
-                )}
-              </select>
-            </label>
           ) : null}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
             <button

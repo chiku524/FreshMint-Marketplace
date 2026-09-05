@@ -2,7 +2,7 @@ import "@/lib/env";
 import { prisma } from "@/lib/db";
 import { DiscoveryEngine } from "@/lib/discovery";
 import { loadMarketplaceState, persistCreatorStats, persistListingSignals } from "@/lib/data/repository";
-import { toListing } from "@/lib/data/mappers";
+import { toCollection, toListing } from "@/lib/data/mappers";
 import {
   marketAddressFor,
   resolveNetwork,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/chains/registry";
 import type {
   Chain,
+  Collection,
   LaunchStage,
   ListingType,
   NetworkId,
@@ -27,23 +28,19 @@ import { isPostgresConfigured } from "@/lib/env";
 import { allowsRepeatPrimaryPurchase } from "@/lib/marketplace/sales";
 import {
   buildEvmMintIntent,
-  buildEvmPurchaseIntent,
   sendEvmMintWithServerKey,
   verifyEvmTx,
 } from "@/lib/onchain/evm";
 import {
   buildSolanaMintIntent,
-  buildSolanaPurchaseIntent,
   sendSolanaMemoWithServerKey,
   sendSolanaMetaplexMintWithServerKey,
   verifySolanaTx,
 } from "@/lib/onchain/solana";
 import {
   buildBoingMintIntent,
-  buildBoingPurchaseIntent,
   verifyBoingTx,
 } from "@/lib/onchain/boing";
-import { fetchLiveUsdRates, quoteNativeFromUsdLive } from "@/lib/onchain/fx";
 import { hashTextMedia } from "@/lib/media/upload";
 import { parseEther } from "viem";
 
@@ -92,6 +89,8 @@ export async function createListingForUser(input: {
   oeEndsAt?: string | null;
   auctionStartsAt?: string | null;
   auctionEndsAt?: string | null;
+  collectionId?: string | null;
+  isCollectionHero?: boolean;
   publishSoftLaunch?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
@@ -109,6 +108,19 @@ export async function createListingForUser(input: {
       ? `data:text/plain;base64,${Buffer.from(input.mediaContent).toString("base64").slice(0, 200)}`
       : null);
   const now = Date.now();
+
+  if (input.type === "collection" && !input.collectionId) {
+    return { ok: false as const, errors: ["collection_required"] };
+  }
+  if (input.collectionId) {
+    const collection = engine.state.collections.get(input.collectionId);
+    if (!collection) {
+      return { ok: false as const, errors: ["collection_not_found"] };
+    }
+    if (collection.creatorId !== input.creatorId) {
+      return { ok: false as const, errors: ["collection_forbidden"] };
+    }
+  }
 
   if (input.type === "open_edition" || input.type === "auction") {
     const startsAt =
@@ -161,8 +173,8 @@ export async function createListingForUser(input: {
     auctionEndsAt: input.auctionEndsAt
       ? new Date(input.auctionEndsAt).getTime()
       : null,
-    collectionId: null,
-    isCollectionHero: false,
+    collectionId: input.collectionId ?? null,
+    isCollectionHero: Boolean(input.isCollectionHero),
     signals: {
       saves: 0,
       follows: 0,
@@ -215,6 +227,19 @@ export async function createListingForUser(input: {
       id,
     };
     mem.state.listings.set(id, listing);
+    if (input.collectionId) {
+      const attached = attachListingToCollectionState(
+        mem.state.collections,
+        input.collectionId,
+        id,
+        Boolean(input.isCollectionHero),
+        input.creatorId,
+      );
+      if (!attached.ok) {
+        mem.state.listings.delete(id);
+        return attached;
+      }
+    }
     if (input.publishSoftLaunch) {
       return transitionListingStage(id, "soft_launch");
     }
@@ -245,8 +270,18 @@ export async function createListingForUser(input: {
       auctionEndsAt: input.auctionEndsAt
         ? new Date(input.auctionEndsAt)
         : null,
+      collectionId: input.collectionId ?? null,
+      isCollectionHero: Boolean(input.isCollectionHero),
     },
   });
+  if (input.collectionId) {
+    await syncCollectionMembership({
+      collectionId: input.collectionId,
+      listingId: created.id,
+      creatorId: input.creatorId,
+      isHero: Boolean(input.isCollectionHero),
+    });
+  }
 
   const user = await prisma.user.findUnique({ where: { id: input.creatorId } });
   if (user && !user.firstListingAt) {
@@ -261,6 +296,121 @@ export async function createListingForUser(input: {
   }
 
   return { ok: true as const, listing: toListing(created), errors: [] as string[] };
+}
+
+export async function createCollectionForUser(input: {
+  creatorId: string;
+  title: string;
+  chain?: Chain;
+  network?: NetworkId | string;
+}) {
+  const title = input.title.trim();
+  if (title.length < 1 || title.length > 120) {
+    return { ok: false as const, errors: ["invalid_title"] };
+  }
+  const network = resolveNetwork(input.network, input.chain);
+  const chain = vmFromNetwork(network);
+  const collection: Collection = {
+    id: `col-mem-${Date.now()}`,
+    title,
+    creatorId: input.creatorId,
+    chain,
+    heroListingId: null,
+    sampleListingIds: [],
+    totalItems: 0,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const mem = getMemoryEngine();
+    mem.state.collections.set(collection.id, collection);
+    return { ok: true as const, collection, errors: [] as string[] };
+  }
+
+  const created = await prisma.collection.create({
+    data: {
+      title,
+      creatorId: input.creatorId,
+      chain,
+    },
+  });
+  return {
+    ok: true as const,
+    collection: toCollection(created),
+    errors: [] as string[],
+  };
+}
+
+export async function listCollectionsForUser(creatorId: string) {
+  const engine = await getDiscoveryEngine();
+  return [...engine.state.collections.values()].filter(
+    (c) => c.creatorId === creatorId,
+  );
+}
+
+function attachListingToCollectionState(
+  collections: Map<string, Collection>,
+  collectionId: string,
+  listingId: string,
+  isHero: boolean,
+  creatorId: string,
+) {
+  const collection = collections.get(collectionId);
+  if (!collection) {
+    return { ok: false as const, errors: ["collection_not_found"] };
+  }
+  if (collection.creatorId !== creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+  const samples = collection.sampleListingIds.includes(listingId)
+    ? collection.sampleListingIds
+    : [...collection.sampleListingIds, listingId].slice(0, 12);
+  collections.set(collectionId, {
+    ...collection,
+    totalItems: collection.totalItems + 1,
+    heroListingId:
+      isHero || !collection.heroListingId
+        ? listingId
+        : collection.heroListingId,
+    sampleListingIds: samples,
+  });
+  return { ok: true as const };
+}
+
+async function syncCollectionMembership(input: {
+  collectionId: string;
+  listingId: string;
+  creatorId: string;
+  isHero: boolean;
+}) {
+  const collection = await prisma.collection.findUnique({
+    where: { id: input.collectionId },
+  });
+  if (!collection) {
+    return { ok: false as const, errors: ["collection_not_found"] };
+  }
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+  const samples = JSON.parse(collection.sampleIdsJson || "[]") as string[];
+  if (!samples.includes(input.listingId)) {
+    samples.push(input.listingId);
+  }
+  await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: {
+      totalItems: { increment: 1 },
+      heroListingId:
+        input.isHero || !collection.heroListingId
+          ? input.listingId
+          : collection.heroListingId,
+      sampleIdsJson: JSON.stringify(samples.slice(0, 12)),
+    },
+  });
+  return { ok: true as const };
 }
 
 export async function transitionListingStage(
@@ -306,149 +456,11 @@ export async function transitionListingStage(
     }
   }
 
-  let walletTx: unknown;
-  if (target === "soft_launch") {
-    const creatorProfile = engine.state.creators.get(listing.creatorId);
-    const network = resolveNetwork(listing.network, listing.chain);
-    const creatorAddress =
-      creatorProfile?.wallets.find((w) => w.chain === listing.chain)?.address ??
-      creatorProfile?.wallets[0]?.address ??
-      "unknown";
-    const tokenUri =
-      listing.mediaUrl ??
-      `https://freshmint.local/metadata/${listingId}`;
-
-    if (listing.chain === "evm") {
-      const mint = buildEvmMintIntent({
-        creatorAddress,
-        tokenUri,
-        listingId,
-        network,
-        priceUsd: listing.priceUsd,
-      });
-      walletTx = mint.walletTx;
-      const server = await sendEvmMintWithServerKey({
-        creatorAddress,
-        tokenUri,
-        network,
-        priceWei: parseEther("0"),
-      });
-      if (server) {
-        mint.txHash = server.txHash;
-        mint.status = "submitted";
-        if (server.tokenId) mint.tokenId = server.tokenId;
-        walletTx = undefined;
-      }
-      if (!memory) {
-        await prisma.listing.update({
-          where: { id: listingId },
-          data: {
-            mintTxHash: mint.txHash || null,
-            contractAddress: mint.contractAddress,
-            tokenId: mint.tokenId,
-            network,
-          },
-        });
-      } else {
-        const row = engine.state.listings.get(listingId);
-        if (row) {
-          engine.state.listings.set(listingId, {
-            ...row,
-            mintTxHash: mint.txHash || null,
-            contractAddress: mint.contractAddress,
-            tokenId: mint.tokenId,
-            network,
-          });
-        }
-      }
-    } else if (listing.chain === "boing") {
-      const mint = buildBoingMintIntent({
-        creatorAddress,
-        metadataUri: tokenUri,
-        listingId,
-        title: listing.title,
-      });
-      walletTx = mint.walletTx;
-      if (!memory) {
-        await prisma.listing.update({
-          where: { id: listingId },
-          data: {
-            mintTxHash: mint.txHash || null,
-            contractAddress: mint.contractAddress,
-            tokenId: mint.tokenId,
-            network: "boing",
-          },
-        });
-      } else {
-        const row = engine.state.listings.get(listingId);
-        if (row) {
-          engine.state.listings.set(listingId, {
-            ...row,
-            mintTxHash: mint.txHash || null,
-            contractAddress: mint.contractAddress,
-            tokenId: mint.tokenId,
-            network: "boing",
-          });
-        }
-      }
-    } else {
-      const mint = buildSolanaMintIntent({
-        creatorAddress,
-        metadataUri: tokenUri,
-        listingId,
-        title: listing.title,
-      });
-      walletTx = mint.walletTx;
-      const mx = await sendSolanaMetaplexMintWithServerKey({
-        metadataUri: tokenUri,
-        name: listing.title,
-        ownerAddress: creatorAddress,
-      });
-      if (mx) {
-        mint.txHash = mx.txHash;
-        mint.status = "submitted";
-        mint.contractAddress = mx.assetAddress;
-        mint.tokenId = mx.assetAddress;
-        walletTx = undefined;
-      } else {
-        const server = await sendSolanaMemoWithServerKey(String(mint.calldata));
-        if (server) {
-          mint.txHash = server.txHash;
-          mint.status = "submitted";
-          walletTx = undefined;
-        }
-      }
-      if (!memory) {
-        await prisma.listing.update({
-          where: { id: listingId },
-          data: {
-            mintTxHash: mint.txHash || null,
-            contractAddress: mint.contractAddress,
-            tokenId: mint.tokenId,
-            network: "solana",
-          },
-        });
-      } else {
-        const row = engine.state.listings.get(listingId);
-        if (row) {
-          engine.state.listings.set(listingId, {
-            ...row,
-            mintTxHash: mint.txHash || null,
-            contractAddress: mint.contractAddress,
-            tokenId: mint.tokenId,
-            network: "solana",
-          });
-        }
-      }
-    }
-  }
-
   if (memory) {
     return {
       ok: true as const,
       listing: engine.state.listings.get(listingId) ?? listing,
       errors: [] as string[],
-      walletTx,
     };
   }
 
@@ -459,7 +471,208 @@ export async function transitionListingStage(
     ok: true as const,
     listing: toListing(updated),
     errors: [] as string[],
+  };
+}
+
+async function mintListingToAddress(input: {
+  listingId: string;
+  ownerAddress: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const listing = engine.state.listings.get(input.listingId);
+  if (!listing) {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+  const network = resolveNetwork(listing.network, listing.chain);
+  const tokenUri =
+    listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
+  const ownerAddress = input.ownerAddress;
+
+  let walletTx: unknown;
+  let txHash: string | null = null;
+  let contractAddress: string | null = listing.contractAddress ?? null;
+  let tokenId: string | null = listing.tokenId ?? null;
+
+  if (listing.chain === "evm") {
+    const mint = buildEvmMintIntent({
+      creatorAddress: ownerAddress,
+      tokenUri,
+      listingId: listing.id,
+      network,
+      priceUsd: listing.priceUsd,
+    });
+    walletTx = mint.walletTx;
+    txHash = mint.txHash || null;
+    contractAddress = mint.contractAddress;
+    tokenId = mint.tokenId;
+    const server = await sendEvmMintWithServerKey({
+      creatorAddress: ownerAddress,
+      tokenUri,
+      network,
+      priceWei: parseEther("0"),
+    });
+    if (server) {
+      txHash = server.txHash;
+      if (server.tokenId) tokenId = server.tokenId;
+      walletTx = undefined;
+    }
+  } else if (listing.chain === "boing") {
+    const mint = buildBoingMintIntent({
+      creatorAddress: ownerAddress,
+      metadataUri: tokenUri,
+      listingId: listing.id,
+      title: listing.title,
+    });
+    walletTx = mint.walletTx;
+    txHash = mint.txHash || null;
+    contractAddress = mint.contractAddress;
+    tokenId = mint.tokenId;
+  } else {
+    const mint = buildSolanaMintIntent({
+      creatorAddress: ownerAddress,
+      metadataUri: tokenUri,
+      listingId: listing.id,
+      title: listing.title,
+    });
+    walletTx = mint.walletTx;
+    txHash = mint.txHash || null;
+    contractAddress = mint.contractAddress;
+    tokenId = mint.tokenId;
+    const mx = await sendSolanaMetaplexMintWithServerKey({
+      metadataUri: tokenUri,
+      name: listing.title,
+      ownerAddress,
+    });
+    if (mx) {
+      txHash = mx.txHash;
+      contractAddress = mx.assetAddress;
+      tokenId = mx.assetAddress;
+      walletTx = undefined;
+    } else {
+      const server = await sendSolanaMemoWithServerKey(String(mint.calldata));
+      if (server) {
+        txHash = server.txHash;
+        walletTx = undefined;
+      }
+    }
+  }
+
+  if (!txHash) {
+    txHash = `pending-withdraw:${listing.id}:${Date.now()}`;
+  }
+
+  if (!memory) {
+    await prisma.listing.update({
+      where: { id: listing.id },
+      data: {
+        mintTxHash: listing.mintTxHash ?? txHash,
+        contractAddress,
+        tokenId,
+        network,
+      },
+    });
+  } else {
+    const row = engine.state.listings.get(listing.id);
+    if (row) {
+      engine.state.listings.set(listing.id, {
+        ...row,
+        mintTxHash: row.mintTxHash ?? txHash,
+        contractAddress,
+        tokenId,
+        network,
+      });
+    }
+  }
+
+  return {
+    ok: true as const,
+    txHash,
     walletTx,
+    contractAddress,
+    tokenId,
+    chain: listing.chain,
+    network,
+  };
+}
+
+export async function withdrawPurchaseToWallet(input: {
+  purchaseId: string;
+  buyerId: string;
+  destinationAddress?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryPurchases, updateMemoryPurchase } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+
+  const purchase = memory
+    ? getMemoryPurchases().find((p) => p.id === input.purchaseId)
+    : await prisma.purchase.findUnique({ where: { id: input.purchaseId } });
+  if (!purchase || purchase.buyerId !== input.buyerId) {
+    return { ok: false as const, error: "unavailable" };
+  }
+  if (purchase.withdrawnAt) {
+    return { ok: false as const, error: "already_withdrawn" };
+  }
+
+  const listing = engine.state.listings.get(purchase.listingId);
+  if (!listing) {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  let destination = input.destinationAddress?.trim() || "";
+  if (!destination) {
+    const owner = engine.state.creators.get(input.buyerId);
+    destination =
+      owner?.wallets.find((w) => w.chain === listing.chain)?.address ??
+      owner?.wallets[0]?.address ??
+      "";
+  }
+  if (!destination) {
+    return { ok: false as const, error: "wallet_required" };
+  }
+
+  const minted = await mintListingToAddress({
+    listingId: listing.id,
+    ownerAddress: destination,
+  });
+  if (!minted.ok) return minted;
+
+  const withdrawnAt = Date.now();
+  if (memory) {
+    updateMemoryPurchase(purchase.id, {
+      withdrawTxHash: minted.txHash,
+      withdrawAddress: destination,
+      withdrawnAt,
+    });
+  } else {
+    await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: {
+        withdrawTxHash: minted.txHash,
+        withdrawAddress: destination,
+        withdrawnAt: new Date(withdrawnAt),
+      },
+    });
+  }
+
+  return {
+    ok: true as const,
+    purchaseId: purchase.id,
+    listingId: listing.id,
+    destinationAddress: destination,
+    txHash: minted.txHash,
+    walletTx: minted.walletTx,
+    chain: minted.chain,
+    network: minted.network,
   };
 }
 
@@ -1125,120 +1338,20 @@ export async function purchaseListing(input: {
   }
 
   let isFirst = true;
-  let buyerAddress = "unknown";
   if (memory) {
     const { getMemoryPurchases } = await import("@/lib/data/memory-store");
     isFirst = !getMemoryPurchases().some(
       (p) => p.buyerId === input.buyerId && p.listingId === input.listingId,
     );
-    let buyer = engine.state.creators.get(input.buyerId);
-    if (!buyer && isPostgresConfigured()) {
-      try {
-        const dbBuyer = await prisma.user.findUnique({
-          where: { id: input.buyerId },
-          include: { wallets: true },
-        });
-        if (dbBuyer) {
-          buyer = ensureMemoryCreator({
-            id: dbBuyer.id,
-            displayName: dbBuyer.displayName,
-            wallets: dbBuyer.wallets,
-            curatorScore: dbBuyer.curatorScore,
-            verifiedCreator: dbBuyer.verifiedCreator,
-            establishedBadge: dbBuyer.establishedBadge,
-            completedSales: dbBuyer.completedSales,
-            lifetimePrimaryVolumeUsd: dbBuyer.lifetimePrimaryVolumeUsd,
-          });
-        }
-      } catch {
-        // stay with catalog buyer if any
-      }
-    }
-    if (!buyer) {
-      buyer = ensureMemoryCreator({
-        id: input.buyerId,
-        displayName: "Collector",
-      });
-    }
-    buyerAddress =
-      buyer.wallets.find((w) => w.chain === listing.chain)?.address ??
-      "unknown";
   } else {
     const prior = await prisma.purchase.count({
       where: { buyerId: input.buyerId, listingId: input.listingId },
     });
     isFirst = prior === 0;
-    const buyer = await prisma.user.findUnique({
-      where: { id: input.buyerId },
-      include: { wallets: true },
-    });
-    buyerAddress =
-      buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
-      "unknown";
-  }
-  if (input.buyerAddress) {
-    buyerAddress = input.buyerAddress;
   }
 
-  const tokenUri =
-    listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
-  await fetchLiveUsdRates();
-  const purchaseIntent =
-    listing.chain === "evm"
-      ? buildEvmPurchaseIntent({
-          buyerAddress,
-          contractAddress: listing.contractAddress,
-          tokenId: listing.tokenId ?? "0",
-          network: listing.network,
-          amountUsd,
-          tokenUri,
-        })
-      : listing.chain === "boing"
-        ? buildBoingPurchaseIntent({
-            buyerAddress,
-            listingId: listing.id,
-            collection: listing.contractAddress,
-            tokenId: listing.tokenId,
-            amountUsd,
-            metadataUri: tokenUri,
-            title:
-              engine.state.listings.get(listing.id)?.title ?? listing.id,
-          })
-        : buildSolanaPurchaseIntent({
-            buyerAddress,
-            mintAddress: listing.contractAddress ?? "unknown",
-            priceLamports: Number(
-              (await quoteNativeFromUsdLive(amountUsd, "solana")).baseUnits,
-            ),
-            listingId: listing.id,
-          });
-
-  let txHash = input.txHash || purchaseIntent.txHash;
-  let walletTx = input.txHash
-    ? undefined
-    : "walletTx" in purchaseIntent
-      ? purchaseIntent.walletTx
-      : undefined;
-
-  if (
-    !memory &&
-    listing.chain === "solana" &&
-    "message" in purchaseIntent
-  ) {
-    try {
-      const server = await sendSolanaMemoWithServerKey(purchaseIntent.message);
-      if (server) {
-        txHash = server.txHash;
-        walletTx = undefined;
-      }
-    } catch {
-      // Keep wallet settlement or a pending hash.
-    }
-  }
-
-  if (!txHash) {
-    txHash = `pending:${listing.id}:${Date.now()}`;
-  }
+  const txHash = input.txHash || `platform:${listing.id}:${Date.now()}`;
+  const walletTx = undefined;
 
   engine.recordPurchase({
     listingId: input.listingId,

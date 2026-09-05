@@ -21,6 +21,9 @@ export default async function ListingDetailPage({
   if (!listing || listing.delisted) notFound();
 
   const creator = engine.state.creators.get(listing.creatorId);
+  const collection = listing.collectionId
+    ? engine.state.collections.get(listing.collectionId)
+    : null;
   const emerging = creator
     ? isEmergingListing(listing, creator).emerging
     : false;
@@ -107,6 +110,12 @@ export default async function ListingDetailPage({
             {listing.priceUsd != null ? ` · $${listing.priceUsd}` : " · auction"}
             {" · "}
             {listing.medium}
+            {collection ? (
+              <>
+                {" · "}
+                <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+              </>
+            ) : null}
           </p>
           <p style={{ maxWidth: "48ch", lineHeight: 1.55 }}>
             {listing.description || "No description yet."}

@@ -4,7 +4,7 @@
 
 Minimal ERC-721 used for primary mints on Ethereum, Base, Arbitrum, and Optimism (testnets first).
 
-Primary `buy()` takes a **2.5%** platform fee (1.5% treasury + 1% operator); the seller receives **97.5%**. Fee recipients are set in the constructor and can be updated later via `setFeeRecipients` (contract owner only).
+Primary marketplace sales take a **0.25%** treasury fee off-chain. The optional on-chain `buy()` still splits 2.5% (1.5% treasury + 1% operator) if someone pays the contract directly; fee recipients are set in the constructor and can be updated later via `setFeeRecipients` (contract owner only).
 
 ```bash
 # Requires Foundry (forge)

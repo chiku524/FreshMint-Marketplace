@@ -35,6 +35,8 @@ const createSchema = z
     oeEndsAt: z.string().nullable().optional(),
     auctionStartsAt: z.string().nullable().optional(),
     auctionEndsAt: z.string().nullable().optional(),
+    collectionId: z.string().min(1).nullable().optional(),
+    isCollectionHero: z.boolean().optional(),
     publishSoftLaunch: z.boolean().optional(),
   })
   .refine((v) => Boolean(v.mediaHash || v.mediaContent), {
@@ -85,6 +87,8 @@ export async function POST(req: NextRequest) {
     oeEndsAt: body.data.oeEndsAt,
     auctionStartsAt: body.data.auctionStartsAt,
     auctionEndsAt: body.data.auctionEndsAt,
+    collectionId: body.data.collectionId,
+    isCollectionHero: body.data.isCollectionHero,
     publishSoftLaunch: body.data.publishSoftLaunch ?? true,
   });
 

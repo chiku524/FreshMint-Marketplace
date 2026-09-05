@@ -23,6 +23,9 @@ export type MemoryPurchase = {
   soldAt: number;
   txHash: string | null;
   chain: string;
+  withdrawTxHash?: string | null;
+  withdrawAddress?: string | null;
+  withdrawnAt?: number | null;
 };
 
 const globalMemory = globalThis as unknown as {
@@ -116,9 +119,23 @@ export function recordMemoryPurchase(
     soldAt: purchase.soldAt,
     txHash: purchase.txHash,
     chain: purchase.chain,
+    withdrawTxHash: purchase.withdrawTxHash ?? null,
+    withdrawAddress: purchase.withdrawAddress ?? null,
+    withdrawnAt: purchase.withdrawnAt ?? null,
   };
   getMemoryPurchases().push(row);
   return row;
+}
+
+export function updateMemoryPurchase(
+  purchaseId: string,
+  patch: Partial<MemoryPurchase>,
+): MemoryPurchase | null {
+  const rows = getMemoryPurchases();
+  const index = rows.findIndex((p) => p.id === purchaseId);
+  if (index < 0) return null;
+  rows[index] = { ...rows[index], ...patch };
+  return rows[index];
 }
 
 /** Keep signed-in wallet/email users in the in-memory catalog so /me and buys work. */

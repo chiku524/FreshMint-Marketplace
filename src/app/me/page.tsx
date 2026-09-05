@@ -1,5 +1,6 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WalletNftCard } from "@/components/WalletNftCard";
+import { WithdrawCollectedButton } from "@/components/WithdrawCollectedButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
@@ -53,7 +54,8 @@ export default async function MeCollectionPage() {
   return (
     <>
       <p style={{ color: "var(--ink-muted)", margin: "0 0 1.75rem", maxWidth: "52ch" }}>
-        Works you created, collected, hold in a linked wallet, curated, and bridged.
+        Works you created, collected, hold in a linked wallet, curated, and
+        bridged. Platform collects stay off-chain until you withdraw them.
       </p>
 
       <section style={{ marginBottom: "2.75rem" }}>
@@ -104,6 +106,20 @@ export default async function MeCollectionPage() {
                       Collected {new Date(item.purchasedAt).toLocaleDateString()} · $
                       {item.amountUsd}
                       {item.txHash ? ` · ${item.txHash.slice(0, 10)}…` : ""}
+                      <span style={{ display: "block", marginTop: "0.35rem" }}>
+                        <WithdrawCollectedButton
+                          purchaseId={item.purchaseId}
+                          chain={item.listing.chain}
+                          withdrawn={Boolean(
+                            "withdrawnAt" in item && item.withdrawnAt,
+                          )}
+                          withdrawTxHash={
+                            "withdrawTxHash" in item
+                              ? item.withdrawTxHash ?? null
+                              : null
+                          }
+                        />
+                      </span>
                     </>
                   )
                 }

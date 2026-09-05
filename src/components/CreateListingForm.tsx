@@ -1,18 +1,48 @@
 "use client";
 
-import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type ListingKind = "single" | "collection" | "open_edition" | "auction";
+type CollectionOption = { id: string; title: string; chain: string };
+
+function toLocalInput(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fromLocalInput(value: string): string | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
 
 export function CreateListingForm() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [listingType, setListingType] = useState<ListingKind>("single");
+  const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [media, setMedia] = useState<{
     mediaUrl: string;
     mediaHash: string;
   } | null>(null);
+
+  useEffect(() => {
+    function loadMine() {
+      void fetch("/api/collections?mine=1", { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : { collections: [] }))
+        .then((data: { collections?: CollectionOption[] }) => {
+          setCollections(data.collections ?? []);
+        })
+        .catch(() => setCollections([]));
+    }
+    loadMine();
+    window.addEventListener("fm-collections-changed", loadMine);
+    return () => window.removeEventListener("fm-collections-changed", loadMine);
+  }, []);
 
   async function uploadFile(file: File) {
     setBusy(true);
@@ -40,9 +70,12 @@ export function CreateListingForm() {
     setBusy(true);
     setError(null);
     setOk(null);
-    const fd = new FormData(e.currentTarget);
-    const type = String(fd.get("type"));
+    const fd = new FormData(form);
+    const type = String(fd.get("type")) as ListingKind;
     const textMedia = String(fd.get("mediaContent") ?? "");
+    const collectionId = String(fd.get("collectionId") ?? "");
+    const scheduled =
+      type === "open_edition" || type === "auction";
     const payload = {
       title: String(fd.get("title")),
       description: String(fd.get("description") ?? ""),
@@ -58,21 +91,43 @@ export function CreateListingForm() {
       mediaHash: media?.mediaHash,
       mediaUrl: media?.mediaUrl,
       publishSoftLaunch: true,
+      collectionId: collectionId || null,
+      isCollectionHero: fd.get("isCollectionHero") === "on",
       oeStartsAt:
-        type === "open_edition" ? new Date().toISOString() : null,
+        type === "open_edition"
+          ? fromLocalInput(String(fd.get("oeStartsAt") ?? ""))
+          : null,
       oeEndsAt:
         type === "open_edition"
-          ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          ? fromLocalInput(String(fd.get("oeEndsAt") ?? ""))
           : null,
-      auctionStartsAt: type === "auction" ? new Date().toISOString() : null,
+      auctionStartsAt:
+        type === "auction"
+          ? fromLocalInput(String(fd.get("auctionStartsAt") ?? ""))
+          : null,
       auctionEndsAt:
         type === "auction"
-          ? new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
+          ? fromLocalInput(String(fd.get("auctionEndsAt") ?? ""))
           : null,
     };
 
     if (!payload.mediaHash && !payload.mediaContent) {
       setError("Upload a file or paste media content");
+      setBusy(false);
+      return;
+    }
+    if (type === "collection" && !payload.collectionId) {
+      setError("Create or choose a collection for this piece");
+      setBusy(false);
+      return;
+    }
+    if (scheduled && type === "open_edition" && (!payload.oeStartsAt || !payload.oeEndsAt)) {
+      setError("Set an open-edition start and end");
+      setBusy(false);
+      return;
+    }
+    if (scheduled && type === "auction" && (!payload.auctionStartsAt || !payload.auctionEndsAt)) {
+      setError("Set an auction start and end");
       setBusy(false);
       return;
     }
@@ -89,35 +144,13 @@ export function CreateListingForm() {
           (data.errors && data.errors.join(", ")) || data.error || "failed",
         );
       }
-      let note = `Listed “${data.listing.title}” · stage ${data.listing.stage}`;
-      try {
-        const hash = await maybeSendWalletTx({
-          walletTx: data.walletTx,
-          listingId: data.listing.id,
-          action: "mint",
-          amountUsd: data.listing.priceUsd ?? undefined,
-        });
-        if (hash) {
-          await fetch("/api/onchain/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              listingId: data.listing.id,
-              action: "mint",
-              txHash: hash,
-            }),
-          });
-          note += ` · on-chain mint ${hash.slice(0, 14)}…`;
-        } else {
-          note += " · mint intent recorded";
-        }
-      } catch (walletErr) {
-        note += ` · wallet: ${walletErr instanceof Error ? walletErr.message : "skipped"}`;
-      }
-      setOk(note);
+      setOk(
+        `Listed “${data.listing.title}” · stage ${data.listing.stage}. Stays on FreshMint until someone withdraws it to a wallet.`,
+      );
       router.refresh();
       form.reset();
       setMedia(null);
+      setListingType("single");
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed");
     } finally {
@@ -133,6 +166,7 @@ export function CreateListingForm() {
     padding: "0.55rem 0.7rem",
     marginTop: "0.35rem",
   };
+  const now = Date.now();
 
   return (
     <form
@@ -140,7 +174,6 @@ export function CreateListingForm() {
       style={{
         display: "grid",
         gap: "0.9rem",
-        maxWidth: "36rem",
         border: "1px solid var(--line)",
         padding: "1.25rem",
         background: "var(--panel)",
@@ -161,10 +194,15 @@ export function CreateListingForm() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
         <label>
           Type
-          <select name="type" defaultValue="single" style={fieldStyle}>
+          <select
+            name="type"
+            value={listingType}
+            onChange={(e) => setListingType(e.target.value as ListingKind)}
+            style={fieldStyle}
+          >
             <option value="single">1/1 single</option>
-            <option value="open_edition">Open edition</option>
-            <option value="auction">Auction</option>
+            <option value="open_edition">Scheduled open edition</option>
+            <option value="auction">Scheduled auction</option>
             <option value="collection">Collection piece</option>
           </select>
         </label>
@@ -180,6 +218,73 @@ export function CreateListingForm() {
           </select>
         </label>
       </div>
+      <div>
+        <label>
+          Collection {listingType === "collection" ? "(required)" : "(optional)"}
+          <select name="collectionId" defaultValue="" style={fieldStyle}>
+            <option value="">
+              {collections.length ? "Standalone listing" : "No collections yet"}
+            </option>
+            {collections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: "flex", gap: "0.45rem", marginTop: "0.55rem", fontSize: "0.9rem" }}>
+          <input type="checkbox" name="isCollectionHero" />
+          Use as collection hero
+        </label>
+      </div>
+      {listingType === "open_edition" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+          <label>
+            Drop starts
+            <input
+              name="oeStartsAt"
+              type="datetime-local"
+              required
+              defaultValue={toLocalInput(now)}
+              style={fieldStyle}
+            />
+          </label>
+          <label>
+            Drop ends
+            <input
+              name="oeEndsAt"
+              type="datetime-local"
+              required
+              defaultValue={toLocalInput(now + 24 * 60 * 60 * 1000)}
+              style={fieldStyle}
+            />
+          </label>
+        </div>
+      ) : null}
+      {listingType === "auction" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+          <label>
+            Auction starts
+            <input
+              name="auctionStartsAt"
+              type="datetime-local"
+              required
+              defaultValue={toLocalInput(now)}
+              style={fieldStyle}
+            />
+          </label>
+          <label>
+            Auction ends
+            <input
+              name="auctionEndsAt"
+              type="datetime-local"
+              required
+              defaultValue={toLocalInput(now + 6 * 60 * 60 * 1000)}
+              style={fieldStyle}
+            />
+          </label>
+        </div>
+      ) : null}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
         <label>
           Price USD
