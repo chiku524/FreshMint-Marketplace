@@ -3,6 +3,8 @@ import {
   COLLECTION_MEDIA_CAP_BYTES,
   dropWindowFor,
   formatBytes,
+  matchDropCsvRow,
+  parseDropMetadataCsv,
   parseTraits,
   primarySupplyCap,
 } from "@/lib/marketplace/drops";
@@ -64,5 +66,37 @@ describe("drop helpers", () => {
   it("keeps a 10 GB collection cap", () => {
     expect(COLLECTION_MEDIA_CAP_BYTES).toBe(10 * 1024 * 1024 * 1024);
     expect(formatBytes(COLLECTION_MEDIA_CAP_BYTES)).toContain("GB");
+  });
+
+  it("parses OpenSea-style metadata CSV and matches by file name", () => {
+    const rows = parseDropMetadataCsv(`file_name,name,description,Background,Eyes
+garden-01.png,Static Garden #1,First leaf,Gold,Laser
+garden-02.png,Static Garden #2,Second leaf,Indigo,Calm
+`);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].traits).toEqual([
+      { trait_type: "Background", value: "Gold" },
+      { trait_type: "Eyes", value: "Laser" },
+    ]);
+    const matched = matchDropCsvRow(rows, {
+      title: "ignored",
+      mediaUrl: "/uploads/xyz.png",
+      fileHint: "garden-01.png",
+    });
+    expect(matched?.title).toBe("Static Garden #1");
+    expect(matched?.traits[0]).toEqual({
+      trait_type: "Background",
+      value: "Gold",
+    });
+  });
+
+  it("accepts attributes[Trait] headers", () => {
+    const rows = parseDropMetadataCsv(
+      `file_name,attributes[Background],attributes[Leaf]\nleaf.png,Gold,Maple\n`,
+    );
+    expect(rows[0].traits).toEqual([
+      { trait_type: "Background", value: "Gold" },
+      { trait_type: "Leaf", value: "Maple" },
+    ]);
   });
 });

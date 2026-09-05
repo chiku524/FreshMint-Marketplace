@@ -4,7 +4,10 @@ import { TraitEditor } from "@/components/TraitEditor";
 import type { DropKind, NftTrait } from "@/lib/discovery/types";
 import {
   COLLECTION_MEDIA_CAP_BYTES,
+  DROP_METADATA_CSV_EXAMPLE,
   formatBytes,
+  matchDropCsvRow,
+  parseDropMetadataCsv,
   parseTraits,
 } from "@/lib/marketplace/drops";
 import Link from "next/link";
@@ -22,6 +25,7 @@ type CollectionOption = {
 type DropItem = {
   key: string;
   title: string;
+  fileName: string;
   mediaUrl: string;
   mediaHash: string;
   size: number;
@@ -69,6 +73,7 @@ export function CreateDropForm() {
   const [endsAt, setEndsAt] = useState(toLocalInput(now + 25 * 60 * 60 * 1000));
   const [priceUsd, setPriceUsd] = useState("25");
   const [items, setItems] = useState<DropItem[]>([]);
+  const [csvNote, setCsvNote] = useState<string | null>(null);
 
   const selected = collections.find((c) => c.id === collectionId);
   const usedBytes =
@@ -141,6 +146,7 @@ export function CreateDropForm() {
         next.push({
           key: `${data.mediaHash}-${file.name}`,
           title: titleFromFile(file.name),
+          fileName: file.name,
           mediaUrl: data.mediaUrl,
           mediaHash: data.mediaHash,
           size: Number(data.size ?? file.size),
@@ -155,6 +161,48 @@ export function CreateDropForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function applyMetadataCsv(text: string) {
+    const rows = parseDropMetadataCsv(text);
+    if (!rows.length) {
+      setError("CSV needs a header row and at least one item");
+      setCsvNote(null);
+      return;
+    }
+    if (!items.length) {
+      setError("Upload artwork files first, then import the CSV");
+      setCsvNote(null);
+      return;
+    }
+
+    let matched = 0;
+    setItems((current) =>
+      current.map((item) => {
+        const row = matchDropCsvRow(rows, {
+          title: item.title,
+          mediaUrl: item.mediaUrl,
+          fileHint: item.fileName,
+        });
+        if (!row) return item;
+        matched += 1;
+        return {
+          ...item,
+          title: row.title || item.title,
+          traits: row.traits.length ? row.traits : item.traits,
+          maxSupply:
+            row.maxSupply != null
+              ? String(row.maxSupply)
+              : item.maxSupply,
+        };
+      }),
+    );
+    setError(null);
+    setCsvNote(
+      matched
+        ? `Applied traits to ${matched} of ${items.length} pieces from CSV`
+        : "No CSV rows matched your uploaded file names — check file_name values",
+    );
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -391,6 +439,51 @@ export function CreateDropForm() {
         <p className="drop-studio__quota">
           {formatBytes(usedBytes)} of {formatBytes(COLLECTION_MEDIA_CAP_BYTES)} used
         </p>
+      </div>
+
+      <div>
+        <label>
+          Traits CSV (OpenSea-style)
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            style={fieldStyle}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              void file.text().then(applyMetadataCsv).catch(() => {
+                setError("Could not read that CSV");
+              });
+            }}
+          />
+        </label>
+        <p className="drop-studio__quota">
+          Match rows with a <code>file_name</code> column (same names as your
+          uploads). Extra columns become traits.{" "}
+          <button
+            type="button"
+            className="drop-studio__sample"
+            onClick={() => {
+              const blob = new Blob([DROP_METADATA_CSV_EXAMPLE], {
+                type: "text/csv;charset=utf-8",
+              });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "freshmint-drop-metadata-sample.csv";
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Download sample CSV
+          </button>
+        </p>
+        {csvNote ? (
+          <p className="drop-studio__quota" style={{ color: "var(--emergent)" }}>
+            {csvNote}
+          </p>
+        ) : null}
       </div>
 
       {items.length ? (

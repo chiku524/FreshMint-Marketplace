@@ -1332,6 +1332,18 @@ html.fm-intro-pending .fm-intro-cover {
   font-size: 0.82rem;
 }
 
+.drop-studio__sample {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent-soft);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .drop-studio__items {
   display: grid;
   gap: 0.85rem;

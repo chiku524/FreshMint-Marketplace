@@ -198,6 +198,9 @@ export async function createListingForUser(input: {
     },
     delisted: false,
     appealStatus: "none" as const,
+    mintTxHash: null,
+    contractAddress: null,
+    tokenId: null,
   };
 
   // Validate against current inventory duplicates / quality.
