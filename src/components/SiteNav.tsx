@@ -158,6 +158,7 @@ function NavDropdown({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={item.href === "/me" ? false : undefined}
                 role="menuitem"
                 className="site-nav__item"
                 onClick={() => {

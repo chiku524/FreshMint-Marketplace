@@ -1,13 +1,33 @@
 import { isPostgresConfigured } from "@/lib/env";
 import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { CreatorProfile } from "@/lib/discovery/types";
 
 export const SESSION_COOKIE = "freshmint_session";
 const COOKIE = SESSION_COOKIE;
+
+export function readNamedCookie(
+  cookieHeader: string | null | undefined,
+  name: string,
+): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    if (trimmed.slice(0, eq) === name) {
+      try {
+        return decodeURIComponent(trimmed.slice(eq + 1));
+      } catch {
+        return trimmed.slice(eq + 1);
+      }
+    }
+  }
+  return undefined;
+}
 
 export type SessionUser = {
   id: string;
@@ -301,16 +321,29 @@ async function resolveSessionUser(jwt: string): Promise<SessionUser | null> {
 
 export async function getSessionUser(req?: {
   cookies: { get: (name: string) => { value: string } | undefined };
+  headers?: { get: (name: string) => string | null };
 }): Promise<SessionUser | null> {
   const fromRequest = req?.cookies.get(COOKIE)?.value;
   if (fromRequest) return resolveSessionUser(fromRequest);
+
+  const fromRequestHeader = readNamedCookie(req?.headers?.get("cookie"), COOKIE);
+  if (fromRequestHeader) return resolveSessionUser(fromRequestHeader);
+
   try {
     const jwt = (await cookies()).get(COOKIE)?.value;
-    if (!jwt) return null;
-    return resolveSessionUser(jwt);
+    if (jwt) return resolveSessionUser(jwt);
   } catch {
-    return null;
+    // Some RSC/prefetch contexts throw instead of returning the jar.
   }
+
+  try {
+    const jwt = readNamedCookie((await headers()).get("cookie"), COOKIE);
+    if (jwt) return resolveSessionUser(jwt);
+  } catch {
+    // No request context (tests, static generation).
+  }
+
+  return null;
 }
 
 /** After wallet/demo auth: either create session or return pending 2FA token. */

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   discoverEvmWallets,
@@ -37,6 +38,7 @@ export function WalletBar({
 }: {
   initialUser?: SessionUser | null;
 }) {
+  const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(initialUser);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,7 @@ export function WalletBar({
     if (data.user) {
       setUser(data.user);
       window.dispatchEvent(new Event("fm-auth-changed"));
+      router.refresh();
     }
   }
 
@@ -151,6 +154,7 @@ export function WalletBar({
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setUser(null);
     window.dispatchEvent(new Event("fm-auth-changed"));
+    router.refresh();
   }
 
   return (
@@ -163,6 +167,8 @@ export function WalletBar({
           onSuccess={(u) => {
             setChallenge(null);
             setUser(u as SessionUser);
+            window.dispatchEvent(new Event("fm-auth-changed"));
+            router.refresh();
             void refresh();
           }}
         />
@@ -180,6 +186,7 @@ export function WalletBar({
           <>
             <Link
               href="/me"
+              prefetch={false}
               style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}
             >
               {user.displayName}

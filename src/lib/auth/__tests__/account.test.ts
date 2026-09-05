@@ -12,6 +12,7 @@ import {
   authUsesMemoryStore,
   clearSessionCookie,
   jsonWithSessionCookie,
+  readNamedCookie,
   SESSION_COOKIE,
 } from "@/lib/auth/session";
 import { NextResponse } from "next/server";
@@ -76,6 +77,18 @@ describe("appBaseUrl", () => {
     expect(
       absoluteAppUrl("/me", "http://localhost:3000/api/auth/google/callback").href,
     ).toBe("https://fresh-mint-marketplace.vercel.app/me");
+  });
+});
+
+describe("readNamedCookie", () => {
+  it("reads a session cookie from a raw header", () => {
+    expect(
+      readNamedCookie(
+        "theme=dark; freshmint_session=abc.def.ghi; other=1",
+        SESSION_COOKIE,
+      ),
+    ).toBe("abc.def.ghi");
+    expect(readNamedCookie(null, SESSION_COOKIE)).toBeUndefined();
   });
 });
 
