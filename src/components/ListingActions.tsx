@@ -17,6 +17,8 @@ export function ListingActions({
   sold = false,
   listingType,
   chain = "evm",
+  dropState = "none",
+  repeatable = false,
 }: {
   listingId: string;
   creatorId?: string;
@@ -25,6 +27,8 @@ export function ListingActions({
   sold?: boolean;
   listingType?: string;
   chain?: Chain;
+  dropState?: "none" | "upcoming" | "live" | "ended";
+  repeatable?: boolean;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
@@ -34,7 +38,11 @@ export function ListingActions({
   const feePreview =
     priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
   const uniqueSold = sold || justSold;
-  const canBuy = priceUsd != null && !uniqueSold;
+  const canBuy =
+    priceUsd != null &&
+    !uniqueSold &&
+    dropState !== "upcoming" &&
+    dropState !== "ended";
 
   async function post(url: string, body: Record<string, unknown>) {
     setMsg(null);
@@ -56,7 +64,11 @@ export function ListingActions({
           ? "You can't buy your own work"
           : raw === "already_sold"
             ? "already_sold"
-            : raw === "unavailable"
+            : raw === "drop_not_started"
+              ? "This drop hasn't started yet"
+              : raw === "drop_ended"
+                ? "This drop has ended"
+                : raw === "unavailable"
               ? "This work isn't available to buy"
               : raw === "wash_blocked" || raw === "high_velocity_low_dwell"
                 ? "Purchase blocked"
@@ -100,7 +112,7 @@ export function ListingActions({
         ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
         : "";
     setConfirmBuy(false);
-    if (listingType !== "open_edition") setJustSold(true);
+    if (!repeatable && listingType !== "open_edition") setJustSold(true);
     setMsg(`${prefix}${feeNote}`);
     router.refresh();
   }
@@ -155,6 +167,12 @@ export function ListingActions({
         Nominate
       </button>
       {uniqueSold ? <span className="badge featured">Sold</span> : null}
+      {dropState === "upcoming" ? (
+        <span className="badge emerging">Drop scheduled</span>
+      ) : null}
+      {dropState === "ended" && !uniqueSold ? (
+        <span className="badge">Drop ended</span>
+      ) : null}
       {canBuy && !confirmBuy ? (
         <button
           type="button"

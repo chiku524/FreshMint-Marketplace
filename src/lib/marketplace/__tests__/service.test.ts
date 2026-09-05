@@ -9,6 +9,7 @@ import {
   confirmOnchainTx,
   createCollectionForUser,
   createListingForUser,
+  updateCollectionDrop,
   followArtist,
   listPendingNominations,
   nominateListingForUser,
@@ -506,5 +507,105 @@ describe("marketplace service (memory mode)", () => {
       txHash: "memosig1234567890abcdef",
     });
     expect(confirmed.ok).toBe(true);
+  });
+
+  it("schedules a limited drop with traits and a supply cap", async () => {
+    const collection = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Trait Garden",
+      network: "ethereum",
+    });
+    expect(collection.ok).toBe(true);
+    if (!collection.ok) return;
+
+    const start = Date.now() - 60 * 60 * 1000;
+    const end = Date.now() + 3 * 60 * 60 * 1000;
+    const scheduled = await updateCollectionDrop({
+      collectionId: collection.collection.id,
+      creatorId: "artist-fresh",
+      dropKind: "limited",
+      dropStartsAt: new Date(start).toISOString(),
+      dropEndsAt: new Date(end).toISOString(),
+      dropPriceUsd: 22,
+    });
+    expect(scheduled.ok).toBe(true);
+    if (!scheduled.ok) return;
+    expect(scheduled.collection.dropKind).toBe("limited");
+
+    const piece = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Gold Leaf",
+      description: "limited drop piece",
+      type: "collection",
+      network: "ethereum",
+      priceUsd: 22,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `gold-leaf-${Date.now()}`,
+      collectionId: collection.collection.id,
+      traits: [
+        { trait_type: "Background", value: "Gold" },
+        { trait_type: "Leaf", value: "Maple" },
+      ],
+      maxSupply: 2,
+      oeStartsAt: new Date(start).toISOString(),
+      oeEndsAt: new Date(end).toISOString(),
+      publishSoftLaunch: true,
+    });
+    expect(piece.ok).toBe(true);
+    if (!piece.ok) return;
+    expect(piece.listing.traits).toEqual([
+      { trait_type: "Background", value: "Gold" },
+      { trait_type: "Leaf", value: "Maple" },
+    ]);
+    expect(piece.listing.maxSupply).toBe(2);
+
+    const first = await purchaseListing({
+      listingId: piece.listing.id,
+      buyerId: "collector-mira",
+      amountUsd: 22,
+    });
+    expect(first.ok).toBe(true);
+    const second = await purchaseListing({
+      listingId: piece.listing.id,
+      buyerId: "collector-kai",
+      amountUsd: 22,
+    });
+    expect(second.ok).toBe(true);
+    const third = await purchaseListing({
+      listingId: piece.listing.id,
+      buyerId: "collector-mira",
+      amountUsd: 22,
+    });
+    expect(third.ok).toBe(false);
+    if (!third.ok) expect(third.error).toBe("already_sold");
+  });
+
+  it("blocks buys before a scheduled drop starts", async () => {
+    const start = Date.now() + 2 * 60 * 60 * 1000;
+    const end = start + 3 * 60 * 60 * 1000;
+    const drop = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Later Bloom",
+      description: "upcoming OE",
+      type: "open_edition",
+      network: "ethereum",
+      priceUsd: 12,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `later-bloom-${Date.now()}`,
+      oeStartsAt: new Date(start).toISOString(),
+      oeEndsAt: new Date(end).toISOString(),
+      publishSoftLaunch: true,
+    });
+    expect(drop.ok).toBe(true);
+    if (!drop.ok) return;
+    const result = await purchaseListing({
+      listingId: drop.listing.id,
+      buyerId: "collector-mira",
+      amountUsd: 12,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("drop_not_started");
   });
 });

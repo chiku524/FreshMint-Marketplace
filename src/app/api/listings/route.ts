@@ -37,6 +37,16 @@ const createSchema = z
     auctionEndsAt: z.string().nullable().optional(),
     collectionId: z.string().min(1).nullable().optional(),
     isCollectionHero: z.boolean().optional(),
+    traits: z
+      .array(
+        z.object({
+          trait_type: z.string().min(1).max(48),
+          value: z.string().min(1).max(80),
+        }),
+      )
+      .max(24)
+      .optional(),
+    maxSupply: z.number().int().positive().nullable().optional(),
     publishSoftLaunch: z.boolean().optional(),
   })
   .refine((v) => Boolean(v.mediaHash || v.mediaContent), {
@@ -89,6 +99,8 @@ export async function POST(req: NextRequest) {
     auctionEndsAt: body.data.auctionEndsAt,
     collectionId: body.data.collectionId,
     isCollectionHero: body.data.isCollectionHero,
+    traits: body.data.traits,
+    maxSupply: body.data.maxSupply,
     publishSoftLaunch: body.data.publishSoftLaunch ?? true,
   });
 

@@ -1297,6 +1297,102 @@ html.fm-intro-pending .fm-intro-cover {
   white-space: nowrap;
 }
 
+.drop-studio__kinds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+}
+
+.drop-studio__kinds button {
+  appearance: none;
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.drop-studio__kinds button:last-child {
+  border-right: 0;
+}
+
+.drop-studio__kinds button.is-active {
+  color: var(--ink);
+  background: rgba(110, 207, 154, 0.1);
+}
+
+.drop-studio__quota {
+  margin: 0.4rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
+.drop-studio__items {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.drop-studio__item {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.9rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+}
+
+.drop-studio__thumb {
+  min-height: 6.5rem;
+  background: var(--bg-mid) center / cover no-repeat;
+}
+
+.drop-studio__item-body {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.trait-editor {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.trait-editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.nft-traits {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+}
+
+.nft-traits > div {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  background: var(--bg-lift);
+}
+
+.nft-traits dt {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nft-traits dd {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-display), sans-serif;
+}
+
 @media (max-width: 560px) {
   .collections-row {
     grid-template-columns: 3.5rem minmax(0, 1fr);
@@ -1305,6 +1401,11 @@ html.fm-intro-pending .fm-intro-cover {
   .collections-row__count {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .drop-studio__item,
+  .trait-editor__row {
+    grid-template-columns: 1fr;
   }
 }
 

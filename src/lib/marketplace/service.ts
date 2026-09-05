@@ -25,7 +25,12 @@ import {
   maybeFlagWashCluster,
 } from "@/lib/integrity/sybil";
 import { isPostgresConfigured } from "@/lib/env";
-import { allowsRepeatPrimaryPurchase } from "@/lib/marketplace/sales";
+import {
+  dropWindowFor,
+  parseDropKind,
+  parseTraits,
+  primarySupplyCap,
+} from "@/lib/marketplace/drops";
 import {
   buildEvmMintIntent,
   sendEvmMintWithServerKey,
@@ -91,6 +96,8 @@ export async function createListingForUser(input: {
   auctionEndsAt?: string | null;
   collectionId?: string | null;
   isCollectionHero?: boolean;
+  traits?: { trait_type: string; value: string }[];
+  maxSupply?: number | null;
   publishSoftLaunch?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
@@ -175,6 +182,9 @@ export async function createListingForUser(input: {
       : null,
     collectionId: input.collectionId ?? null,
     isCollectionHero: Boolean(input.isCollectionHero),
+    traits: parseTraits(input.traits ?? []),
+    maxSupply:
+      input.maxSupply != null && input.maxSupply > 0 ? input.maxSupply : null,
     signals: {
       saves: 0,
       follows: 0,
@@ -273,6 +283,9 @@ export async function createListingForUser(input: {
         : null,
       collectionId: input.collectionId ?? null,
       isCollectionHero: Boolean(input.isCollectionHero),
+      traitsJson: JSON.stringify(parseTraits(input.traits ?? [])),
+      maxSupply:
+        input.maxSupply != null && input.maxSupply > 0 ? input.maxSupply : null,
     },
   });
   if (input.collectionId) {
@@ -319,6 +332,11 @@ export async function createCollectionForUser(input: {
     heroListingId: null,
     sampleListingIds: [],
     totalItems: 0,
+    dropKind: "none",
+    dropStartsAt: null,
+    dropEndsAt: null,
+    dropPriceUsd: null,
+    mediaBytes: 0,
   };
 
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
@@ -343,6 +361,115 @@ export async function createCollectionForUser(input: {
     collection: toCollection(created),
     errors: [] as string[],
   };
+}
+
+export async function updateCollectionDrop(input: {
+  collectionId: string;
+  creatorId: string;
+  dropKind: "limited" | "open";
+  dropStartsAt: string;
+  dropEndsAt: string;
+  dropPriceUsd?: number | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, errors: ["collection_not_found"] };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+
+  const startsAt = new Date(input.dropStartsAt).getTime();
+  const endsAt = new Date(input.dropEndsAt).getTime();
+  const cal = await validateDropWindow({
+    type: "open_edition",
+    startsAt,
+    endsAt,
+  });
+  if (!cal.ok) return { ok: false as const, errors: cal.errors };
+
+  const dropKind = parseDropKind(input.dropKind);
+  if (dropKind === "none") {
+    return { ok: false as const, errors: ["drop_kind_required"] };
+  }
+  const dropPriceUsd =
+    input.dropPriceUsd != null && input.dropPriceUsd > 0
+      ? input.dropPriceUsd
+      : null;
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const next: Collection = {
+    ...existing,
+    dropKind,
+    dropStartsAt: startsAt,
+    dropEndsAt: endsAt,
+    dropPriceUsd,
+    mediaBytes: existing.mediaBytes ?? 0,
+  };
+
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(input.collectionId, next);
+    return { ok: true as const, collection: next, errors: [] as string[] };
+  }
+
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: {
+      dropKind,
+      dropStartsAt: new Date(startsAt),
+      dropEndsAt: new Date(endsAt),
+      dropPriceUsd,
+    },
+  });
+  engine.state.collections.set(input.collectionId, toCollection(updated));
+  return {
+    ok: true as const,
+    collection: toCollection(updated),
+    errors: [] as string[],
+  };
+}
+
+export async function reserveCollectionMedia(input: {
+  collectionId: string;
+  creatorId: string;
+  size: number;
+}) {
+  const { COLLECTION_MEDIA_CAP_BYTES } = await import("@/lib/marketplace/drops");
+  if (!(input.size > 0)) {
+    return { ok: false as const, error: "empty_file" };
+  }
+
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, error: "collection_not_found" };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+  const used = existing.mediaBytes ?? 0;
+  if (used + input.size > COLLECTION_MEDIA_CAP_BYTES) {
+    return { ok: false as const, error: "collection_quota" };
+  }
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const mediaBytes = used + input.size;
+
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(input.collectionId, {
+      ...existing,
+      mediaBytes,
+    });
+    return { ok: true as const, mediaBytes };
+  }
+
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: { mediaBytes },
+  });
+  engine.state.collections.set(input.collectionId, toCollection(updated));
+  return { ok: true as const, mediaBytes: updated.mediaBytes };
 }
 
 export async function listCollectionsForUser(creatorId: string) {
@@ -1237,6 +1364,12 @@ export async function purchaseListing(input: {
     tokenId: string | null;
     priceUsd: number | null;
     mediaUrl: string | null;
+    collectionId: string | null;
+    maxSupply: number | null;
+    oeStartsAt: number | null;
+    oeEndsAt: number | null;
+    auctionStartsAt: number | null;
+    auctionEndsAt: number | null;
   } | null = null;
 
   const { getMemoryEngine, ensureMemoryCreator } = await import(
@@ -1261,6 +1394,12 @@ export async function purchaseListing(input: {
         tokenId: l.tokenId ?? null,
         priceUsd: l.priceUsd,
         mediaUrl: l.mediaUrl ?? null,
+        collectionId: l.collectionId,
+        maxSupply: l.maxSupply ?? null,
+        oeStartsAt: l.oeStartsAt,
+        oeEndsAt: l.oeEndsAt,
+        auctionStartsAt: l.auctionStartsAt,
+        auctionEndsAt: l.auctionEndsAt,
       };
     }
   }
@@ -1283,6 +1422,12 @@ export async function purchaseListing(input: {
           tokenId: listing.tokenId,
           priceUsd: listing.priceUsd,
           mediaUrl: listing.mediaUrl,
+          collectionId: listing.collectionId,
+          maxSupply: listing.maxSupply,
+          oeStartsAt: listing.oeStartsAt?.getTime() ?? null,
+          oeEndsAt: listing.oeEndsAt?.getTime() ?? null,
+          auctionStartsAt: listing.auctionStartsAt?.getTime() ?? null,
+          auctionEndsAt: listing.auctionEndsAt?.getTime() ?? null,
         };
       }
     } catch {
@@ -1305,6 +1450,12 @@ export async function purchaseListing(input: {
       tokenId: l.tokenId ?? null,
       priceUsd: l.priceUsd,
       mediaUrl: l.mediaUrl ?? null,
+      collectionId: l.collectionId,
+      maxSupply: l.maxSupply ?? null,
+      oeStartsAt: l.oeStartsAt,
+      oeEndsAt: l.oeEndsAt,
+      auctionStartsAt: l.auctionStartsAt,
+      auctionEndsAt: l.auctionEndsAt,
     };
   }
 
@@ -1316,15 +1467,25 @@ export async function purchaseListing(input: {
   const fees = splitSaleProceeds(amountUsd);
   const feeRecipients = platformFeeRecipients();
 
-  if (!allowsRepeatPrimaryPurchase(listing.type)) {
-    const alreadySold = memory
-      ? (await import("@/lib/data/memory-store"))
-          .getMemoryPurchases()
-          .some((p) => p.listingId === listing.id)
-      : (await prisma.purchase.count({ where: { listingId: listing.id } })) > 0;
-    if (alreadySold) {
-      return { ok: false as const, error: "already_sold" };
-    }
+  const collection = listing.collectionId
+    ? engine.state.collections.get(listing.collectionId) ?? null
+    : null;
+  const window = dropWindowFor(listing, collection);
+  if (window.state === "upcoming") {
+    return { ok: false as const, error: "drop_not_started" };
+  }
+  if (window.state === "ended") {
+    return { ok: false as const, error: "drop_ended" };
+  }
+
+  const soldCount = memory
+    ? (await import("@/lib/data/memory-store"))
+        .getMemoryPurchases()
+        .filter((p) => p.listingId === listing.id).length
+    : await prisma.purchase.count({ where: { listingId: listing.id } });
+  const cap = primarySupplyCap(listing);
+  if (cap != null && soldCount >= cap) {
+    return { ok: false as const, error: "already_sold" };
   }
 
   const wash = await detectWashRisk({

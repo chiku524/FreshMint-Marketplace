@@ -2,14 +2,19 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { put } from "@vercel/blob";
+import { DROP_FILE_MAX_BYTES } from "@/lib/marketplace/drops";
 
-const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+const MAX_BYTES = DROP_FILE_MAX_BYTES;
 const ALLOWED = new Set([
   "image/png",
   "image/jpeg",
   "image/webp",
   "image/gif",
   "image/svg+xml",
+  "video/mp4",
+  "video/webm",
+  "audio/mpeg",
+  "audio/wav",
   "text/plain",
 ]);
 
@@ -28,6 +33,10 @@ function extFor(mimeType: string): string {
   if (mimeType === "image/webp") return "webp";
   if (mimeType === "image/gif") return "gif";
   if (mimeType === "image/svg+xml") return "svg";
+  if (mimeType === "video/mp4") return "mp4";
+  if (mimeType === "video/webm") return "webm";
+  if (mimeType === "audio/mpeg") return "mp3";
+  if (mimeType === "audio/wav") return "wav";
   return "bin";
 }
 

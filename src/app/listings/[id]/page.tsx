@@ -5,6 +5,7 @@ import { PageViewTracker } from "@/components/PageViewTracker";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
 import { getSessionUser } from "@/lib/auth/session";
+import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
@@ -46,6 +47,8 @@ export default async function ListingDetailPage({
   const explorerTx = listing.mintTxHash
     ? net.explorerTx(listing.mintTxHash)
     : null;
+  const drop = dropWindowFor(listing, collection);
+  const cap = primarySupplyCap(listing);
   const explorerToken =
     listing.contractAddress && listing.tokenId && net.explorerToken
       ? net.explorerToken(listing.contractAddress, listing.tokenId)
@@ -101,6 +104,20 @@ export default async function ListingDetailPage({
             <span className="badge">{net.label}</span>
             <span className="badge">{listing.type.replace("_", " ")}</span>
             <span className="badge">{listing.stage.replace("_", " ")}</span>
+            {cap != null ? (
+              <span className="badge">
+                {cap === 1 ? "1/1" : `Limited ${cap}`}
+              </span>
+            ) : listing.type === "open_edition" ? (
+              <span className="badge">Open edition</span>
+            ) : null}
+            {drop.state === "upcoming" ? (
+              <span className="badge emerging">Drop scheduled</span>
+            ) : null}
+            {drop.state === "live" ? (
+              <span className="badge emerging">Drop live</span>
+            ) : null}
+            {drop.state === "ended" ? <span className="badge">Drop ended</span> : null}
           </div>
           <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
             {listing.title}
@@ -159,6 +176,16 @@ export default async function ListingDetailPage({
               ))}
             </p>
           ) : null}
+          {listing.traits && listing.traits.length > 0 ? (
+            <dl className="nft-traits">
+              {listing.traits.map((trait) => (
+                <div key={`${trait.trait_type}-${trait.value}`}>
+                  <dt>{trait.trait_type}</dt>
+                  <dd>{trait.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
 
           <div style={{ marginTop: "1.25rem" }}>
             <FollowButton
@@ -176,6 +203,8 @@ export default async function ListingDetailPage({
             sold={soldIds.has(listing.id)}
             listingType={listing.type}
             chain={listing.chain}
+            dropState={drop.state}
+            repeatable={cap == null || cap > 1}
           />
 
           <dl

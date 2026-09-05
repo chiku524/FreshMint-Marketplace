@@ -6,6 +6,7 @@ import type {
   Wallet as DbWallet,
 } from "@/generated/prisma/client";
 import { resolveNetwork } from "@/lib/chains/registry";
+import { parseDropKind, parseTraits } from "@/lib/marketplace/drops";
 import type {
   Collection,
   CreatorProfile,
@@ -84,6 +85,8 @@ export function toListing(listing: DbListing): Listing {
     auctionEndsAt: listing.auctionEndsAt?.getTime() ?? null,
     collectionId: listing.collectionId,
     isCollectionHero: listing.isCollectionHero,
+    traits: parseTraits(JSON.parse(listing.traitsJson || "[]")),
+    maxSupply: listing.maxSupply,
     signals: signalsFromListing(listing),
     delisted: listing.delisted,
     appealStatus: listing.appealStatus as Listing["appealStatus"],
@@ -102,6 +105,11 @@ export function toCollection(c: DbCollection): Collection {
     heroListingId: c.heroListingId,
     sampleListingIds: JSON.parse(c.sampleIdsJson || "[]") as string[],
     totalItems: c.totalItems,
+    dropKind: parseDropKind(c.dropKind),
+    dropStartsAt: c.dropStartsAt?.getTime() ?? null,
+    dropEndsAt: c.dropEndsAt?.getTime() ?? null,
+    dropPriceUsd: c.dropPriceUsd,
+    mediaBytes: c.mediaBytes,
   };
 }
 

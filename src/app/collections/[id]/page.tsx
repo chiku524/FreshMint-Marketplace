@@ -1,5 +1,6 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
+import { formatBytes, COLLECTION_MEDIA_CAP_BYTES } from "@/lib/marketplace/drops";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
@@ -36,6 +37,11 @@ export default async function CollectionDetailPage({
       <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
         <span className="badge">{collection.chain}</span>
         <span className="badge">{collection.totalItems} items</span>
+        {collection.dropKind && collection.dropKind !== "none" ? (
+          <span className="badge emerging">
+            {collection.dropKind === "open" ? "Open edition drop" : "Limited drop"}
+          </span>
+        ) : null}
         {hasTraction ? <span className="badge emerging">Traction</span> : null}
       </div>
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
@@ -46,8 +52,26 @@ export default async function CollectionDetailPage({
         <Link href={`/creators/${collection.creatorId}`}>
           {creator?.displayName ?? collection.creatorId}
         </Link>
-        . Collect on FreshMint — withdraw to a wallet later if you want it
-        on-chain.
+        . Collect on FreshMint — buy from the artist, then withdraw later if
+        you want it on-chain.
+        {collection.dropStartsAt && collection.dropEndsAt ? (
+          <>
+            {" "}
+            Drop {new Date(collection.dropStartsAt).toLocaleString()} –{" "}
+            {new Date(collection.dropEndsAt).toLocaleString()}
+            {collection.dropPriceUsd != null
+              ? ` · $${collection.dropPriceUsd}`
+              : ""}
+            .
+          </>
+        ) : null}
+        {collection.mediaBytes ? (
+          <>
+            {" "}
+            Art {formatBytes(collection.mediaBytes)} of{" "}
+            {formatBytes(COLLECTION_MEDIA_CAP_BYTES)}.
+          </>
+        ) : null}
       </p>
 
       {listings.length ? (

@@ -1,4 +1,5 @@
 import { CreateCollectionForm } from "@/components/CreateCollectionForm";
+import { CreateDropForm } from "@/components/CreateDropForm";
 import { CreateListingForm } from "@/components/CreateListingForm";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 
@@ -8,10 +9,18 @@ export default function CreatePage() {
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Create collection & drop
       </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "0.85rem" }}>
-        Pick a mint network for later withdrawal, then soft-launch to Open Lane.
+      <p style={{ color: "var(--ink-muted)", maxWidth: "58ch", marginBottom: "0.85rem" }}>
+        Schedule a limited or open-edition drop so collectors buy from you.
+        Upload up to 10 GB of art per collection, add traits, then pick a mint
+        network for later withdrawal.
       </p>
       <HowItWorksNote kind="create" />
+      <section style={{ marginBottom: "2.25rem" }}>
+        <h2 className="display" style={{ fontSize: "1.35rem", margin: "0 0 0.75rem" }}>
+          Schedule a drop
+        </h2>
+        <CreateDropForm />
+      </section>
       <div
         style={{
           display: "grid",
@@ -29,7 +38,7 @@ export default function CreatePage() {
         </section>
         <section>
           <h2 className="display" style={{ fontSize: "1.35rem", margin: "0 0 0.75rem" }}>
-            Listing or scheduled drop
+            Single listing or auction
           </h2>
           <CreateListingForm />
         </section>

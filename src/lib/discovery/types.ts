@@ -13,6 +13,13 @@ export type NetworkId =
 
 export type ListingType = "single" | "collection" | "open_edition" | "auction";
 
+export type DropKind = "none" | "limited" | "open";
+
+export interface NftTrait {
+  trait_type: string;
+  value: string;
+}
+
 /** Lifecycle stages from the plan: Draft → Soft launch → Rising → Featured. */
 export type LaunchStage =
   | "draft"
@@ -93,6 +100,9 @@ export interface Listing {
   auctionEndsAt: number | null;
   collectionId: string | null;
   isCollectionHero: boolean;
+  traits?: NftTrait[];
+  /** Null/omitted = 1 for 1/1s, unlimited for open editions. */
+  maxSupply?: number | null;
   signals: ListingSignals;
   delisted: boolean;
   appealStatus: AppealStatus;
@@ -109,6 +119,11 @@ export interface Collection {
   heroListingId: string | null;
   sampleListingIds: string[];
   totalItems: number;
+  dropKind?: DropKind;
+  dropStartsAt?: number | null;
+  dropEndsAt?: number | null;
+  dropPriceUsd?: number | null;
+  mediaBytes?: number;
 }
 
 export interface Shelf {

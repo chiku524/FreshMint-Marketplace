@@ -1,6 +1,7 @@
 "use client";
 
 import type { RankedListing, Listing } from "@/lib/discovery/types";
+import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ImpressionTracker } from "./ImpressionTracker";
@@ -38,6 +39,8 @@ export function WorkCard({
   const featured =
     listing.stage === "featured" || bucket === "featured";
   const [spinning, setSpinning] = useState(false);
+  const supplyCap = primarySupplyCap(listing);
+  const dropState = dropWindowFor(listing).state;
 
   const tileClass = [
     "work-tile",
@@ -93,6 +96,8 @@ export function WorkCard({
           sold={sold || bucket === "sold"}
           listingType={listing.type}
           chain={listing.chain}
+          dropState={dropState}
+          repeatable={supplyCap == null || supplyCap > 1}
         />
       ) : null}
       {footer ? <div className="work-tile__footer">{footer}</div> : null}

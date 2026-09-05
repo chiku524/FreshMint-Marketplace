@@ -1,5 +1,8 @@
 "use client";
 
+import { TraitEditor } from "@/components/TraitEditor";
+import type { NftTrait } from "@/lib/discovery/types";
+import { parseTraits } from "@/lib/marketplace/drops";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -29,6 +32,7 @@ export function CreateListingForm() {
     mediaUrl: string;
     mediaHash: string;
   } | null>(null);
+  const [traits, setTraits] = useState<NftTrait[]>([]);
 
   useEffect(() => {
     function loadMine() {
@@ -93,6 +97,8 @@ export function CreateListingForm() {
       publishSoftLaunch: true,
       collectionId: collectionId || null,
       isCollectionHero: fd.get("isCollectionHero") === "on",
+      traits: parseTraits(traits),
+      maxSupply: fd.get("maxSupply") ? Number(fd.get("maxSupply")) : null,
       oeStartsAt:
         type === "open_edition"
           ? fromLocalInput(String(fd.get("oeStartsAt") ?? ""))
@@ -150,6 +156,7 @@ export function CreateListingForm() {
       router.refresh();
       form.reset();
       setMedia(null);
+      setTraits([]);
       setListingType("single");
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed");
@@ -301,12 +308,28 @@ export function CreateListingForm() {
           <input name="styleTags" placeholder="ink, minimal" style={fieldStyle} />
         </label>
       </div>
+      {listingType === "open_edition" ? (
+        <label>
+          Edition supply (blank = unlimited)
+          <input
+            name="maxSupply"
+            type="number"
+            min={1}
+            placeholder="Unlimited"
+            style={fieldStyle}
+          />
+        </label>
+      ) : null}
+      <div>
+        <p style={{ margin: "0 0 0.4rem" }}>Traits</p>
+        <TraitEditor traits={traits} onChange={setTraits} />
+      </div>
       <div>
         <label>
           Artwork file
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,text/plain"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,audio/mpeg,audio/wav,text/plain"
             style={fieldStyle}
             onChange={(e) => {
               const file = e.target.files?.[0];

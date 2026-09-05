@@ -136,6 +136,10 @@ model Listing {
   auctionEndsAt    DateTime?
   collectionId     String?
   isCollectionHero Boolean  @default(false)
+  /// [{ trait_type, value }]
+  traitsJson       String   @default("[]")
+  /// Null = default by type (1 for 1/1s, unlimited for open editions).
+  maxSupply        Int?
   delisted         Boolean  @default(false)
   appealStatus     String   @default("none")
   /// Simulated on-chain refs for testnet path
@@ -197,6 +201,12 @@ model Collection {
   heroListingId   String?
   sampleIdsJson   String  @default("[]")
   totalItems      Int     @default(0)
+  /// none | limited | open
+  dropKind        String  @default("none")
+  dropStartsAt    DateTime?
+  dropEndsAt      DateTime?
+  dropPriceUsd    Float?
+  mediaBytes      Int     @default(0)
 
   creator  User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   listings Listing[]
