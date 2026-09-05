@@ -756,13 +756,26 @@ html.fm-intro-pending .fm-intro-cover {
 .site-nav__trigger {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.4rem;
   padding: 0.35rem 0.2rem;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+
+.site-nav__icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.site-nav__trigger:hover .site-nav__icon,
+.site-nav__dropdown.is-open .site-nav__icon,
+.site-nav__item:hover .site-nav__icon {
+  opacity: 1;
 }
 
 .site-nav__trigger:hover,
@@ -805,7 +818,9 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .site-nav__item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
   padding: 0.45rem 0.65rem;
   border: 0;

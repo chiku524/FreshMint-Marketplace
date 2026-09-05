@@ -1,5 +1,6 @@
 "use client";
 
+import { NAV_GROUP_ICON, NAV_ITEM_ICON, NavGlyph } from "@/components/NavGlyph";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -146,6 +147,7 @@ function NavDropdown({
           setOpen(true);
         }}
       >
+        <NavGlyph name={NAV_GROUP_ICON[group.id] ?? group.id} />
         {group.label}
         <span className="site-nav__caret" aria-hidden>
           ▾
@@ -166,6 +168,7 @@ function NavDropdown({
                   closeMenu();
                 }}
               >
+                <NavGlyph name={NAV_ITEM_ICON[item.href] ?? "docs"} />
                 {item.label}
               </Link>
             ) : (
@@ -180,6 +183,7 @@ function NavDropdown({
                   onLogout?.();
                 }}
               >
+                <NavGlyph name={NAV_ITEM_ICON[item.action] ?? "logout"} />
                 {item.label}
               </button>
             ),

@@ -3,15 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import {
-  discoverEvmWallets,
-  signWallet,
-  WALLET_AUTH_ERRORS,
-  type BrowserWalletChain,
-  type DiscoveredEvmWallet,
-  type EthProvider,
-} from "@/lib/auth/browser-wallets";
-import { EvmWalletPicker } from "@/components/EvmWalletPicker";
 import { TwoFactorChallenge } from "./TwoFactorChallenge";
 
 type SessionUser = {
@@ -46,9 +37,6 @@ export function WalletBar({
     pendingToken: string;
     displayName: string;
   } | null>(null);
-  const [evmChoices, setEvmChoices] = useState<DiscoveredEvmWallet[] | null>(
-    null,
-  );
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/auth/me", { credentials: "include" });
@@ -104,47 +92,6 @@ export function WalletBar({
       handleAuthResponse(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "login_failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function connectOrLink(
-    chain: BrowserWalletChain,
-    evmProvider?: EthProvider,
-  ) {
-    setBusy(true);
-    setError(null);
-    try {
-      if (chain === "evm" && !evmProvider) {
-        const wallets = await discoverEvmWallets();
-        if (wallets.length === 0) throw new Error("No EVM wallet found");
-        if (wallets.length > 1) {
-          setEvmChoices(wallets);
-          setBusy(false);
-          return;
-        }
-        evmProvider = wallets[0].provider;
-      }
-      const proof = await signWallet(chain, evmProvider);
-      const endpoint = user ? "/api/auth/link-wallet" : "/api/auth/verify";
-      const verifyRes = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(proof),
-      });
-      const data = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(data.error ?? "verify_failed");
-      if (endpoint === "/api/auth/verify") {
-        handleAuthResponse(data);
-      } else {
-        await refresh();
-      }
-      setEvmChoices(null);
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : "connect_failed";
-      setError(WALLET_AUTH_ERRORS[raw] ?? raw);
     } finally {
       setBusy(false);
     }
@@ -212,33 +159,6 @@ export function WalletBar({
             <Link href="/sign-up" className="badge">
               Create profile
             </Link>
-            <button
-              type="button"
-              className="badge featured"
-              disabled={busy}
-              onClick={() => void connectOrLink("evm")}
-              style={{ cursor: "pointer", background: "transparent" }}
-            >
-              Connect EVM
-            </button>
-            <button
-              type="button"
-              className="badge emerging"
-              disabled={busy}
-              onClick={() => void connectOrLink("solana")}
-              style={{ cursor: "pointer", background: "transparent" }}
-            >
-              Connect Solana
-            </button>
-            <button
-              type="button"
-              className="badge"
-              disabled={busy}
-              onClick={() => void connectOrLink("boing")}
-              style={{ cursor: "pointer", background: "transparent" }}
-            >
-              Connect Boing
-            </button>
             <select
               disabled={busy}
               defaultValue=""
@@ -263,13 +183,6 @@ export function WalletBar({
             </select>
           </>
         )}
-        {evmChoices ? (
-          <EvmWalletPicker
-            wallets={evmChoices}
-            onSelect={(wallet) => void connectOrLink("evm", wallet.provider)}
-            onCancel={() => setEvmChoices(null)}
-          />
-        ) : null}
         {error ? (
           <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
             {error}
