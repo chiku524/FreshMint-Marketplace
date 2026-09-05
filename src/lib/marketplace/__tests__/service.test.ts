@@ -17,6 +17,7 @@ import {
   transitionListingStage,
 } from "@/lib/marketplace/service";
 import { createShelf } from "@/lib/marketplace/editorial";
+import { splitSaleProceeds } from "@/lib/fees/platform";
 
 beforeEach(() => {
   resetMemoryStoreForTests();
@@ -69,8 +70,14 @@ describe("marketplace service (memory mode)", () => {
 
   it("purchases a listing in memory mode", async () => {
     const engine = getMemoryEngine();
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    const sold = new Set(getMemoryPurchases().map((p) => p.listingId));
     const listing = [...engine.state.listings.values()].find(
-      (l) => l.priceUsd != null && !l.delisted && l.creatorId !== "collector-mira",
+      (l) =>
+        l.priceUsd != null &&
+        !l.delisted &&
+        l.creatorId !== "collector-mira" &&
+        !sold.has(l.id),
     );
     expect(listing).toBeTruthy();
     if (!listing || listing.priceUsd == null) return;
@@ -92,6 +99,97 @@ describe("marketplace service (memory mode)", () => {
     expect(
       engine.state.creators.get(listing.creatorId)?.completedSales,
     ).toBe(beforeSales + 1);
+  });
+
+  it("purchases unsold works on evm, solana, and boing", async () => {
+    const cases = [
+      { id: "listing-fresh-1", chain: "evm", network: "ethereum" },
+      { id: "listing-glitch-oe", chain: "solana", network: "solana" },
+      { id: "listing-boing-1", chain: "boing", network: "boing" },
+    ] as const;
+
+    for (const item of cases) {
+      const listing = getMemoryEngine().state.listings.get(item.id);
+      expect(listing, item.id).toBeTruthy();
+      expect(listing?.chain).toBe(item.chain);
+      expect(listing?.network).toBe(item.network);
+      expect(listing?.priceUsd).toBeGreaterThan(0);
+
+      const result = await purchaseListing({
+        listingId: item.id,
+        buyerId: "collector-kai",
+        amountUsd: listing!.priceUsd!,
+      });
+      expect(result.ok, item.id).toBe(true);
+      if (!result.ok) continue;
+      expect(result.txHash).toBeTruthy();
+      expect(result.chain).toBe(item.chain);
+      expect(result.network).toBe(item.network);
+      expect(result.fees.sellerNetUsd).toBe(
+        splitSaleProceeds(listing!.priceUsd!).sellerNetUsd,
+      );
+      expect(result.walletTx).toBeUndefined();
+    }
+  });
+
+  it("blocks a second buy on unique inventory and allows open editions", async () => {
+    const first = await purchaseListing({
+      listingId: "listing-nova-1",
+      buyerId: "collector-kai",
+      amountUsd: 120,
+    });
+    expect(first.ok).toBe(true);
+
+    const again = await purchaseListing({
+      listingId: "listing-nova-1",
+      buyerId: "collector-mira",
+      amountUsd: 120,
+    });
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.error).toBe("already_sold");
+
+    const soldAuction = await purchaseListing({
+      listingId: "listing-fresh-sold-auction",
+      buyerId: "collector-kai",
+      amountUsd: 180,
+    });
+    expect(soldAuction.ok).toBe(false);
+
+    const oe1 = await purchaseListing({
+      listingId: "listing-glitch-oe",
+      buyerId: "collector-kai",
+      amountUsd: 25,
+    });
+    const oe2 = await purchaseListing({
+      listingId: "listing-glitch-oe",
+      buyerId: "collector-mira",
+      amountUsd: 25,
+    });
+    expect(oe1.ok).toBe(true);
+    expect(oe2.ok).toBe(true);
+  });
+
+  it("records a confirmed buy hash on the memory purchase", async () => {
+    const bought = await purchaseListing({
+      listingId: "listing-fresh-1",
+      buyerId: "collector-kai",
+      amountUsd: 45,
+    });
+    expect(bought.ok).toBe(true);
+
+    const confirmed = await confirmOnchainTx({
+      listingId: "listing-fresh-1",
+      action: "buy",
+      txHash: "0xconfirmedbuyhash1234567890",
+      buyerId: "collector-kai",
+    });
+    expect(confirmed.ok).toBe(true);
+
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    const row = getMemoryPurchases().find(
+      (p) => p.listingId === "listing-fresh-1" && p.buyerId === "collector-kai",
+    );
+    expect(row?.txHash).toBe("0xconfirmedbuyhash1234567890");
   });
 
   it("nominates and settles curator stakes", async () => {

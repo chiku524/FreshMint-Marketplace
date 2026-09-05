@@ -245,17 +245,29 @@ export function buildBoingPurchaseIntent(input: {
   amountUsd: number;
 }): {
   txHash: string;
-  status: "pending_wallet";
-  walletTx: BoingWalletTx;
+  status: "simulated" | "pending_wallet";
+  walletTx?: BoingWalletTx;
 } {
   const buyerIsBoing = isBoingNativeAccountIdHex(input.buyerAddress);
   const buyer = buyerIsBoing
     ? normalizeBoingAccountId(input.buyerAddress)
     : input.buyerAddress;
+  const configured =
+    input.collection && isBoingNativeAccountIdHex(input.collection)
+      ? normalizeBoingAccountId(input.collection)
+      : marketAddressFor("boing");
   const tokenId = (input.tokenId ?? tokenIdWordForListing(input.listingId)).replace(
     /^0x/,
     "",
   );
+
+  if (!configured || !buyerIsBoing) {
+    return {
+      txHash: simulatedBoingHash(),
+      status: "simulated",
+    };
+  }
+
   return {
     txHash: "",
     status: "pending_wallet",
@@ -266,11 +278,9 @@ export function buildBoingPurchaseIntent(input: {
       method: "boing_sendTransaction",
       tx: {
         type: "contract_call",
-        to: input.collection ?? "pending-deploy",
+        to: configured,
         from: buyer,
-        ...(buyerIsBoing
-          ? { calldata: encodeBoingTransferNft(buyer, tokenId) }
-          : {}),
+        calldata: encodeBoingTransferNft(buyer, tokenId),
         purpose_category: "nft",
         asset_name: `buy:${input.listingId}`.slice(0, 32),
         asset_symbol: "FMINT",

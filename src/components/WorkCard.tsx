@@ -21,6 +21,7 @@ export function WorkCard({
   creatorName,
   trackImpression = true,
   footer,
+  sold = false,
 }: {
   listing: Listing;
   emerging?: boolean;
@@ -30,6 +31,7 @@ export function WorkCard({
   creatorName?: string;
   trackImpression?: boolean;
   footer?: ReactNode;
+  sold?: boolean;
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
@@ -88,6 +90,8 @@ export function WorkCard({
           creatorId={listing.creatorId}
           priceUsd={listing.priceUsd}
           stage={listing.stage}
+          sold={sold || bucket === "sold"}
+          listingType={listing.type}
         />
       ) : null}
       {footer ? <div className="work-tile__footer">{footer}</div> : null}

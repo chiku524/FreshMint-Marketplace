@@ -23,11 +23,11 @@ import {
   detectWashRisk,
   maybeFlagWashCluster,
 } from "@/lib/integrity/sybil";
+import { allowsRepeatPrimaryPurchase } from "@/lib/marketplace/sales";
 import {
   buildEvmMintIntent,
   buildEvmPurchaseIntent,
   sendEvmMintWithServerKey,
-  sendEvmBuyWithServerKey,
   verifyEvmTx,
 } from "@/lib/onchain/evm";
 import {
@@ -708,6 +708,18 @@ export async function confirmOnchainTx(input: {
       tokenId: input.tokenId ?? listing.tokenId,
       contractAddress: input.contractAddress ?? listing.contractAddress,
     });
+    if (input.action === "buy") {
+      const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+      const purchases = getMemoryPurchases();
+      const row = [...purchases]
+        .reverse()
+        .find(
+          (p) =>
+            p.listingId === input.listingId &&
+            (!input.buyerId || p.buyerId === input.buyerId),
+        );
+      if (row) row.txHash = input.txHash;
+    }
     return { ok: true as const, txHash: input.txHash, mode: "memory" as const };
   }
 
@@ -992,6 +1004,7 @@ export async function purchaseListing(input: {
     delisted: boolean;
     chain: Chain;
     network: NetworkId;
+    type: string;
     contractAddress: string | null;
     tokenId: string | null;
     priceUsd: number | null;
@@ -1006,6 +1019,7 @@ export async function purchaseListing(input: {
       delisted: l.delisted,
       chain: l.chain,
       network: resolveNetwork(l.network, l.chain),
+      type: l.type,
       contractAddress: l.contractAddress ?? null,
       tokenId: l.tokenId ?? null,
       priceUsd: l.priceUsd,
@@ -1023,6 +1037,7 @@ export async function purchaseListing(input: {
       delisted: listing.delisted,
       chain: listing.chain as Chain,
       network: resolveNetwork(listing.network, listing.chain as Chain),
+      type: listing.type,
       contractAddress: listing.contractAddress,
       tokenId: listing.tokenId,
       priceUsd: listing.priceUsd,
@@ -1030,6 +1045,17 @@ export async function purchaseListing(input: {
   }
 
   const listing = listingRow;
+
+  if (!allowsRepeatPrimaryPurchase(listing.type)) {
+    const alreadySold = memory
+      ? (await import("@/lib/data/memory-store"))
+          .getMemoryPurchases()
+          .some((p) => p.listingId === listing.id)
+      : (await prisma.purchase.count({ where: { listingId: listing.id } })) > 0;
+    if (alreadySold) {
+      return { ok: false as const, error: "already_sold" };
+    }
+  }
 
   const wash = await detectWashRisk({
     buyerId: input.buyerId,
@@ -1057,10 +1083,13 @@ export async function purchaseListing(input: {
   let isFirst = true;
   let buyerAddress = "unknown";
   if (memory) {
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    isFirst = !getMemoryPurchases().some(
+      (p) => p.buyerId === input.buyerId && p.listingId === input.listingId,
+    );
     const buyer = engine.state.creators.get(input.buyerId);
     buyerAddress =
       buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
-      buyer?.wallets[0]?.address ??
       "unknown";
   } else {
     const prior = await prisma.purchase.count({
@@ -1073,7 +1102,6 @@ export async function purchaseListing(input: {
     });
     buyerAddress =
       buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
-      buyer?.wallets[0]?.address ??
       "unknown";
   }
 
@@ -1105,26 +1133,19 @@ export async function purchaseListing(input: {
   let walletTx =
     "walletTx" in purchaseIntent ? purchaseIntent.walletTx : undefined;
 
-  if (!memory && listing.chain === "evm") {
-    const server = await sendEvmBuyWithServerKey({
-      tokenId: listing.tokenId ?? "0",
-      network: listing.network,
-      contractAddress: listing.contractAddress,
-      valueWei: BigInt(Math.max(1, Math.floor(input.amountUsd * 1e15))),
-    });
-    if (server) {
-      txHash = server.txHash;
-      walletTx = undefined;
-    }
-  } else if (
+  if (
     !memory &&
     listing.chain === "solana" &&
     "message" in purchaseIntent
   ) {
-    const server = await sendSolanaMemoWithServerKey(purchaseIntent.message);
-    if (server) {
-      txHash = server.txHash;
-      walletTx = undefined;
+    try {
+      const server = await sendSolanaMemoWithServerKey(purchaseIntent.message);
+      if (server) {
+        txHash = server.txHash;
+        walletTx = undefined;
+      }
+    } catch {
+      // Keep wallet settlement or a pending hash.
     }
   }
 
@@ -1216,6 +1237,8 @@ export async function purchaseListing(input: {
     walletTx,
     fees,
     feeRecipients,
+    chain: listing.chain,
+    network: listing.network,
   };
 }
 

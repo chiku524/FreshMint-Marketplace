@@ -204,6 +204,21 @@ export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
   throw new Error("boing_tx_hash_missing");
 }
 
+export function browserWalletAvailable(
+  chain: "evm" | "solana" | "boing" | string,
+): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as {
+    ethereum?: unknown;
+    solana?: unknown;
+    boing?: { request?: unknown };
+  };
+  if (chain === "evm") return Boolean(w.ethereum);
+  if (chain === "solana") return Boolean(w.solana);
+  if (chain === "boing") return Boolean(w.boing?.request);
+  return false;
+}
+
 /** Prepare + send Solana mint/buy via wallet. */
 export async function sendSolanaMintFromWallet(
   listingId: string,
@@ -242,9 +257,11 @@ export async function maybeSendWalletTx(input: {
   if (!wt || typeof wt !== "object") return null;
 
   if (wt.chain === "evm" && "to" in wt && "data" in wt) {
+    if (!browserWalletAvailable("evm")) return null;
     return sendEvmWalletTx(wt as EvmWalletTx);
   }
   if (wt.chain === "solana") {
+    if (!browserWalletAvailable("solana")) return null;
     if ("serialized" in wt && typeof wt.serialized === "string") {
       return sendSolanaWalletTx(wt.serialized);
     }
@@ -256,6 +273,7 @@ export async function maybeSendWalletTx(input: {
     return result.signature;
   }
   if (wt.chain === "boing" && "tx" in wt && wt.tx) {
+    if (!browserWalletAvailable("boing")) return null;
     return sendBoingWalletTx(wt as BoingWalletTx);
   }
   return null;

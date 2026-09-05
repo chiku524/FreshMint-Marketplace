@@ -3,6 +3,7 @@ import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
+import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -25,6 +26,7 @@ export default async function CreatorProfilePage({
     .sort((a, b) => b.createdAt - a.createdAt);
 
   const user = await getSessionUser();
+  const soldIds = await listClosedPrimarySaleIds();
   const following =
     user != null &&
     (engine.state.follows.get(user.id)?.followedArtistIds.includes(id) ?? false);
@@ -91,6 +93,7 @@ export default async function CreatorProfilePage({
               emerging={emerging.emerging}
               creatorName={creator.displayName}
               showActions
+              sold={soldIds.has(listing.id)}
             />
           ))}
         </PuzzleRail>

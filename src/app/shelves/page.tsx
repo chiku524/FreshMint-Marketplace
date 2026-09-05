@@ -1,11 +1,13 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
+import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function ShelvesPage() {
   const engine = await getDiscoveryEngine();
+  const soldIds = await listClosedPrimarySaleIds();
   const shelves = [...engine.state.shelves.values()];
 
   return (
@@ -33,7 +35,12 @@ export default async function ShelvesPage() {
             </p>
             <PuzzleRail>
               {listings.map((listing) => (
-                <WorkCard key={listing.id} listing={listing} showActions />
+                <WorkCard
+                  key={listing.id}
+                  listing={listing}
+                  showActions
+                  sold={soldIds.has(listing.id)}
+                />
               ))}
             </PuzzleRail>
           </section>

@@ -5,6 +5,7 @@ import {
   splitSaleProceeds,
 } from "@/lib/fees/platform";
 import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -25,18 +26,25 @@ export function ListingActions({
   creatorId,
   priceUsd,
   stage,
+  sold = false,
+  listingType,
 }: {
   listingId: string;
   creatorId?: string;
   priceUsd: number | null;
   stage: string;
+  sold?: boolean;
+  listingType?: string;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmBuy, setConfirmBuy] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [justSold, setJustSold] = useState(false);
   const feePreview =
     priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
+  const uniqueSold = sold || justSold;
+  const canBuy = priceUsd != null && !uniqueSold;
 
   async function post(url: string, body: Record<string, unknown>) {
     setMsg(null);
@@ -47,8 +55,13 @@ export function ListingActions({
     });
     const data = await res.json();
     if (!res.ok) {
-      setMsg(data.error || data.errors?.join(", ") || "failed");
-      return null;
+      if (res.status === 401) {
+        setMsg("sign_in");
+        return { error: "sign_in" };
+      }
+      const error = data.error || data.errors?.join(", ") || "failed";
+      setMsg(error);
+      return { error };
     }
     return data as Record<string, unknown>;
   }
@@ -61,7 +74,13 @@ export function ListingActions({
         listingId,
         amountUsd: priceUsd,
       });
-      if (!data) return;
+      if (!data || "error" in data) {
+        if (data && data.error === "already_sold") {
+          setJustSold(true);
+          setConfirmBuy(false);
+        }
+        return;
+      }
       const feeNote =
         data.fees &&
         typeof data.fees === "object" &&
@@ -69,7 +88,7 @@ export function ListingActions({
         "sellerNetUsd" in data.fees
           ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
           : "";
-      let note = `Purchase · ${String(data.txHash).slice(0, 14)}…${feeNote}`;
+      let note = `Collected · ${String(data.txHash).slice(0, 14)}…${feeNote}`;
       try {
         const hash = await maybeSendWalletTx({
           walletTx: data.walletTx,
@@ -82,9 +101,10 @@ export function ListingActions({
           note = `On-chain buy · ${hash.slice(0, 14)}…${feeNote}`;
         }
       } catch (e) {
-        note += ` · wallet: ${e instanceof Error ? e.message : "skipped"}`;
+        note += ` · on-chain skipped: ${e instanceof Error ? e.message : "wallet"}`;
       }
       setConfirmBuy(false);
+      if (listingType !== "open_edition") setJustSold(true);
       setMsg(note);
       router.refresh();
     } finally {
@@ -141,7 +161,8 @@ export function ListingActions({
       >
         Nominate
       </button>
-      {priceUsd != null && !confirmBuy ? (
+      {uniqueSold ? <span className="badge featured">Sold</span> : null}
+      {canBuy && !confirmBuy ? (
         <button
           type="button"
           className="badge featured"
@@ -154,7 +175,7 @@ export function ListingActions({
           Buy ${priceUsd}
         </button>
       ) : null}
-      {priceUsd != null && confirmBuy ? (
+      {canBuy && confirmBuy ? (
         <div
           style={{
             width: "100%",
@@ -248,7 +269,16 @@ export function ListingActions({
       >
         Report
       </button>
-      {msg ? (
+      {msg === "sign_in" ? (
+        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+          <Link href={`/sign-in?next=/listings/${listingId}`}>Sign in</Link> to
+          buy
+        </span>
+      ) : msg === "already_sold" ? (
+        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+          Already sold
+        </span>
+      ) : msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
       ) : null}
     </div>

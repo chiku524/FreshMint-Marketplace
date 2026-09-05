@@ -7,6 +7,7 @@ import {
 } from "@/lib/chains/registry";
 import {
   buildBoingMintIntent,
+  buildBoingPurchaseIntent,
   encodeBoingTransferNft,
   isBoingNativeAccountIdHex,
   normalizeBoingAccountId,
@@ -25,6 +26,36 @@ describe("boing network registry", () => {
     expect(listNetworks().some((n) => n.id === "boing")).toBe(true);
     expect(listBridgeNetworks().some((n) => n.id === "boing")).toBe(false);
     expect(resolveNetwork(undefined, "boing")).toBe("boing");
+    expect(resolveNetwork("ethereum", "solana")).toBe("solana");
+    expect(resolveNetwork("ethereum", "boing")).toBe("boing");
+    expect(resolveNetwork("base", "evm")).toBe("base");
+  });
+});
+
+describe("boing purchase intent", () => {
+  it("simulates when the buyer or collection is not a native account", () => {
+    const buy = buildBoingPurchaseIntent({
+      buyerAddress: "0xmira0000000000000000000000000000000001",
+      listingId: "listing-boing-1",
+      amountUsd: 32,
+    });
+    expect(buy.status).toBe("simulated");
+    expect(buy.txHash).toMatch(/^0x[0-9a-f]+$/);
+    expect(buy.walletTx).toBeUndefined();
+  });
+
+  it("builds transfer_nft calldata when buyer and collection are native", () => {
+    const collection = `0x${"22".repeat(32)}`;
+    const buy = buildBoingPurchaseIntent({
+      buyerAddress: ACCOUNT,
+      listingId: "listing-boing-1",
+      collection,
+      amountUsd: 32,
+    });
+    expect(buy.status).toBe("pending_wallet");
+    expect(buy.walletTx?.tx.type).toBe("contract_call");
+    expect(buy.walletTx?.tx.to).toBe(collection);
+    expect(String(buy.walletTx?.tx.calldata)).toMatch(/^0x/);
   });
 });
 

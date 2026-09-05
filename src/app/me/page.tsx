@@ -3,6 +3,7 @@ import { WalletNftCard } from "@/components/WalletNftCard";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
+import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import {
   findListingsByWalletNfts,
   getUserAssetProfile,
@@ -24,6 +25,7 @@ export default async function MeCollectionPage() {
 
   const profile = await getUserAssetProfile(user.id);
   if (!profile) redirect("/");
+  const soldIds = await listClosedPrimarySaleIds();
 
   const catalog = [
     ...profile.created,
@@ -68,6 +70,7 @@ export default async function MeCollectionPage() {
                 key={listing.id}
                 listing={listing}
                 showActions
+                sold={soldIds.has(listing.id)}
                 trackImpression={false}
               />
             ))}

@@ -14,6 +14,7 @@ import {
   buildSolanaMintTransactionBase64,
   buildSolanaPurchaseIntent,
   buildSolanaMemoTransactionBase64,
+  isValidSolanaAddress,
 } from "@/lib/onchain/solana";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -23,6 +24,61 @@ const schema = z.object({
   action: z.enum(["mint", "buy"]),
   amountUsd: z.number().nonnegative().optional(),
 });
+
+type PrepareListing = {
+  id: string;
+  title: string;
+  chain: Chain;
+  network: string | null;
+  contractAddress: string | null;
+  tokenId: string | null;
+  priceUsd: number | null;
+  mediaUrl: string | null;
+};
+
+async function loadListing(listingId: string): Promise<{
+  listing: PrepareListing;
+  memory: boolean;
+} | null> {
+  const mode = await ensureDatabaseReady();
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const memory = mode === "memory" || isMemoryMode();
+  if (memory) {
+    const row = getMemoryEngine().state.listings.get(listingId);
+    if (!row) return null;
+    return {
+      memory: true,
+      listing: {
+        id: row.id,
+        title: row.title,
+        chain: row.chain,
+        network: row.network,
+        contractAddress: row.contractAddress ?? null,
+        tokenId: row.tokenId ?? null,
+        priceUsd: row.priceUsd,
+        mediaUrl: row.mediaUrl ?? null,
+      },
+    };
+  }
+
+  const row = await prisma.listing.findUnique({ where: { id: listingId } });
+  if (!row) return null;
+  return {
+    memory: false,
+    listing: {
+      id: row.id,
+      title: row.title,
+      chain: row.chain as Chain,
+      network: row.network,
+      contractAddress: row.contractAddress,
+      tokenId: row.tokenId,
+      priceUsd: row.priceUsd,
+      mediaUrl: row.mediaUrl,
+    },
+  };
+}
 
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
@@ -35,23 +91,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  await ensureDatabaseReady();
-  const listing = await prisma.listing.findUnique({
-    where: { id: body.data.listingId },
-  });
-  if (!listing) {
+  const loaded = await loadListing(body.data.listingId);
+  if (!loaded) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  const { listing, memory } = loaded;
 
-  const network = resolveNetwork(listing.network, listing.chain as Chain);
-  const wallet =
-    user.wallets.find((w) => w.chain === listing.chain)?.address ??
-    user.wallets[0]?.address;
+  const network = resolveNetwork(listing.network, listing.chain);
+  const wallet = user.wallets.find((w) => w.chain === listing.chain)?.address;
   if (!wallet) {
-    return NextResponse.json({ error: "wallet_required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "wallet_required", chain: listing.chain },
+      { status: 400 },
+    );
   }
 
-  const tokenUri = listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
+  const tokenUri =
+    listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`;
 
   if (body.data.action === "mint") {
     if (listing.chain === "evm") {
@@ -112,13 +168,26 @@ export async function POST(req: NextRequest) {
       assetAddress = built.assetAddress;
       mode = built.mode;
       if (assetAddress) {
-        await prisma.listing.update({
-          where: { id: listing.id },
-          data: {
-            contractAddress: assetAddress,
-            tokenId: assetAddress,
-          },
-        });
+        if (memory) {
+          const { getMemoryEngine } = await import("@/lib/data/memory-store");
+          const engine = getMemoryEngine();
+          const current = engine.state.listings.get(listing.id);
+          if (current) {
+            engine.state.listings.set(listing.id, {
+              ...current,
+              contractAddress: assetAddress,
+              tokenId: assetAddress,
+            });
+          }
+        } else {
+          await prisma.listing.update({
+            where: { id: listing.id },
+            data: {
+              contractAddress: assetAddress,
+              tokenId: assetAddress,
+            },
+          });
+        }
       }
     } catch {
       serialized = null;
@@ -163,13 +232,15 @@ export async function POST(req: NextRequest) {
     listingId: listing.id,
   });
   let serialized: string | null = null;
-  try {
-    serialized = await buildSolanaMemoTransactionBase64({
-      feePayer: wallet,
-      memo: buy.message,
-    });
-  } catch {
-    serialized = null;
+  if (isValidSolanaAddress(wallet)) {
+    try {
+      serialized = await buildSolanaMemoTransactionBase64({
+        feePayer: wallet,
+        memo: buy.message,
+      });
+    } catch {
+      serialized = null;
+    }
   }
   return NextResponse.json({ ok: true, intent: buy, serialized });
 }

@@ -96,6 +96,14 @@ export function buildSolanaMintIntent(input: {
   };
 }
 
+export function isValidSolanaAddress(address: string): boolean {
+  try {
+    return Boolean(new PublicKey(address).toBase58());
+  } catch {
+    return false;
+  }
+}
+
 export function buildSolanaPurchaseIntent(input: {
   buyerAddress: string;
   mintAddress: string;
@@ -121,6 +129,17 @@ export function buildSolanaPurchaseIntent(input: {
     lamports: input.priceLamports,
     platformFeeBps: feeBps,
   });
+
+  if (!isValidSolanaAddress(input.buyerAddress)) {
+    return {
+      txHash: `sim:${createHash("sha256")
+        .update(`solana-buy:${input.listingId ?? input.mintAddress}:${input.buyerAddress}`)
+        .digest("hex")
+        .slice(0, 40)}`,
+      status: "simulated",
+      message: memo,
+    };
+  }
 
   return {
     txHash: "",

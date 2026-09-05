@@ -237,9 +237,12 @@ export function resolveNetwork(
   network: string | null | undefined,
   chain?: Chain | string | null,
 ): NetworkId {
-  if (network && isNetworkId(network)) return network;
   if (chain === "solana") return "solana";
   if (chain === "boing") return "boing";
+  if (network && isNetworkId(network)) {
+    const vm = getNetwork(network).vm;
+    if (!chain || chain === vm) return network;
+  }
   return "ethereum";
 }
 

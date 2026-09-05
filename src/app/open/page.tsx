@@ -2,6 +2,7 @@ import { OpenLaneFilters } from "@/components/OpenLaneFilters";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { isNetworkId } from "@/lib/chains/registry";
+import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function OpenLanePage({
   const maxPrice = typeof sp.maxPrice === "string" ? sp.maxPrice : undefined;
 
   const engine = await getDiscoveryEngine();
+  const soldIds = await listClosedPrimarySaleIds();
   const ranked = engine.rankOpenLane({
     chain:
       chain === "evm" || chain === "solana" || chain === "boing"
@@ -49,7 +51,7 @@ export default async function OpenLanePage({
         Open Lane
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.25rem" }}>
-        Permissionless browse across Ethereum, Base, Arbitrum, Optimism, and Solana.
+        Permissionless browse across Ethereum, Base, Arbitrum, Optimism, Solana, and Boing.
         Soft-launched works appear here, lightly ranked by quality — not dumped
         onto the homepage firehose.
       </p>
@@ -76,6 +78,7 @@ export default async function OpenLanePage({
               key={item.listing.id}
               listing={item.listing}
               showActions
+              sold={soldIds.has(item.listing.id)}
               creatorName={
                 engine.state.creators.get(item.listing.creatorId)?.displayName
               }

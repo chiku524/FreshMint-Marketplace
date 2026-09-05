@@ -3,6 +3,7 @@ import { ListingActions } from "@/components/ListingActions";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
 import { getSessionUser } from "@/lib/auth/session";
+import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,6 +25,7 @@ export default async function ListingDetailPage({
     ? isEmergingListing(listing, creator).emerging
     : false;
   const user = await getSessionUser();
+  const soldIds = await listClosedPrimarySaleIds();
   const following =
     user != null &&
     (engine.state.follows.get(user.id)?.followedArtistIds.includes(
@@ -158,6 +160,8 @@ export default async function ListingDetailPage({
             creatorId={listing.creatorId}
             priceUsd={listing.priceUsd}
             stage={listing.stage}
+            sold={soldIds.has(listing.id)}
+            listingType={listing.type}
           />
 
           <dl
