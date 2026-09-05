@@ -169,6 +169,46 @@ describe("marketplace service (memory mode)", () => {
     expect(oe2.ok).toBe(true);
   });
 
+  it("lets a signed-in buyer missing from the seed catalog purchase", async () => {
+    const result = await purchaseListing({
+      listingId: "listing-boing-1",
+      buyerId: "user-unknown-collector",
+      amountUsd: 32,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.network).toBe("boing");
+  });
+
+  it("builds a collection profile from the session when the catalog has no row", async () => {
+    const { profileFromSession } = await import("@/lib/marketplace/profile");
+    const profile = profileFromSession({
+      id: "user-session-only",
+      displayName: "Session Collector",
+      wallets: [{ chain: "evm", address: "0xabc0000000000000000000000000000000000001" }],
+      curatorScore: 10,
+      verifiedCreator: false,
+      role: "member",
+      flagged: false,
+      washCluster: false,
+      firstListingAt: null,
+      lifetimePrimaryVolumeUsd: 0,
+      completedSales: 0,
+      walletCreatedAt: new Date(),
+      risingEntriesThisWeek: 0,
+      openLaneListingsToday: 0,
+      establishedBadge: false,
+      totpEnabled: false,
+      email: null,
+      googleLinked: false,
+      hasPassword: false,
+      avatarUrl: null,
+    });
+    expect(profile.userId).toBe("user-session-only");
+    expect(profile.wallets).toHaveLength(1);
+    expect(profile.created).toEqual([]);
+  });
+
   it("records a confirmed buy hash on the memory purchase", async () => {
     const bought = await purchaseListing({
       listingId: "listing-fresh-1",

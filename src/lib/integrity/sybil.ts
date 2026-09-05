@@ -35,8 +35,11 @@ export async function checkSignalSybil(input: {
     const engine = getMemoryEngine();
     const listing = engine.state.listings.get(input.listingId);
     const viewer = engine.state.creators.get(input.viewerId);
-    if (!listing || !viewer) {
-      return { allowed: false, reason: "viewer_missing", trustWeight: 0 };
+    if (!listing) {
+      return { allowed: false, reason: "not_found", trustWeight: 0 };
+    }
+    if (!viewer) {
+      return { allowed: true, trustWeight: 0.5 };
     }
     if (viewer.flagged || viewer.washCluster) {
       return { allowed: false, reason: "viewer_flagged", trustWeight: 0 };

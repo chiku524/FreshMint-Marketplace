@@ -1,4 +1,5 @@
 import { DiscoveryEngine, type MarketplaceState } from "@/lib/discovery";
+import type { Chain, CreatorProfile, NetworkId } from "@/lib/discovery/types";
 import { buildSeedState } from "@/lib/data/seed";
 
 export type MemoryNomination = {
@@ -118,6 +119,61 @@ export function recordMemoryPurchase(
   };
   getMemoryPurchases().push(row);
   return row;
+}
+
+/** Keep signed-in wallet/email users in the in-memory catalog so /me and buys work. */
+export function ensureMemoryCreator(input: {
+  id: string;
+  displayName: string;
+  wallets?: { chain: string; address: string; network?: string | null }[];
+  curatorScore?: number;
+  verifiedCreator?: boolean;
+  establishedBadge?: boolean;
+  completedSales?: number;
+  lifetimePrimaryVolumeUsd?: number;
+}): CreatorProfile {
+  const state = getMemoryState();
+  const existing = state.creators.get(input.id);
+  if (existing) {
+    if (input.wallets?.length) {
+      const seen = new Set(
+        existing.wallets.map((w) => `${w.chain}:${w.address.toLowerCase()}`),
+      );
+      for (const wallet of input.wallets) {
+        const key = `${wallet.chain}:${wallet.address.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        existing.wallets.push({
+          chain: wallet.chain as Chain,
+          address: wallet.address,
+          network: (wallet.network as NetworkId | null) ?? null,
+        });
+        seen.add(key);
+      }
+    }
+    return existing;
+  }
+  const created: CreatorProfile = {
+    id: input.id,
+    displayName: input.displayName,
+    wallets: (input.wallets ?? []).map((w) => ({
+      chain: w.chain as Chain,
+      address: w.address,
+      network: (w.network as NetworkId | null) ?? null,
+    })),
+    firstListingAt: null,
+    lifetimePrimaryVolumeUsd: input.lifetimePrimaryVolumeUsd ?? 0,
+    completedSales: input.completedSales ?? 0,
+    flagged: false,
+    washCluster: false,
+    verifiedCreator: input.verifiedCreator ?? false,
+    walletCreatedAt: Date.now(),
+    risingEntriesThisWeek: 0,
+    openLaneListingsToday: 0,
+    curatorScore: input.curatorScore ?? 25,
+    establishedBadge: input.establishedBadge ?? false,
+  };
+  state.creators.set(input.id, created);
+  return created;
 }
 
 export function resetMemoryStoreForTests(): void {

@@ -2,7 +2,10 @@ import { ProfileSettings } from "@/components/ProfileSettings";
 import { WalletLinkPanel } from "@/components/WalletLinkPanel";
 import { isGoogleAuthConfigured } from "@/lib/auth/google";
 import { getSessionUser } from "@/lib/auth/session";
-import { getUserAssetProfile } from "@/lib/marketplace/profile";
+import {
+  getUserAssetProfile,
+  profileFromSession,
+} from "@/lib/marketplace/profile";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +14,8 @@ export default async function MeSettingsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/sign-in?next=/me/settings");
 
-  const profile = await getUserAssetProfile(user.id);
-  if (!profile) redirect("/");
+  const profile =
+    (await getUserAssetProfile(user.id)) ?? profileFromSession(user);
 
   return (
     <>

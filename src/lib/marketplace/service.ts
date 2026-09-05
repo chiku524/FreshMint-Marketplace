@@ -23,6 +23,7 @@ import {
   detectWashRisk,
   maybeFlagWashCluster,
 } from "@/lib/integrity/sybil";
+import { isPostgresConfigured } from "@/lib/env";
 import { allowsRepeatPrimaryPurchase } from "@/lib/marketplace/sales";
 import {
   buildEvmMintIntent,
@@ -995,8 +996,8 @@ export async function purchaseListing(input: {
   const fees = splitSaleProceeds(input.amountUsd);
   const feeRecipients = platformFeeRecipients();
 
-  const memory = await inMemoryMode();
   const engine = await getDiscoveryEngine();
+  let memory = await inMemoryMode();
 
   let listingRow: {
     id: string;
@@ -1010,9 +1011,59 @@ export async function purchaseListing(input: {
     priceUsd: number | null;
   } | null = null;
 
+  const { getMemoryEngine, ensureMemoryCreator } = await import(
+    "@/lib/data/memory-store"
+  );
+  const fromCatalogMaps = () =>
+    engine.state.listings.get(input.listingId) ??
+    getMemoryEngine().state.listings.get(input.listingId) ??
+    null;
+
   if (memory) {
-    const l = engine.state.listings.get(input.listingId);
+    const l = fromCatalogMaps();
+    if (l && !l.delisted) {
+      listingRow = {
+        id: l.id,
+        creatorId: l.creatorId,
+        delisted: l.delisted,
+        chain: l.chain,
+        network: resolveNetwork(l.network, l.chain),
+        type: l.type,
+        contractAddress: l.contractAddress ?? null,
+        tokenId: l.tokenId ?? null,
+        priceUsd: l.priceUsd,
+      };
+    }
+  }
+
+  if (!listingRow && isPostgresConfigured()) {
+    try {
+      const listing = await prisma.listing.findUnique({
+        where: { id: input.listingId },
+      });
+      if (listing && !listing.delisted) {
+        memory = false;
+        listingRow = {
+          id: listing.id,
+          creatorId: listing.creatorId,
+          delisted: listing.delisted,
+          chain: listing.chain as Chain,
+          network: resolveNetwork(listing.network, listing.chain as Chain),
+          type: listing.type,
+          contractAddress: listing.contractAddress,
+          tokenId: listing.tokenId,
+          priceUsd: listing.priceUsd,
+        };
+      }
+    } catch {
+      // Catalog may still be in memory if Postgres dropped mid-request.
+    }
+  }
+
+  if (!listingRow) {
+    const l = fromCatalogMaps();
     if (!l || l.delisted) return { ok: false as const, error: "unavailable" };
+    memory = true;
     listingRow = {
       id: l.id,
       creatorId: l.creatorId,
@@ -1023,24 +1074,6 @@ export async function purchaseListing(input: {
       contractAddress: l.contractAddress ?? null,
       tokenId: l.tokenId ?? null,
       priceUsd: l.priceUsd,
-    };
-  } else {
-    const listing = await prisma.listing.findUnique({
-      where: { id: input.listingId },
-    });
-    if (!listing || listing.delisted) {
-      return { ok: false as const, error: "unavailable" };
-    }
-    listingRow = {
-      id: listing.id,
-      creatorId: listing.creatorId,
-      delisted: listing.delisted,
-      chain: listing.chain as Chain,
-      network: resolveNetwork(listing.network, listing.chain as Chain),
-      type: listing.type,
-      contractAddress: listing.contractAddress,
-      tokenId: listing.tokenId,
-      priceUsd: listing.priceUsd,
     };
   }
 
@@ -1087,9 +1120,37 @@ export async function purchaseListing(input: {
     isFirst = !getMemoryPurchases().some(
       (p) => p.buyerId === input.buyerId && p.listingId === input.listingId,
     );
-    const buyer = engine.state.creators.get(input.buyerId);
+    let buyer = engine.state.creators.get(input.buyerId);
+    if (!buyer && isPostgresConfigured()) {
+      try {
+        const dbBuyer = await prisma.user.findUnique({
+          where: { id: input.buyerId },
+          include: { wallets: true },
+        });
+        if (dbBuyer) {
+          buyer = ensureMemoryCreator({
+            id: dbBuyer.id,
+            displayName: dbBuyer.displayName,
+            wallets: dbBuyer.wallets,
+            curatorScore: dbBuyer.curatorScore,
+            verifiedCreator: dbBuyer.verifiedCreator,
+            establishedBadge: dbBuyer.establishedBadge,
+            completedSales: dbBuyer.completedSales,
+            lifetimePrimaryVolumeUsd: dbBuyer.lifetimePrimaryVolumeUsd,
+          });
+        }
+      } catch {
+        // stay with catalog buyer if any
+      }
+    }
+    if (!buyer) {
+      buyer = ensureMemoryCreator({
+        id: input.buyerId,
+        displayName: "Collector",
+      });
+    }
     buyerAddress =
-      buyer?.wallets.find((w) => w.chain === listing.chain)?.address ??
+      buyer.wallets.find((w) => w.chain === listing.chain)?.address ??
       "unknown";
   } else {
     const prior = await prisma.purchase.count({

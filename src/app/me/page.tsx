@@ -7,6 +7,7 @@ import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import {
   findListingsByWalletNfts,
   getUserAssetProfile,
+  profileFromSession,
 } from "@/lib/marketplace/profile";
 import {
   fetchLinkedWalletNfts,
@@ -23,8 +24,8 @@ export default async function MeCollectionPage() {
   const user = await getSessionUser();
   if (!user) redirect("/sign-in?next=/me");
 
-  const profile = await getUserAssetProfile(user.id);
-  if (!profile) redirect("/");
+  const profile =
+    (await getUserAssetProfile(user.id)) ?? profileFromSession(user);
   const soldIds = await listClosedPrimarySaleIds();
 
   const catalog = [

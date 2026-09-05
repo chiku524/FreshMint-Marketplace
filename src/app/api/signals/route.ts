@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (!result.ok) {
-    return NextResponse.json(result, { status: 404 });
+    const status = result.error === "not_found" ? 404 : 400;
+    return NextResponse.json(result, { status });
   }
   return NextResponse.json(result);
 }

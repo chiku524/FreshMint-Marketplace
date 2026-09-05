@@ -59,7 +59,17 @@ export function ListingActions({
         setMsg("sign_in");
         return { error: "sign_in" };
       }
-      const error = data.error || data.errors?.join(", ") || "failed";
+      const raw = data.error || data.errors?.join(", ") || "failed";
+      const error =
+        raw === "self_purchase"
+          ? "You can't buy your own work"
+          : raw === "already_sold"
+            ? "already_sold"
+            : raw === "unavailable"
+              ? "This work isn't available to buy"
+              : raw === "wash_blocked" || raw === "high_velocity_low_dwell"
+                ? "Purchase blocked"
+                : raw;
       setMsg(error);
       return { error };
     }
