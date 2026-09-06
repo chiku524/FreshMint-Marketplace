@@ -539,9 +539,13 @@ export function buildSeedState(): MarketplaceState {
     title: "Static Garden",
     creatorId: "artist-glitch",
     chain: "solana",
+    network: "solana",
     heroListingId: "listing-glitch-col-hero",
     sampleListingIds: ["listing-glitch-col-2", "listing-glitch-col-3"],
     totalItems: 3,
+    deployStatus: "confirmed",
+    contractAddress: "sol-col-static-garden",
+    escrowAddress: null,
   });
 
   shelves.set("shelf-ink", {

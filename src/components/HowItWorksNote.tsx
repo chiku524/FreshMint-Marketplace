@@ -16,7 +16,7 @@ const NOTES: Record<
   },
   create: {
     href: "/docs#flow",
-    text: "Drops stay on the platform. Gas only if someone later withdraws the NFT.",
+    text: "Create deploys your collection; publish mints into it. Collectors buy in USD.",
   },
   buy: {
     href: "/docs#fees",
@@ -24,7 +24,7 @@ const NOTES: Record<
   },
   collect: {
     href: "/docs#withdraw",
-    text: "Collected works stay off-chain until you withdraw them to a wallet.",
+    text: "Withdraw transfers an already-minted token to your wallet — it does not mint again.",
   },
   funds: {
     href: "/docs#settlement",

@@ -116,6 +116,7 @@ export interface Collection {
   title: string;
   creatorId: string;
   chain: Chain;
+  network?: NetworkId | string;
   heroListingId: string | null;
   sampleListingIds: string[];
   totalItems: number;
@@ -124,6 +125,10 @@ export interface Collection {
   dropEndsAt?: number | null;
   dropPriceUsd?: number | null;
   mediaBytes?: number;
+  contractAddress?: string | null;
+  deployTxHash?: string | null;
+  deployStatus?: "none" | "pending_wallet" | "confirmed" | "failed" | string;
+  escrowAddress?: string | null;
 }
 
 export interface Shelf {

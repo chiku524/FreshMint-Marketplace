@@ -198,6 +198,8 @@ model Collection {
   title           String
   creatorId       String
   chain           String
+  /// ethereum | base | arbitrum | optimism | solana | boing
+  network         String  @default("ethereum")
   heroListingId   String?
   sampleIdsJson   String  @default("[]")
   totalItems      Int     @default(0)
@@ -207,6 +209,13 @@ model Collection {
   dropEndsAt      DateTime?
   dropPriceUsd    Float?
   mediaBytes      Int     @default(0)
+  /// On-chain collection contract (EVM address / Solana / Boing id)
+  contractAddress String?
+  deployTxHash    String?
+  /// none | pending_wallet | confirmed | failed
+  deployStatus    String  @default("none")
+  /// Custody address holding minted tokens until withdraw
+  escrowAddress   String?
 
   creator  User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   listings Listing[]

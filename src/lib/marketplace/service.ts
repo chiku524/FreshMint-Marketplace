@@ -320,6 +320,7 @@ export async function createCollectionForUser(input: {
   title: string;
   chain?: Chain;
   network?: NetworkId | string;
+  creatorAddress?: string | null;
 }) {
   const title = input.title.trim();
   if (title.length < 1 || title.length > 120) {
@@ -327,19 +328,128 @@ export async function createCollectionForUser(input: {
   }
   const network = resolveNetwork(input.network, input.chain);
   const chain = vmFromNetwork(network);
-  const collection: Collection = {
-    id: `col-mem-${Date.now()}`,
-    title,
-    creatorId: input.creatorId,
+  const creatorAddress = input.creatorAddress?.trim() || "";
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  let collection: Collection;
+
+  if (mode === "memory" || isMemoryMode()) {
+    collection = {
+      id: `col-mem-${Date.now()}`,
+      title,
+      creatorId: input.creatorId,
+      chain,
+      network,
+      heroListingId: null,
+      sampleListingIds: [],
+      totalItems: 0,
+      dropKind: "none",
+      dropStartsAt: null,
+      dropEndsAt: null,
+      dropPriceUsd: null,
+      mediaBytes: 0,
+      contractAddress: null,
+      deployTxHash: null,
+      deployStatus: "pending_wallet",
+      escrowAddress: null,
+    };
+    const mem = getMemoryEngine();
+    mem.state.collections.set(collection.id, collection);
+  } else {
+    const created = await prisma.collection.create({
+      data: {
+        title,
+        creatorId: input.creatorId,
+        chain,
+        network,
+        deployStatus: "pending_wallet",
+      },
+    });
+    collection = toCollection(created);
+  }
+
+  const { buildCollectionDeployIntent } = await import("@/lib/onchain/collection");
+  const deployIntent = buildCollectionDeployIntent({
+    collectionId: collection.id,
+    title: collection.title,
+    creatorAddress:
+      creatorAddress ||
+      (
+        await getDiscoveryEngine()
+      ).state.creators
+        .get(input.creatorId)
+        ?.wallets.find((w) => w.chain === chain)?.address ||
+      "",
+    network,
     chain,
-    heroListingId: null,
-    sampleListingIds: [],
-    totalItems: 0,
-    dropKind: "none",
-    dropStartsAt: null,
-    dropEndsAt: null,
-    dropPriceUsd: null,
-    mediaBytes: 0,
+  });
+
+  // Simulated deploys (no wallet / memory) are confirmed immediately.
+  if (deployIntent.status === "simulated" && deployIntent.txHash) {
+    const confirmed = await confirmCollectionDeploy({
+      collectionId: collection.id,
+      creatorId: input.creatorId,
+      txHash: deployIntent.txHash,
+      contractAddress: deployIntent.contractAddress,
+      escrowAddress: deployIntent.escrowAddress,
+    });
+    if (confirmed.ok) {
+      return {
+        ok: true as const,
+        collection: confirmed.collection,
+        deployIntent: null,
+        errors: [] as string[],
+      };
+    }
+  }
+
+  return {
+    ok: true as const,
+    collection: {
+      ...collection,
+      deployStatus: "pending_wallet",
+      escrowAddress: deployIntent.escrowAddress,
+    },
+    deployIntent,
+    errors: [] as string[],
+  };
+}
+
+export async function confirmCollectionDeploy(input: {
+  collectionId: string;
+  creatorId: string;
+  txHash: string;
+  contractAddress?: string | null;
+  escrowAddress?: string | null;
+}) {
+  if (!input.txHash || input.txHash.length < 8) {
+    return { ok: false as const, error: "invalid_tx" };
+  }
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, error: "collection_not_found" };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const contractAddress =
+    input.contractAddress?.trim() ||
+    existing.contractAddress ||
+    `pending:${input.collectionId}`;
+  const escrowAddress =
+    input.escrowAddress?.trim() ||
+    existing.escrowAddress ||
+    null;
+
+  const next: Collection = {
+    ...existing,
+    contractAddress,
+    deployTxHash: input.txHash,
+    deployStatus: "confirmed",
+    escrowAddress,
   };
 
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
@@ -347,23 +457,134 @@ export async function createCollectionForUser(input: {
   const mode = await ensureDatabaseReady();
 
   if (mode === "memory" || isMemoryMode()) {
-    const mem = getMemoryEngine();
-    mem.state.collections.set(collection.id, collection);
-    return { ok: true as const, collection, errors: [] as string[] };
+    getMemoryEngine().state.collections.set(input.collectionId, next);
+    return { ok: true as const, collection: next };
   }
 
-  const created = await prisma.collection.create({
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
     data: {
-      title,
-      creatorId: input.creatorId,
-      chain,
+      contractAddress,
+      deployTxHash: input.txHash,
+      deployStatus: "confirmed",
+      escrowAddress,
     },
   });
-  return {
-    ok: true as const,
-    collection: toCollection(created),
-    errors: [] as string[],
-  };
+  const mapped = toCollection(updated);
+  engine.state.collections.set(input.collectionId, mapped);
+  return { ok: true as const, collection: mapped };
+}
+
+export async function prepareCollectionPublishMints(input: {
+  collectionId: string;
+  creatorId: string;
+  listingIds: string[];
+  creatorAddress?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+  if (collection.deployStatus !== "confirmed" || !collection.contractAddress) {
+    return { ok: false as const, error: "collection_not_deployed" };
+  }
+
+  const creator =
+    input.creatorAddress?.trim() ||
+    engine.state.creators
+      .get(input.creatorId)
+      ?.wallets.find((w) => w.chain === collection.chain)?.address ||
+    "";
+
+  const items = input.listingIds
+    .map((id) => {
+      const listing = engine.state.listings.get(id);
+      if (!listing || listing.collectionId !== input.collectionId) return null;
+      if (listing.tokenId && listing.mintTxHash) return null;
+      return {
+        listingId: listing.id,
+        tokenUri:
+          listing.mediaUrl ?? `https://freshmint.local/metadata/${listing.id}`,
+        title: listing.title,
+      };
+    })
+    .filter(Boolean) as { listingId: string; tokenUri: string; title: string }[];
+
+  if (!items.length) {
+    return { ok: true as const, batches: [], alreadyMinted: true as const };
+  }
+
+  const { buildCollectionMintBatches } = await import("@/lib/onchain/collection");
+  const network = resolveNetwork(collection.network, collection.chain);
+  const batches = buildCollectionMintBatches({
+    network,
+    chain: collection.chain,
+    contractAddress: collection.contractAddress,
+    creatorAddress: creator,
+    escrowAddress: collection.escrowAddress || creator,
+    items,
+    startingTokenId: 1,
+  });
+
+  return { ok: true as const, batches, alreadyMinted: false as const };
+}
+
+export async function confirmCollectionMintBatch(input: {
+  collectionId: string;
+  creatorId: string;
+  txHash: string;
+  listingIds: string[];
+  tokenIds?: string[];
+  contractAddress?: string | null;
+}) {
+  if (!input.txHash || input.txHash.length < 8) {
+    return { ok: false as const, error: "invalid_tx" };
+  }
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const contractAddress =
+    input.contractAddress?.trim() || collection.contractAddress || null;
+  const tokenIds = input.tokenIds ?? [];
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+
+  for (let i = 0; i < input.listingIds.length; i++) {
+    const listingId = input.listingIds[i]!;
+    const listing = engine.state.listings.get(listingId);
+    if (!listing || listing.collectionId !== input.collectionId) continue;
+    const tokenId = tokenIds[i] ?? listing.tokenId ?? String(i + 1);
+    const next = {
+      ...listing,
+      mintTxHash: input.txHash,
+      tokenId,
+      contractAddress: contractAddress ?? listing.contractAddress,
+    };
+    if (memory) {
+      getMemoryEngine().state.listings.set(listingId, next);
+    } else {
+      await prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          mintTxHash: input.txHash,
+          tokenId,
+          ...(contractAddress ? { contractAddress } : {}),
+        },
+      });
+      engine.state.listings.set(listingId, next);
+    }
+  }
+
+  return { ok: true as const, txHash: input.txHash };
 }
 
 export async function updateCollectionDrop(input: {
@@ -771,16 +992,59 @@ export async function withdrawPurchaseToWallet(input: {
     return { ok: false as const, error: "wallet_required" };
   }
 
-  const minted = await mintListingToAddress({
-    listingId: listing.id,
-    ownerAddress: destination,
-  });
-  if (!minted.ok) return minted;
+  const alreadyMinted = Boolean(
+    listing.tokenId && listing.contractAddress && listing.mintTxHash,
+  );
+
+  let txHash: string | null = null;
+  let walletTx: unknown;
+  let chain = listing.chain;
+  let network = resolveNetwork(listing.network, listing.chain);
+
+  if (alreadyMinted) {
+    const collection = listing.collectionId
+      ? engine.state.collections.get(listing.collectionId)
+      : null;
+    const escrow =
+      collection?.escrowAddress ||
+      listing.contractAddress ||
+      destination;
+    const { buildWithdrawTransferIntent } = await import(
+      "@/lib/onchain/collection"
+    );
+    try {
+      const transfer = buildWithdrawTransferIntent({
+        network,
+        chain: listing.chain,
+        contractAddress: listing.contractAddress!,
+        tokenId: listing.tokenId!,
+        escrowAddress: escrow!,
+        destinationAddress: destination,
+      });
+      walletTx = transfer.walletTx;
+      txHash = transfer.txHash || `pending-withdraw:${listing.id}:${Date.now()}`;
+      chain = transfer.chain;
+      network = transfer.network;
+    } catch {
+      return { ok: false as const, error: "transfer_unavailable" };
+    }
+  } else {
+    // Legacy listings without publish mint — still mint on withdraw once.
+    const minted = await mintListingToAddress({
+      listingId: listing.id,
+      ownerAddress: destination,
+    });
+    if (!minted.ok) return minted;
+    txHash = minted.txHash;
+    walletTx = minted.walletTx;
+    chain = minted.chain;
+    network = minted.network;
+  }
 
   const withdrawnAt = Date.now();
   if (memory) {
     updateMemoryPurchase(purchase.id, {
-      withdrawTxHash: minted.txHash,
+      withdrawTxHash: txHash,
       withdrawAddress: destination,
       withdrawnAt,
     });
@@ -788,7 +1052,7 @@ export async function withdrawPurchaseToWallet(input: {
     await prisma.purchase.update({
       where: { id: purchase.id },
       data: {
-        withdrawTxHash: minted.txHash,
+        withdrawTxHash: txHash,
         withdrawAddress: destination,
         withdrawnAt: new Date(withdrawnAt),
       },
@@ -800,10 +1064,11 @@ export async function withdrawPurchaseToWallet(input: {
     purchaseId: purchase.id,
     listingId: listing.id,
     destinationAddress: destination,
-    txHash: minted.txHash,
-    walletTx: minted.walletTx,
-    chain: minted.chain,
-    network: minted.network,
+    txHash,
+    walletTx,
+    chain,
+    network,
+    transfer: alreadyMinted,
   };
 }
 

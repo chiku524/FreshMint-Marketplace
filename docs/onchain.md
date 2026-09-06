@@ -17,15 +17,26 @@ Set `NEXT_PUBLIC_CHAIN_MODE=testnet` (default) or `mainnet`.
 
 **Boing is a native L1**, not an EVM chain. Do not add it via MetaMask `wallet_addEthereumChain`. Use [Boing Express](https://boing.express) (`window.boing`) and 32-byte account ids (`0x` + 64 hex). Public RPC: `https://testnet-rpc.boing.network/`. Explorer: `https://boing.observer`. Boing is **not** on Relay — `/bridge` excludes it.
 
-## Minting (lazy / on withdraw)
+## Collection deploy + mint at publish
 
-Creates, collections, drops, and buys stay on FreshMint. Gas is paid only when a collector withdraws an NFT to a wallet, or when moving ETH / SOL / Boing.
+Creates and buys stay on FreshMint (USD). On-chain work happens in two **creator-paid** phases:
 
-- **EVM:** `FreshMintERC721.safeMint` — real ERC-721; token URI should point at media/metadata (Blob URL).
-- **Solana:** Metaplex Core asset; Phantom signs (or server key on Devnet).
-- **Boing:** Boing Express signs a native `contract_deploy_meta` with the **pinned reference NFT collection bytecode** (`boing.reference_nft_collection.v0`, purpose `nft`). Empty bytecode is rejected by protocol QA (`MALFORMED_BYTECODE`). If `NEXT_PUBLIC_BOING_NFT_COLLECTION` is set, mint uses `contract_call` with official `transfer_nft` (selector `0x04`) calldata instead. No server-side Boing minter key in this slice.
-- Withdraw (`POST /api/withdraw`) prepares a wallet tx; `/api/onchain/confirm` stores the hash and verifies when a live market/RPC is configured.
-- Listings show **Minted** + explorer links when `mintTxHash` is set.
+1. **Create collection** — creator wallet deploys a per-collection contract (`FreshMintERC721` on EVM; Boing `contract_deploy_meta`; Solana collection attestation). Store `contractAddress` / `deployTxHash` on the collection.
+2. **Soft-launch / publish** — creator wallet mints tokens **into that collection** (EVM `safeMintBatch` in chunks of 25). Each listing gets `tokenId` + `mintTxHash`.
+
+Collector **withdraw** transfers an already-minted `tokenId` from escrow to the collector wallet — it does **not** mint into the collection.
+
+| Step | On-chain | Who pays gas |
+|------|----------|--------------|
+| Create collection | Deploy contract | Creator |
+| Publish / soft-launch | Batch mint into collection | Creator |
+| Buy | No | — (USD on FreshMint) |
+| Withdraw | Transfer existing token | Collector (usual) |
+
+- **EVM:** Deploy bytecode from `src/lib/onchain/evm-artifacts/freshMintErc721Bytecode.ts`. Mint URI should point at media (Blob URL).
+- **Solana:** Metaplex Core asset per piece at publish; Phantom signs (or server key on Devnet for legacy paths only).
+- **Boing:** Collection deploy via `contract_deploy_meta` with pinned reference NFT bytecode; mints use `contract_call` when a collection address exists.
+- Confirm deploy: `POST /api/collections/[id]/deploy`. Confirm mint batches: `POST /api/collections/[id]/mint`.
 
 ## Platform fees (primary sales)
 
@@ -47,7 +58,7 @@ npm run wallets:deploy-squads
 
 Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
-Platform sales record the 3% split on each `Purchase` row. The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; prefer platform settlement so collectors skip gas until they withdraw.
+Platform sales record the 3% split on each `Purchase` row. The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; prefer platform settlement so collectors skip gas until they withdraw (transfer).
 
 ## Bridge
 

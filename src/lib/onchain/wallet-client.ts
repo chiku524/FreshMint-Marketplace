@@ -8,7 +8,8 @@ export type EvmWalletTx = {
   chain: "evm";
   network?: NetworkId;
   chainId?: number;
-  to: string;
+  /** Omit for contract creation deploys. */
+  to?: string;
   data: string;
   value?: string;
   from?: string;
@@ -146,16 +147,17 @@ export async function sendEvmWalletTx(tx: EvmWalletTx): Promise<string> {
   const chainId = tx.chainId ?? 11155111;
   await ensureEvmChain(eth, chainId);
 
+  const params: Record<string, string> = {
+    from,
+    data: tx.data,
+    value: tx.value ?? "0x0",
+  };
+  // Contract creation omits `to`.
+  if (tx.to) params.to = tx.to;
+
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [
-      {
-        from,
-        to: tx.to,
-        data: tx.data,
-        value: tx.value ?? "0x0",
-      },
-    ],
+    params: [params],
   })) as string;
   return hash;
 }

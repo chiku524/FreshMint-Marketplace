@@ -117,7 +117,9 @@ contract FreshMintERC721 {
     }
 
     /// @notice Mint a new token to `to` with metadata URI and optional primary price.
+    /// Only the collection owner (deployer) may mint.
     function safeMint(address to, string calldata uri, uint256 priceWei) external returns (uint256 tokenId) {
+        require(msg.sender == owner, "auth");
         require(to != address(0), "zero");
         tokenId = nextId++;
         _ownerOf[tokenId] = to;
@@ -127,6 +129,30 @@ contract FreshMintERC721 {
         emit Transfer(address(0), to, tokenId);
         emit Minted(to, tokenId, uri);
         if (priceWei > 0) emit Listed(tokenId, priceWei);
+    }
+
+    /// @notice Mint many tokens to `to` in one transaction (creator-paid publish path).
+    function safeMintBatch(
+        address to,
+        string[] calldata uris,
+        uint256 priceWei
+    ) external returns (uint256[] memory tokenIds) {
+        require(msg.sender == owner, "auth");
+        require(to != address(0), "zero");
+        uint256 n = uris.length;
+        require(n > 0 && n <= 50, "batch");
+        tokenIds = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 tokenId = nextId++;
+            _ownerOf[tokenId] = to;
+            _balances[to] += 1;
+            _tokenURIs[tokenId] = uris[i];
+            priceOf[tokenId] = priceWei;
+            tokenIds[i] = tokenId;
+            emit Transfer(address(0), to, tokenId);
+            emit Minted(to, tokenId, uris[i]);
+            if (priceWei > 0) emit Listed(tokenId, priceWei);
+        }
     }
 
     function setPrice(uint256 tokenId, uint256 priceWei) external {

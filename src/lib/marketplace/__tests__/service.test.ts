@@ -6,13 +6,16 @@ import {
   resetMemoryStoreForTests,
 } from "@/lib/data/memory-store";
 import {
+  confirmCollectionMintBatch,
   confirmOnchainTx,
   createCollectionForUser,
   createListingForUser,
+  getDiscoveryEngine,
   updateCollectionDrop,
   followArtist,
   listPendingNominations,
   nominateListingForUser,
+  prepareCollectionPublishMints,
   purchaseListing,
   recordSignal,
   settleNomination,
@@ -507,6 +510,86 @@ describe("marketplace service (memory mode)", () => {
       txHash: "memosig1234567890abcdef",
     });
     expect(confirmed.ok).toBe(true);
+  });
+
+  it("deploys a collection, mints at publish, and withdraws via transfer", async () => {
+    const created = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Onchain Drop",
+      network: "ethereum",
+      creatorAddress: "",
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.collection.deployStatus).toBe("confirmed");
+    expect(created.collection.contractAddress).toBeTruthy();
+
+    const piece = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Minted Leaf",
+      description: "",
+      type: "collection",
+      network: "ethereum",
+      priceUsd: 18,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `minted-leaf-${Date.now()}`,
+      collectionId: created.collection.id,
+      publishSoftLaunch: true,
+    });
+    expect(piece.ok).toBe(true);
+    if (!piece.ok) return;
+
+    const prepared = await prepareCollectionPublishMints({
+      collectionId: created.collection.id,
+      creatorId: "artist-fresh",
+      listingIds: [piece.listing.id],
+      creatorAddress: "0xabc0000000000000000000000000000000000001",
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    expect(prepared.batches.length).toBeGreaterThan(0);
+
+    const batch = prepared.batches[0]!;
+    const minted = await confirmCollectionMintBatch({
+      collectionId: created.collection.id,
+      creatorId: "artist-fresh",
+      txHash: batch.txHash || `0x${"ab".repeat(16)}`,
+      listingIds: batch.listingIds,
+      tokenIds: batch.provisionalTokenIds,
+      contractAddress: created.collection.contractAddress,
+    });
+    expect(minted.ok).toBe(true);
+
+    const engine = await getDiscoveryEngine();
+    const listing = engine.state.listings.get(piece.listing.id);
+    expect(listing?.tokenId).toBeTruthy();
+    expect(listing?.mintTxHash).toBeTruthy();
+    expect(listing?.contractAddress).toBeTruthy();
+
+    const bought = await purchaseListing({
+      listingId: piece.listing.id,
+      buyerId: "collector-mira",
+      amountUsd: 18,
+    });
+    expect(bought.ok).toBe(true);
+    if (!bought.ok) return;
+
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    const purchase = getMemoryPurchases().find(
+      (p) => p.listingId === piece.listing.id && p.buyerId === "collector-mira",
+    );
+    expect(purchase).toBeTruthy();
+    if (!purchase) return;
+
+    const withdrawn = await withdrawPurchaseToWallet({
+      purchaseId: purchase.id,
+      buyerId: "collector-mira",
+      destinationAddress: "0xabc0000000000000000000000000000000000099",
+    });
+    expect(withdrawn.ok).toBe(true);
+    if (!withdrawn.ok) return;
+    expect(withdrawn.transfer).toBe(true);
   });
 
   it("schedules a limited drop with traits and a supply cap", async () => {

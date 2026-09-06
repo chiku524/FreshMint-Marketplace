@@ -102,6 +102,7 @@ export function toCollection(c: DbCollection): Collection {
     title: c.title,
     creatorId: c.creatorId,
     chain: c.chain as Collection["chain"],
+    network: resolveNetwork(c.network, c.chain as Collection["chain"]),
     heroListingId: c.heroListingId,
     sampleListingIds: JSON.parse(c.sampleIdsJson || "[]") as string[],
     totalItems: c.totalItems,
@@ -110,6 +111,10 @@ export function toCollection(c: DbCollection): Collection {
     dropEndsAt: c.dropEndsAt?.getTime() ?? null,
     dropPriceUsd: c.dropPriceUsd,
     mediaBytes: c.mediaBytes,
+    contractAddress: c.contractAddress ?? null,
+    deployTxHash: c.deployTxHash ?? null,
+    deployStatus: c.deployStatus ?? "none",
+    escrowAddress: c.escrowAddress ?? null,
   };
 }
 

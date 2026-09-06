@@ -10,6 +10,12 @@ import {
   parseDropMetadataCsv,
   parseTraits,
 } from "@/lib/marketplace/drops";
+import {
+  maybeSendWalletTx,
+  requestBuyerAddress,
+  sendEvmWalletTx,
+  type EvmWalletTx,
+} from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -26,7 +32,10 @@ type CollectionOption = {
   id: string;
   title: string;
   chain: string;
+  network?: string;
   mediaBytes?: number;
+  contractAddress?: string | null;
+  deployStatus?: string | null;
 };
 
 type Piece = {
@@ -115,6 +124,11 @@ export function CreateWizard() {
     current: number;
     total: number;
   } | null>(null);
+  const [mintProgress, setMintProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [deployNote, setDeployNote] = useState<string | null>(null);
 
   const steps = useMemo(() => stepDefs(intent), [intent]);
   const step = steps[stepIndex] ?? steps[0];
@@ -145,14 +159,38 @@ export function CreateWizard() {
   }
 
   async function ensureCollection(): Promise<string> {
-    if (collectionId) return collectionId;
+    if (collectionId) {
+      const existing = collections.find((c) => c.id === collectionId);
+      if (
+        existing?.deployStatus === "confirmed" &&
+        existing.contractAddress
+      ) {
+        return collectionId;
+      }
+      // Existing collection still needs deploy confirmation.
+      if (existing && existing.deployStatus !== "confirmed") {
+        throw new Error(
+          "This collection is not deployed on-chain yet — create a new one or finish deploy",
+        );
+      }
+      return collectionId;
+    }
     const title = newTitle.trim();
     if (!title) throw new Error("Choose an existing collection or name a new one");
+
+    const creatorAddress = await requestBuyerAddress(
+      network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
+    );
+
     const res = await fetch("/api/collections", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, network }),
+      body: JSON.stringify({
+        title,
+        network,
+        creatorAddress: creatorAddress || undefined,
+      }),
     });
     const data = await res.json();
     if (res.status === 401) throw new Error("sign_in");
@@ -162,6 +200,53 @@ export function CreateWizard() {
       );
     }
     const id = String(data.collection.id);
+    const deployIntent = data.deployIntent as
+      | {
+          status: string;
+          contractAddress: string;
+          escrowAddress?: string;
+          walletTx?: unknown;
+        }
+      | null
+      | undefined;
+
+    if (deployIntent?.walletTx) {
+      setDeployNote("Confirm collection deploy in your wallet (you pay gas)…");
+      const wt = deployIntent.walletTx as EvmWalletTx & { chain: string };
+      let txHash: string | null = null;
+      if (wt.chain === "evm") {
+        txHash = await sendEvmWalletTx(wt);
+      } else {
+        txHash = await maybeSendWalletTx({
+          walletTx: deployIntent.walletTx,
+          listingId: id,
+          action: "mint",
+        });
+      }
+      if (!txHash) {
+        throw new Error(
+          "Wallet required to deploy the collection contract on your mint network",
+        );
+      }
+      const confirm = await fetch(`/api/collections/${id}/deploy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txHash,
+          contractAddress: deployIntent.contractAddress,
+          escrowAddress: deployIntent.escrowAddress,
+        }),
+      });
+      const confirmData = await confirm.json();
+      if (!confirm.ok) {
+        throw new Error(confirmData.error || "deploy_confirm_failed");
+      }
+      setDeployNote(`Collection deployed · ${txHash.slice(0, 10)}…`);
+    } else if (data.collection?.deployStatus === "confirmed") {
+      setDeployNote("Collection contract ready (simulated or already deployed).");
+    }
+
     setCollectionId(id);
     window.dispatchEvent(new Event("fm-collections-changed"));
     loadMine();
@@ -402,6 +487,7 @@ export function CreateWizard() {
         }
       }
 
+      const listingIds: string[] = [];
       for (const [index, item] of pieces.entries()) {
         const supply =
           intent === "drop" && dropKind === "limited" && item.maxSupply
@@ -455,6 +541,79 @@ export function CreateWizard() {
             (data.errors && data.errors.join(", ")) || data.error || "listing_failed",
           );
         }
+        const listingId = String(data.listing?.id ?? data.id ?? "");
+        if (listingId) listingIds.push(listingId);
+      }
+
+      // Mint into the collection contract (creator pays gas).
+      const creatorAddress = await requestBuyerAddress(
+        network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
+      );
+      const mintPrep = await fetch(`/api/collections/${id}/mint`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "prepare",
+          listingIds,
+          creatorAddress: creatorAddress || undefined,
+        }),
+      });
+      const mintPrepData = await mintPrep.json();
+      if (!mintPrep.ok) {
+        throw new Error(mintPrepData.error || "mint_prepare_failed");
+      }
+      const batches = (mintPrepData.batches ?? []) as Array<{
+        listingIds: string[];
+        provisionalTokenIds: string[];
+        walletTx?: unknown;
+        contractAddress?: string;
+        txHash?: string;
+        status?: string;
+      }>;
+      if (batches.length) {
+        setMintProgress({ current: 0, total: batches.length });
+        for (let b = 0; b < batches.length; b++) {
+          const batch = batches[b]!;
+          let txHash = batch.txHash || "";
+          if (batch.walletTx) {
+            const wt = batch.walletTx as EvmWalletTx & { chain: string };
+            if (wt.chain === "evm") {
+              txHash = await sendEvmWalletTx(wt);
+            } else {
+              txHash =
+                (await maybeSendWalletTx({
+                  walletTx: batch.walletTx,
+                  listingId: batch.listingIds[0] ?? id,
+                  action: "mint",
+                })) || "";
+            }
+            if (!txHash) {
+              throw new Error(
+                "Wallet required to mint pieces into your collection (you pay gas)",
+              );
+            }
+          } else if (!txHash) {
+            txHash = `simulated-mint:${id}:${b}:${Date.now()}`;
+          }
+          const confirm = await fetch(`/api/collections/${id}/mint`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "confirm",
+              txHash,
+              listingIds: batch.listingIds,
+              tokenIds: batch.provisionalTokenIds,
+              contractAddress: batch.contractAddress,
+            }),
+          });
+          const confirmData = await confirm.json();
+          if (!confirm.ok) {
+            throw new Error(confirmData.error || "mint_confirm_failed");
+          }
+          setMintProgress({ current: b + 1, total: batches.length });
+        }
       }
 
       const label =
@@ -464,9 +623,10 @@ export function CreateWizard() {
             ? "auction listing"
             : "1/1 listing";
       setOk(
-        `Published ${label}. Collectors buy from you on FreshMint — no wallet prompt.`,
+        `Published ${label} and minted on-chain into your collection. Collectors buy in USD; withdraw later transfers the existing token.`,
       );
       setPieces([]);
+      setMintProgress(null);
       setStepIndex(0);
       setIntent(null);
       router.refresh();
@@ -475,6 +635,7 @@ export function CreateWizard() {
       setError(err instanceof Error ? err.message : "failed");
     } finally {
       setBusy(false);
+      setMintProgress(null);
     }
   }
 
@@ -550,8 +711,8 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">Collection & network</h2>
             <p className="create-wizard__lead">
-              Works live in a creator-owned set. Pick a mint network for later
-              withdrawal.
+              Works live in a creator-owned set. Creating a new collection
+              deploys its on-chain contract — you pay gas from a linked wallet.
             </p>
             <div className="create-wizard__grid-2">
               <label>
@@ -921,8 +1082,9 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">Review & publish</h2>
             <p className="create-wizard__lead">
-              Soft-launch to Open Lane. Collectors buy in USD — gas only if
-              someone later withdraws.
+              Soft-launch lists the works, then mints them into your collection
+              contract (you pay gas in batches). Collectors buy in USD; withdraw
+              later transfers an already-minted token.
             </p>
             <dl className="create-wizard__summary">
               <div>
@@ -973,6 +1135,17 @@ export function CreateWizard() {
           </>
         ) : null}
 
+        {deployNote ? (
+          <p style={{ color: "var(--emergent)", margin: "0.75rem 0 0" }}>
+            {deployNote}
+          </p>
+        ) : null}
+        {mintProgress ? (
+          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }}>
+            Minting on-chain batch {mintProgress.current} of {mintProgress.total}
+            … (you pay gas)
+          </p>
+        ) : null}
         {error === "sign_in" ? (
           <p style={{ color: "var(--ink-muted)", margin: "0.75rem 0 0" }}>
             <Link href="/sign-in?next=/create">Sign in</Link> to continue.

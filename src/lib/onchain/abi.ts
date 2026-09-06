@@ -1,5 +1,15 @@
 export const freshMintErc721Abi = [
   {
+    type: "constructor",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name_", type: "string" },
+      { name: "symbol_", type: "string" },
+      { name: "treasury_", type: "address" },
+      { name: "operatorWallet_", type: "address" },
+    ],
+  },
+  {
     type: "function",
     name: "safeMint",
     stateMutability: "nonpayable",
@@ -9,6 +19,38 @@ export const freshMintErc721Abi = [
       { name: "priceWei", type: "uint256" },
     ],
     outputs: [{ name: "tokenId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "safeMintBatch",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "uris", type: "string[]" },
+      { name: "priceWei", type: "uint256" },
+    ],
+    outputs: [{ name: "tokenIds", type: "uint256[]" }],
+  },
+  {
+    type: "function",
+    name: "transferFrom",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "tokenId", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setApprovalForAll",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "operator", type: "address" },
+      { name: "approved", type: "bool" },
+    ],
+    outputs: [],
   },
   {
     type: "function",
@@ -30,6 +72,13 @@ export const freshMintErc721Abi = [
     stateMutability: "view",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "nextId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     type: "event",

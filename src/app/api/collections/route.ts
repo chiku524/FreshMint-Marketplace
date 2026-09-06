@@ -36,6 +36,7 @@ const createSchema = z
     network: z
       .enum(["ethereum", "base", "arbitrum", "optimism", "solana", "boing"])
       .optional(),
+    creatorAddress: z.string().min(1).max(128).optional(),
   })
   .refine((v) => Boolean(v.network || v.chain), {
     message: "network_required",
@@ -61,14 +62,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_network" }, { status: 400 });
   }
 
+  const creatorAddress =
+    body.data.creatorAddress ||
+    user.wallets.find((w) => w.chain === vmFromNetwork(network))?.address ||
+    user.wallets[0]?.address ||
+    null;
+
   const result = await createCollectionForUser({
     creatorId: user.id,
     title: body.data.title,
     network,
     chain: vmFromNetwork(network),
+    creatorAddress,
   });
   if (!result.ok) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
   }
-  return NextResponse.json({ ok: true, collection: result.collection });
+  return NextResponse.json({
+    ok: true,
+    collection: result.collection,
+    deployIntent: result.deployIntent,
+  });
 }
