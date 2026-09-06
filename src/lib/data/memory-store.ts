@@ -21,6 +21,10 @@ export type MemoryPurchase = {
   feeOperatorUsd?: number;
   sellerNetUsd?: number;
   soldAt: number;
+  status?: string;
+  payNetwork?: string | null;
+  paymentTxHash?: string | null;
+  bridgeRequestId?: string | null;
   txHash: string | null;
   chain: string;
   withdrawTxHash?: string | null;
@@ -117,6 +121,10 @@ export function recordMemoryPurchase(
     feeOperatorUsd: purchase.feeOperatorUsd,
     sellerNetUsd: purchase.sellerNetUsd,
     soldAt: purchase.soldAt,
+    status: purchase.status ?? "completed",
+    payNetwork: purchase.payNetwork ?? null,
+    paymentTxHash: purchase.paymentTxHash ?? null,
+    bridgeRequestId: purchase.bridgeRequestId ?? null,
     txHash: purchase.txHash,
     chain: purchase.chain,
     withdrawTxHash: purchase.withdrawTxHash ?? null,

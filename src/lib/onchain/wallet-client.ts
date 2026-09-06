@@ -299,7 +299,7 @@ export async function maybeSendWalletTx(input: {
     | undefined;
   if (!wt || typeof wt !== "object") return null;
 
-  if (wt.chain === "evm" && "to" in wt && "data" in wt) {
+  if (wt.chain === "evm" && "data" in wt) {
     if (!browserWalletAvailable("evm")) return null;
     return sendEvmWalletTx(wt as EvmWalletTx);
   }

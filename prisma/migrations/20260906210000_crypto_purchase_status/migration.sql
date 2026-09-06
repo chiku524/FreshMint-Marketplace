@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'completed';
+ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "payNetwork" TEXT;
+ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "paymentTxHash" TEXT;
+ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "bridgeRequestId" TEXT;

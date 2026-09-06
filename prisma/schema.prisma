@@ -335,6 +335,12 @@ model Purchase {
   feeOperatorUsd Float @default(0)
   sellerNetUsd   Float @default(0)
   isFirst   Boolean  @default(false)
+  /// pending_payment | pending_transfer | completed | failed
+  status    String   @default("completed")
+  /// Network used to pay (may differ from listing network when bridged).
+  payNetwork String?
+  paymentTxHash String?
+  bridgeRequestId String?
   txHash    String?
   chain     String
   withdrawTxHash  String?

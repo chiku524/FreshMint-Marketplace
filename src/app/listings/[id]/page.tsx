@@ -203,6 +203,7 @@ export default async function ListingDetailPage({
             sold={soldIds.has(listing.id)}
             listingType={listing.type}
             chain={listing.chain}
+            network={listing.network}
             dropState={drop.state}
             repeatable={cap == null || cap > 1}
           />

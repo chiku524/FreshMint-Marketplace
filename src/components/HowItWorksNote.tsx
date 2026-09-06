@@ -12,23 +12,23 @@ const NOTES: Record<
 > = {
   home: {
     href: "/docs#flow",
-    text: `Collect on FreshMint — no gas on buys. ${PLATFORM_FEE_PERCENT.total}% treasury.`,
+    text: `Collect on FreshMint — pay crypto, own on-chain. ${PLATFORM_FEE_PERCENT.total}% treasury.`,
   },
   create: {
     href: "/docs#flow",
-    text: "Create deploys your collection; publish mints into it. Collectors buy in USD.",
+    text: "Create deploys your collection; publish mints into it. Collectors buy with crypto.",
   },
   buy: {
     href: "/docs#fees",
-    text: `This buy settles here. ${PLATFORM_FEE_PERCENT.total}% to the treasury. Withdraw anytime.`,
+    text: `This buy pays native (or bridges via Relay) and transfers the NFT to your wallet. ${PLATFORM_FEE_PERCENT.total}% treasury.`,
   },
   collect: {
     href: "/docs#withdraw",
-    text: "Withdraw transfers an already-minted token to your wallet — it does not mint again.",
+    text: "New buys already land in your wallet. Withdraw remains for legacy USD holds only.",
   },
   funds: {
     href: "/docs#settlement",
-    text: "Bridges and cash-out are on-chain. Art sales and listings are not.",
+    text: "Primary buys settle on-chain. Bridges move natives; Boing stays same-chain.",
   },
 };
 

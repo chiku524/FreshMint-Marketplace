@@ -96,6 +96,7 @@ export function WorkCard({
           sold={sold || bucket === "sold"}
           listingType={listing.type}
           chain={listing.chain}
+          network={listing.network}
           dropState={dropState}
           repeatable={supplyCap == null || supplyCap > 1}
         />

@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   enableMemoryMode,
   getMemoryEngine,
   getMemoryNominations,
+  recordMemoryPurchase,
   resetMemoryStoreForTests,
 } from "@/lib/data/memory-store";
+import type { NetworkId } from "@/lib/discovery/types";
 import {
   confirmCollectionMintBatch,
   confirmOnchainTx,
@@ -17,6 +19,7 @@ import {
   nominateListingForUser,
   prepareCollectionPublishMints,
   purchaseListing,
+  quoteCryptoPurchase,
   recordSignal,
   settleNomination,
   transitionListingStage,
@@ -29,6 +32,51 @@ beforeEach(() => {
   resetMemoryStoreForTests();
   enableMemoryMode("unit-test");
 });
+
+function markListingMintedForTest(listingId: string) {
+  const listing = getMemoryEngine().state.listings.get(listingId);
+  expect(listing, listingId).toBeTruthy();
+  if (!listing) return;
+  listing.tokenId = listing.tokenId || "1";
+  listing.contractAddress =
+    listing.contractAddress ||
+    (listing.chain === "solana"
+      ? "So11111111111111111111111111111111111111112"
+      : listing.chain === "boing"
+        ? `0x${"22".repeat(32)}`
+        : "0x1111111111111111111111111111111111111111");
+  listing.mintTxHash = listing.mintTxHash || `0xmint${listingId.replace(/\W/g, "").slice(-12)}`;
+}
+
+function cryptoBuy(input: {
+  listingId: string;
+  buyerId: string;
+  amountUsd?: number;
+  payNetwork?: NetworkId;
+  simulate?: boolean;
+}) {
+  const listing = getMemoryEngine().state.listings.get(input.listingId);
+  const payNetwork = (input.payNetwork ??
+    listing?.network ??
+    "ethereum") as NetworkId;
+  const payAddr =
+    payNetwork === "solana"
+      ? "Buyer1111111111111111111111111111111111111"
+      : `0x${"b1".repeat(20)}`;
+  const recvAddr =
+    listing?.chain === "solana"
+      ? "Recv11111111111111111111111111111111111111"
+      : `0x${"b2".repeat(20)}`;
+  return purchaseListing({
+    listingId: input.listingId,
+    buyerId: input.buyerId,
+    amountUsd: input.amountUsd,
+    payNetwork,
+    buyerPaymentAddress: payAddr,
+    buyerReceiveAddress: recvAddr,
+    simulate: input.simulate ?? true,
+  });
+}
 
 describe("marketplace service (memory mode)", () => {
   it("creates a soft-launched listing", async () => {
@@ -194,9 +242,10 @@ describe("marketplace service (memory mode)", () => {
     expect(listing).toBeTruthy();
     if (!listing || listing.priceUsd == null) return;
 
+    markListingMintedForTest(listing.id);
     const beforeSales =
       engine.state.creators.get(listing.creatorId)?.completedSales ?? 0;
-    const result = await purchaseListing({
+    const result = await cryptoBuy({
       listingId: listing.id,
       buyerId: "collector-mira",
       amountUsd: listing.priceUsd,
@@ -204,6 +253,7 @@ describe("marketplace service (memory mode)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.txHash).toBeTruthy();
+    expect(result.status).toBe("completed");
     expect(result.fees.feeTotalUsd).toBeCloseTo(listing.priceUsd * 0.03, 5);
     expect(result.fees.feeTreasuryUsd).toBeCloseTo(listing.priceUsd * 0.03, 5);
     expect(result.fees.feeOperatorUsd).toBe(0);
@@ -226,8 +276,9 @@ describe("marketplace service (memory mode)", () => {
       expect(listing?.chain).toBe(item.chain);
       expect(listing?.network).toBe(item.network);
       expect(listing?.priceUsd).toBeGreaterThan(0);
+      markListingMintedForTest(item.id);
 
-      const result = await purchaseListing({
+      const result = await cryptoBuy({
         listingId: item.id,
         buyerId: "collector-kai",
         amountUsd: listing!.priceUsd!,
@@ -240,19 +291,23 @@ describe("marketplace service (memory mode)", () => {
       expect(result.fees.sellerNetUsd).toBe(
         splitSaleProceeds(listing!.priceUsd!).sellerNetUsd,
       );
-      expect(result.walletTx).toBeUndefined();
+      expect(result.status).toBe("completed");
     }
   });
 
   it("blocks a second buy on unique inventory and allows open editions", async () => {
-    const first = await purchaseListing({
+    markListingMintedForTest("listing-nova-1");
+    markListingMintedForTest("listing-fresh-sold-auction");
+    markListingMintedForTest("listing-glitch-oe");
+
+    const first = await cryptoBuy({
       listingId: "listing-nova-1",
       buyerId: "collector-kai",
       amountUsd: 120,
     });
     expect(first.ok).toBe(true);
 
-    const again = await purchaseListing({
+    const again = await cryptoBuy({
       listingId: "listing-nova-1",
       buyerId: "collector-mira",
       amountUsd: 120,
@@ -260,19 +315,19 @@ describe("marketplace service (memory mode)", () => {
     expect(again.ok).toBe(false);
     if (!again.ok) expect(again.error).toBe("already_sold");
 
-    const soldAuction = await purchaseListing({
+    const soldAuction = await cryptoBuy({
       listingId: "listing-fresh-sold-auction",
       buyerId: "collector-kai",
       amountUsd: 180,
     });
     expect(soldAuction.ok).toBe(false);
 
-    const oe1 = await purchaseListing({
+    const oe1 = await cryptoBuy({
       listingId: "listing-glitch-oe",
       buyerId: "collector-kai",
       amountUsd: 25,
     });
-    const oe2 = await purchaseListing({
+    const oe2 = await cryptoBuy({
       listingId: "listing-glitch-oe",
       buyerId: "collector-mira",
       amountUsd: 25,
@@ -282,7 +337,8 @@ describe("marketplace service (memory mode)", () => {
   });
 
   it("uses the listing price when amountUsd is omitted", async () => {
-    const result = await purchaseListing({
+    markListingMintedForTest("listing-whale-featured");
+    const result = await cryptoBuy({
       listingId: "listing-whale-featured",
       buyerId: "collector-mira",
     });
@@ -292,7 +348,8 @@ describe("marketplace service (memory mode)", () => {
   });
 
   it("lets a signed-in buyer missing from the seed catalog purchase", async () => {
-    const result = await purchaseListing({
+    markListingMintedForTest("listing-boing-1");
+    const result = await cryptoBuy({
       listingId: "listing-boing-1",
       buyerId: "user-unknown-collector",
       amountUsd: 32,
@@ -332,12 +389,16 @@ describe("marketplace service (memory mode)", () => {
   });
 
   it("records a confirmed buy hash on the memory purchase", async () => {
-    const bought = await purchaseListing({
+    markListingMintedForTest("listing-fresh-1");
+    const bought = await cryptoBuy({
       listingId: "listing-fresh-1",
       buyerId: "collector-kai",
       amountUsd: 45,
+      simulate: false,
     });
     expect(bought.ok).toBe(true);
+    if (!bought.ok) return;
+    expect(bought.status).toBe("pending_payment");
 
     const confirmed = await confirmOnchainTx({
       listingId: "listing-fresh-1",
@@ -427,7 +488,7 @@ describe("marketplace service (memory mode)", () => {
     expect("walletTx" in created && created.walletTx).toBeFalsy();
   });
 
-  it("withdraws a collected listing to a wallet", async () => {
+  it("withdraws a legacy USD purchase to a wallet", async () => {
     const created = await createListingForUser({
       creatorId: "artist-fresh",
       title: "Withdraw Me",
@@ -443,19 +504,15 @@ describe("marketplace service (memory mode)", () => {
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const bought = await purchaseListing({
+    // Legacy USD hold (no payNetwork) — withdraw still mints/transfers.
+    const purchase = recordMemoryPurchase({
       listingId: created.listing.id,
       buyerId: "collector-kai",
       amountUsd: 16,
+      soldAt: Date.now(),
+      txHash: "platform:legacy-usd",
+      chain: "boing",
     });
-    expect(bought.ok).toBe(true);
-
-    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
-    const purchase = getMemoryPurchases().find(
-      (p) => p.listingId === created.listing.id && p.buyerId === "collector-kai",
-    );
-    expect(purchase).toBeTruthy();
-    if (!purchase) return;
 
     const withdrawn = await withdrawPurchaseToWallet({
       purchaseId: purchase.id,
@@ -470,7 +527,9 @@ describe("marketplace service (memory mode)", () => {
       method: "boing_sendTransaction",
     });
     expect(
-      getMemoryPurchases().find((p) => p.id === purchase.id)?.withdrawnAt,
+      (await import("@/lib/data/memory-store"))
+        .getMemoryPurchases()
+        .find((p) => p.id === purchase.id)?.withdrawnAt,
     ).toBeTruthy();
 
     const again = await withdrawPurchaseToWallet({
@@ -567,19 +626,21 @@ describe("marketplace service (memory mode)", () => {
     expect(listing?.mintTxHash).toBeTruthy();
     expect(listing?.contractAddress).toBeTruthy();
 
-    const bought = await purchaseListing({
+    const bought = await cryptoBuy({
       listingId: piece.listing.id,
       buyerId: "collector-mira",
       amountUsd: 18,
     });
     expect(bought.ok).toBe(true);
     if (!bought.ok) return;
+    expect(bought.status).toBe("completed");
 
     const { getMemoryPurchases } = await import("@/lib/data/memory-store");
     const purchase = getMemoryPurchases().find(
       (p) => p.listingId === piece.listing.id && p.buyerId === "collector-mira",
     );
     expect(purchase).toBeTruthy();
+    expect(purchase?.withdrawnAt).toBeTruthy();
     if (!purchase) return;
 
     const withdrawn = await withdrawPurchaseToWallet({
@@ -587,9 +648,13 @@ describe("marketplace service (memory mode)", () => {
       buyerId: "collector-mira",
       destinationAddress: "0xabc0000000000000000000000000000000000099",
     });
-    expect(withdrawn.ok).toBe(true);
-    if (!withdrawn.ok) return;
-    expect(withdrawn.transfer).toBe(true);
+    expect(withdrawn.ok).toBe(false);
+    if (!withdrawn.ok) {
+      expect(
+        withdrawn.error === "already_withdrawn" ||
+          withdrawn.error === "crypto_purchase_owned_at_buy",
+      ).toBe(true);
+    }
   });
 
   it("schedules a limited drop with traits and a supply cap", async () => {
@@ -643,19 +708,20 @@ describe("marketplace service (memory mode)", () => {
     ]);
     expect(piece.listing.maxSupply).toBe(2);
 
-    const first = await purchaseListing({
+    markListingMintedForTest(piece.listing.id);
+    const first = await cryptoBuy({
       listingId: piece.listing.id,
       buyerId: "collector-mira",
       amountUsd: 22,
     });
     expect(first.ok).toBe(true);
-    const second = await purchaseListing({
+    const second = await cryptoBuy({
       listingId: piece.listing.id,
       buyerId: "collector-kai",
       amountUsd: 22,
     });
     expect(second.ok).toBe(true);
-    const third = await purchaseListing({
+    const third = await cryptoBuy({
       listingId: piece.listing.id,
       buyerId: "collector-mira",
       amountUsd: 22,
@@ -683,12 +749,109 @@ describe("marketplace service (memory mode)", () => {
     });
     expect(drop.ok).toBe(true);
     if (!drop.ok) return;
-    const result = await purchaseListing({
+    markListingMintedForTest(drop.listing.id);
+    const result = await cryptoBuy({
       listingId: drop.listing.id,
       buyerId: "collector-mira",
       amountUsd: 12,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe("drop_not_started");
+  });
+
+  it("rejects unminted listings and Boing cross-chain pay", async () => {
+    const created = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Unminted",
+      description: "",
+      type: "single",
+      network: "ethereum",
+      priceUsd: 10,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `unminted-${Date.now()}`,
+      publishSoftLaunch: true,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const unminted = await cryptoBuy({
+      listingId: created.listing.id,
+      buyerId: "collector-mira",
+      amountUsd: 10,
+    });
+    expect(unminted.ok).toBe(false);
+    if (!unminted.ok) expect(unminted.error).toBe("listing_not_minted");
+
+    markListingMintedForTest("listing-boing-1");
+    const boingCross = await purchaseListing({
+      listingId: "listing-boing-1",
+      buyerId: "collector-mira",
+      amountUsd: 32,
+      payNetwork: "ethereum",
+      buyerPaymentAddress: `0x${"b1".repeat(20)}`,
+      buyerReceiveAddress: `0x${"22".repeat(32)}`,
+      simulate: true,
+    });
+    expect(boingCross.ok).toBe(false);
+    if (!boingCross.ok) expect(boingCross.error).toBe("boing_same_chain_only");
+
+    const quoted = await quoteCryptoPurchase({
+      listingId: "listing-boing-1",
+      payNetwork: "ethereum",
+    });
+    expect(quoted.ok).toBe(false);
+    if (!quoted.ok) expect(quoted.error).toBe("boing_same_chain_only");
+  });
+
+  it("same-chain crypto purchase marks ownership delivered", async () => {
+    markListingMintedForTest("listing-fresh-1");
+    const result = await cryptoBuy({
+      listingId: "listing-fresh-1",
+      buyerId: "collector-mira",
+      amountUsd: 45,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.status).toBe("completed");
+    expect(result.transferTxHash).toBeTruthy();
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    const row = getMemoryPurchases().find((p) => p.id === result.purchaseId);
+    expect(row?.withdrawnAt).toBeTruthy();
+    expect(row?.payNetwork).toBe("ethereum");
+  });
+
+  it("builds a cross-chain Relay quote for ETH→Solana", async () => {
+    const relay = await import("@/lib/bridge/relay");
+    const spy = vi.spyOn(relay, "quoteNativeBridge").mockResolvedValue({
+      requestId: "relay-test-eth-sol",
+      fromNetwork: "ethereum",
+      toNetwork: "solana",
+      amount: "0.008333",
+      estimatedOutput: "0.3",
+      feeUsd: "1.2",
+      raw: { mocked: true },
+      steps: [],
+    });
+
+    markListingMintedForTest("listing-glitch-oe");
+    const result = await purchaseListing({
+      listingId: "listing-glitch-oe",
+      buyerId: "collector-kai",
+      amountUsd: 25,
+      payNetwork: "ethereum",
+      buyerPaymentAddress: `0x${"e1".repeat(20)}`,
+      buyerReceiveAddress: "RecvCross1111111111111111111111111111111",
+      simulate: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.quote.bridged).toBe(true);
+    expect(result.bridge?.requestId).toBe("relay-test-eth-sol");
+    expect(result.bridge?.fromNetwork).toBe("ethereum");
+    expect(result.bridge?.toNetwork).toBe("solana");
+    expect(result.status).toBe("pending_payment");
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

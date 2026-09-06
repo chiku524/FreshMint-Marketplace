@@ -974,6 +974,13 @@ export async function withdrawPurchaseToWallet(input: {
   if (purchase.withdrawnAt) {
     return { ok: false as const, error: "already_withdrawn" };
   }
+  // Crypto purchases deliver ownership at buy time — withdraw is legacy USD only.
+  const cryptoPurchase =
+    ("payNetwork" in purchase && purchase.payNetwork) ||
+    ("paymentTxHash" in purchase && purchase.paymentTxHash);
+  if (cryptoPurchase) {
+    return { ok: false as const, error: "crypto_purchase_owned_at_buy" };
+  }
 
   const listing = engine.state.listings.get(purchase.listingId);
   if (!listing) {
@@ -1607,21 +1614,16 @@ export async function reportListingForUser(input: {
   return result;
 }
 
-export async function purchaseListing(input: {
-  listingId: string;
-  buyerId: string;
-  amountUsd?: number;
-  txHash?: string;
-  buyerAddress?: string;
-}) {
-  const { splitSaleProceeds, platformFeeRecipients } = await import(
-    "@/lib/fees/platform"
-  );
-
+async function loadPurchaseListingRow(listingId: string) {
   const engine = await getDiscoveryEngine();
   let memory = await inMemoryMode();
+  const { getMemoryEngine } = await import("@/lib/data/memory-store");
+  const fromCatalogMaps = () =>
+    engine.state.listings.get(listingId) ??
+    getMemoryEngine().state.listings.get(listingId) ??
+    null;
 
-  let listingRow: {
+  type ListingRow = {
     id: string;
     creatorId: string;
     delisted: boolean;
@@ -1630,6 +1632,7 @@ export async function purchaseListing(input: {
     type: string;
     contractAddress: string | null;
     tokenId: string | null;
+    mintTxHash: string | null;
     priceUsd: number | null;
     mediaUrl: string | null;
     collectionId: string | null;
@@ -1638,15 +1641,9 @@ export async function purchaseListing(input: {
     oeEndsAt: number | null;
     auctionStartsAt: number | null;
     auctionEndsAt: number | null;
-  } | null = null;
+  };
 
-  const { getMemoryEngine, ensureMemoryCreator } = await import(
-    "@/lib/data/memory-store"
-  );
-  const fromCatalogMaps = () =>
-    engine.state.listings.get(input.listingId) ??
-    getMemoryEngine().state.listings.get(input.listingId) ??
-    null;
+  let listingRow: ListingRow | null = null;
 
   if (memory) {
     const l = fromCatalogMaps();
@@ -1660,6 +1657,7 @@ export async function purchaseListing(input: {
         type: l.type,
         contractAddress: l.contractAddress ?? null,
         tokenId: l.tokenId ?? null,
+        mintTxHash: l.mintTxHash ?? null,
         priceUsd: l.priceUsd,
         mediaUrl: l.mediaUrl ?? null,
         collectionId: l.collectionId,
@@ -1675,7 +1673,7 @@ export async function purchaseListing(input: {
   if (!listingRow && isPostgresConfigured()) {
     try {
       const listing = await prisma.listing.findUnique({
-        where: { id: input.listingId },
+        where: { id: listingId },
       });
       if (listing && !listing.delisted) {
         memory = false;
@@ -1688,6 +1686,7 @@ export async function purchaseListing(input: {
           type: listing.type,
           contractAddress: listing.contractAddress,
           tokenId: listing.tokenId,
+          mintTxHash: listing.mintTxHash,
           priceUsd: listing.priceUsd,
           mediaUrl: listing.mediaUrl,
           collectionId: listing.collectionId,
@@ -1705,7 +1704,7 @@ export async function purchaseListing(input: {
 
   if (!listingRow) {
     const l = fromCatalogMaps();
-    if (!l || l.delisted) return { ok: false as const, error: "unavailable" };
+    if (!l || l.delisted) return { ok: false as const, error: "unavailable" as const };
     memory = true;
     listingRow = {
       id: l.id,
@@ -1716,6 +1715,7 @@ export async function purchaseListing(input: {
       type: l.type,
       contractAddress: l.contractAddress ?? null,
       tokenId: l.tokenId ?? null,
+      mintTxHash: l.mintTxHash ?? null,
       priceUsd: l.priceUsd,
       mediaUrl: l.mediaUrl ?? null,
       collectionId: l.collectionId,
@@ -1727,11 +1727,57 @@ export async function purchaseListing(input: {
     };
   }
 
-  const listing = listingRow;
+  return { ok: true as const, listing: listingRow, memory, engine };
+}
+
+/** Crypto-only primary buy: pay/bridge native, then escrow→buyer transfer. */
+export async function purchaseListing(input: {
+  listingId: string;
+  buyerId: string;
+  payNetwork: NetworkId;
+  buyerPaymentAddress: string;
+  buyerReceiveAddress: string;
+  amountUsd?: number;
+  /** Tests / local: complete payment+transfer in one shot. */
+  simulate?: boolean;
+  paymentTxHash?: string;
+  transferTxHash?: string;
+  bridgeRequestId?: string;
+}) {
+  const {
+    assertCryptoPayAllowed,
+    buildCrossChainPayQuote,
+    buildNativePaymentWalletTx,
+    buildPurchaseTransferIntent,
+    listingIsMinted,
+    payNetworksForListing,
+    publicPayQuote,
+    settlementAddressFor,
+    splitSaleProceeds,
+  } = await import("@/lib/marketplace/crypto-purchase");
+  const { platformFeeRecipients } = await import("@/lib/fees/platform");
+
+  const loaded = await loadPurchaseListingRow(input.listingId);
+  if (!loaded.ok) return loaded;
+  const { listing, memory, engine } = loaded;
+
   const amountUsd = input.amountUsd ?? listing.priceUsd ?? 0;
   if (!(amountUsd > 0)) {
     return { ok: false as const, error: "unavailable" };
   }
+
+  const payCheck = assertCryptoPayAllowed({
+    listingNetwork: listing.network,
+    payNetwork: input.payNetwork,
+  });
+  if (!payCheck.ok) {
+    return { ok: false as const, error: payCheck.error };
+  }
+
+  if (!listingIsMinted(listing)) {
+    return { ok: false as const, error: "listing_not_minted" };
+  }
+
   const fees = splitSaleProceeds(amountUsd);
   const feeRecipients = platformFeeRecipients();
 
@@ -1749,8 +1795,15 @@ export async function purchaseListing(input: {
   const soldCount = memory
     ? (await import("@/lib/data/memory-store"))
         .getMemoryPurchases()
-        .filter((p) => p.listingId === listing.id).length
-    : await prisma.purchase.count({ where: { listingId: listing.id } });
+        .filter(
+          (p) => p.listingId === listing.id && (p.status ?? "completed") !== "failed",
+        ).length
+    : await prisma.purchase.count({
+        where: {
+          listingId: listing.id,
+          NOT: { status: "failed" },
+        },
+      });
   const cap = primarySupplyCap(listing);
   if (cap != null && soldCount >= cap) {
     return { ok: false as const, error: "already_sold" };
@@ -1792,18 +1845,95 @@ export async function purchaseListing(input: {
     isFirst = prior === 0;
   }
 
-  const txHash = input.txHash || `platform:${listing.id}:${Date.now()}`;
-  const walletTx = undefined;
+  const settlementAddress = settlementAddressFor(listing.network);
+  const escrowAddress =
+    collection?.escrowAddress ||
+    listing.contractAddress ||
+    settlementAddress;
+  const crossChain = input.payNetwork !== listing.network;
 
-  engine.recordPurchase({
-    listingId: input.listingId,
-    buyerId: input.buyerId,
-    amountUsd,
-    isFirstPurchaseForBuyerOnArtifact: isFirst,
+  let paymentWalletTx: Record<string, unknown> | undefined;
+  let bridgeQuote: Awaited<ReturnType<typeof buildCrossChainPayQuote>> | null =
+    null;
+  let settleQuote = (
+    await import("@/lib/onchain/fx")
+  ).quoteNativeFromUsd(amountUsd, listing.chain);
+
+  if (crossChain) {
+    try {
+      bridgeQuote = await buildCrossChainPayQuote({
+        listingNetwork: listing.network,
+        payNetwork: input.payNetwork,
+        amountUsd,
+        buyerPaymentAddress: input.buyerPaymentAddress,
+        settlementAddress,
+      });
+      settleQuote = bridgeQuote.settle;
+    } catch (e) {
+      return {
+        ok: false as const,
+        error:
+          e instanceof Error && e.message.includes("boing")
+            ? "boing_same_chain_only"
+            : e instanceof Error
+              ? e.message
+              : "bridge_quote_failed",
+      };
+    }
+  } else {
+    const pay = await buildNativePaymentWalletTx({
+      network: listing.network,
+      fromAddress: input.buyerPaymentAddress,
+      toAddress: settlementAddress,
+      amountUsd,
+      listingChain: listing.chain,
+    });
+    paymentWalletTx = pay.walletTx;
+    settleQuote = pay.quote;
+  }
+
+  const transferIntent = buildPurchaseTransferIntent({
+    listingNetwork: listing.network,
+    listingChain: listing.chain,
+    contractAddress: listing.contractAddress!,
+    tokenId: listing.tokenId!,
+    escrowAddress: escrowAddress!,
+    buyerReceiveAddress: input.buyerReceiveAddress,
   });
 
-  const creator = engine.state.creators.get(listing.creatorId);
+  const simulateComplete = Boolean(
+    input.simulate &&
+      (input.paymentTxHash || input.transferTxHash || !crossChain),
+  );
+  const paymentTxHash =
+    input.paymentTxHash ||
+    (simulateComplete ? `sim-pay:${listing.id}:${Date.now()}` : null);
+  const transferTxHash =
+    input.transferTxHash ||
+    (simulateComplete
+      ? `sim-xfer:${listing.id}:${Date.now()}`
+      : null);
+  const status = simulateComplete
+    ? "completed"
+    : paymentTxHash
+      ? "pending_transfer"
+      : "pending_payment";
+  const withdrawnAt = simulateComplete ? Date.now() : null;
+  const txHash =
+    transferTxHash ||
+    paymentTxHash ||
+    `pending:${listing.id}:${Date.now()}`;
 
+  if (simulateComplete || status === "completed") {
+    engine.recordPurchase({
+      listingId: input.listingId,
+      buyerId: input.buyerId,
+      amountUsd,
+      isFirstPurchaseForBuyerOnArtifact: isFirst,
+    });
+  }
+
+  const creator = engine.state.creators.get(listing.creatorId);
   const domainListing =
     engine.state.listings.get(listing.id) ??
     (!memory
@@ -1816,9 +1946,10 @@ export async function purchaseListing(input: {
       ? isEmergingListing(domainListing, creator).emerging
       : false;
 
+  let purchaseId: string;
   if (memory) {
     const { recordMemoryPurchase } = await import("@/lib/data/memory-store");
-    recordMemoryPurchase({
+    const row = recordMemoryPurchase({
       listingId: listing.id,
       buyerId: input.buyerId,
       amountUsd,
@@ -1827,11 +1958,19 @@ export async function purchaseListing(input: {
       feeOperatorUsd: fees.feeOperatorUsd,
       sellerNetUsd: fees.sellerNetUsd,
       soldAt: Date.now(),
+      status,
+      payNetwork: input.payNetwork,
+      paymentTxHash,
+      bridgeRequestId: input.bridgeRequestId ?? bridgeQuote?.bridge?.requestId ?? null,
       txHash,
       chain: listing.chain,
+      withdrawTxHash: transferTxHash,
+      withdrawAddress: input.buyerReceiveAddress,
+      withdrawnAt,
     });
+    purchaseId = row.id;
   } else {
-    await prisma.purchase.create({
+    const row = await prisma.purchase.create({
       data: {
         listingId: input.listingId,
         buyerId: input.buyerId,
@@ -1841,46 +1980,311 @@ export async function purchaseListing(input: {
         feeOperatorUsd: fees.feeOperatorUsd,
         sellerNetUsd: fees.sellerNetUsd,
         isFirst,
+        status,
+        payNetwork: input.payNetwork,
+        paymentTxHash,
+        bridgeRequestId:
+          input.bridgeRequestId ?? bridgeQuote?.bridge?.requestId ?? null,
         txHash,
         chain: listing.chain,
+        withdrawTxHash: transferTxHash,
+        withdrawAddress: input.buyerReceiveAddress,
+        withdrawnAt: withdrawnAt ? new Date(withdrawnAt) : null,
       },
     });
+    purchaseId = row.id;
 
-    await prisma.user.update({
-      where: { id: listing.creatorId },
+    if (status === "completed") {
+      await prisma.user.update({
+        where: { id: listing.creatorId },
+        data: {
+          completedSales: { increment: 1 },
+          lifetimePrimaryVolumeUsd: { increment: amountUsd },
+        },
+      });
+
+      await prisma.signalEvent.create({
+        data: {
+          type: isFirst ? "first_purchase" : "purchase",
+          listingId: listing.id,
+          creatorId: listing.creatorId,
+          viewerId: input.buyerId,
+          emerging,
+          metaJson: JSON.stringify({
+            amountUsd,
+            txHash,
+            fees,
+            feeRecipients,
+            payNetwork: input.payNetwork,
+          }),
+        },
+      });
+    }
+  }
+
+  return {
+    ok: true as const,
+    purchaseId,
+    status,
+    txHash,
+    paymentTxHash,
+    transferTxHash,
+    isFirst,
+    emerging,
+    paymentWalletTx,
+    transferWalletTx: transferIntent.walletTx,
+    bridge: bridgeQuote?.bridge
+      ? {
+          requestId: bridgeQuote.bridge.requestId,
+          fromNetwork: bridgeQuote.bridge.fromNetwork,
+          toNetwork: bridgeQuote.bridge.toNetwork,
+          amount: bridgeQuote.bridge.amount,
+          estimatedOutput: bridgeQuote.bridge.estimatedOutput,
+          feeUsd: bridgeQuote.bridge.feeUsd,
+          steps: bridgeQuote.bridge.steps,
+        }
+      : null,
+    quote: publicPayQuote({
+      settle: settleQuote,
+      pay: bridgeQuote?.pay ?? settleQuote,
+      bridged: crossChain,
+    }),
+    settlementAddress,
+    fees,
+    feeRecipients,
+    chain: listing.chain,
+    network: listing.network,
+    payNetwork: input.payNetwork,
+    payNetworks: payNetworksForListing(listing.network),
+    buyerReceiveAddress: input.buyerReceiveAddress,
+  };
+}
+
+export async function quoteCryptoPurchase(input: {
+  listingId: string;
+  payNetwork: NetworkId;
+}) {
+  const {
+    assertCryptoPayAllowed,
+    listingIsMinted,
+    payNetworksForListing,
+    publicPayQuote,
+    settlementAddressFor,
+    splitSaleProceeds,
+  } = await import("@/lib/marketplace/crypto-purchase");
+  const { quotePayInFromUsdAt } = await import("@/lib/onchain/fx");
+
+  const loaded = await loadPurchaseListingRow(input.listingId);
+  if (!loaded.ok) return loaded;
+  const { listing } = loaded;
+  const amountUsd = listing.priceUsd ?? 0;
+  if (!(amountUsd > 0)) {
+    return { ok: false as const, error: "unavailable" };
+  }
+  if (!listingIsMinted(listing)) {
+    return { ok: false as const, error: "listing_not_minted" };
+  }
+  const payCheck = assertCryptoPayAllowed({
+    listingNetwork: listing.network,
+    payNetwork: input.payNetwork,
+  });
+  if (!payCheck.ok) {
+    return { ok: false as const, error: payCheck.error };
+  }
+
+  const quotes = quotePayInFromUsdAt({
+    amountUsd,
+    listingChain: listing.chain,
+    payNetwork: input.payNetwork,
+  });
+  const bridged = input.payNetwork !== listing.network;
+  return {
+    ok: true as const,
+    listingId: listing.id,
+    network: listing.network,
+    chain: listing.chain,
+    payNetwork: input.payNetwork,
+    payNetworks: payNetworksForListing(listing.network),
+    amountUsd,
+    fees: splitSaleProceeds(amountUsd),
+    settlementAddress: settlementAddressFor(listing.network),
+    quote: publicPayQuote({
+      settle: quotes.settle,
+      pay: quotes.pay,
+      bridged,
+    }),
+  };
+}
+
+export async function confirmCryptoPurchase(input: {
+  purchaseId: string;
+  buyerId: string;
+  step: "payment" | "transfer";
+  txHash: string;
+  bridgeRequestId?: string;
+}) {
+  const {
+    buildPurchaseTransferIntent,
+    listingIsMinted,
+  } = await import("@/lib/marketplace/crypto-purchase");
+  const engine = await getDiscoveryEngine();
+  const { isMemoryMode, getMemoryPurchases, updateMemoryPurchase } =
+    await import("@/lib/data/memory-store");
+  const memory = (await inMemoryMode()) || isMemoryMode();
+
+  const purchase = memory
+    ? getMemoryPurchases().find((p) => p.id === input.purchaseId)
+    : await prisma.purchase.findUnique({ where: { id: input.purchaseId } });
+  if (!purchase || purchase.buyerId !== input.buyerId) {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  const listing = engine.state.listings.get(purchase.listingId);
+  if (!listing || !listingIsMinted(listing)) {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  const network = resolveNetwork(listing.network, listing.chain);
+  const collection = listing.collectionId
+    ? engine.state.collections.get(listing.collectionId)
+    : null;
+
+  if (input.step === "payment") {
+    if (
+      purchase.status === "completed" ||
+      purchase.status === "pending_transfer"
+    ) {
+      const transferIntent = buildPurchaseTransferIntent({
+        listingNetwork: network,
+        listingChain: listing.chain,
+        contractAddress: listing.contractAddress!,
+        tokenId: listing.tokenId!,
+        escrowAddress:
+          collection?.escrowAddress ||
+          listing.contractAddress ||
+          purchase.withdrawAddress ||
+          "",
+        buyerReceiveAddress:
+          purchase.withdrawAddress ||
+          input.buyerId,
+      });
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: purchase.status === "completed" ? "completed" : "pending_transfer",
+        transferWalletTx: transferIntent.walletTx,
+      };
+    }
+    const patch = {
+      status: "pending_transfer",
+      paymentTxHash: input.txHash,
+      bridgeRequestId: input.bridgeRequestId ?? purchase.bridgeRequestId,
+      txHash: input.txHash,
+    };
+    if (memory) {
+      updateMemoryPurchase(purchase.id, patch);
+    } else {
+      await prisma.purchase.update({
+        where: { id: purchase.id },
+        data: patch,
+      });
+    }
+    const receive =
+      purchase.withdrawAddress ||
+      engine.state.creators
+        .get(input.buyerId)
+        ?.wallets.find((w) => w.chain === listing.chain)?.address ||
+      "";
+    const transferIntent = buildPurchaseTransferIntent({
+      listingNetwork: network,
+      listingChain: listing.chain,
+      contractAddress: listing.contractAddress!,
+      tokenId: listing.tokenId!,
+      escrowAddress:
+        collection?.escrowAddress || listing.contractAddress || receive,
+      buyerReceiveAddress: receive || input.txHash.slice(0, 42),
+    });
+    return {
+      ok: true as const,
+      purchaseId: purchase.id,
+      status: "pending_transfer" as const,
+      transferWalletTx: transferIntent.walletTx,
+    };
+  }
+
+  // transfer step
+  const withdrawnAt = Date.now();
+  const completePatch = {
+    status: "completed",
+    txHash: input.txHash,
+    withdrawTxHash: input.txHash,
+    withdrawnAt,
+  };
+
+  if (memory) {
+    updateMemoryPurchase(purchase.id, {
+      ...completePatch,
+      withdrawnAt,
+    });
+  } else {
+    const wasComplete = purchase.status === "completed";
+    await prisma.purchase.update({
+      where: { id: purchase.id },
       data: {
-        completedSales: { increment: 1 },
-        lifetimePrimaryVolumeUsd: { increment: amountUsd },
+        status: "completed",
+        txHash: input.txHash,
+        withdrawTxHash: input.txHash,
+        withdrawnAt: new Date(withdrawnAt),
       },
     });
+    if (!wasComplete) {
+      const isFirst =
+        "isFirst" in purchase ? Boolean(purchase.isFirst) : true;
+      engine.recordPurchase({
+        listingId: purchase.listingId,
+        buyerId: input.buyerId,
+        amountUsd: purchase.amountUsd,
+        isFirstPurchaseForBuyerOnArtifact: isFirst,
+      });
+      await prisma.user.update({
+        where: { id: listing.creatorId },
+        data: {
+          completedSales: { increment: 1 },
+          lifetimePrimaryVolumeUsd: { increment: purchase.amountUsd },
+        },
+      });
+      await prisma.signalEvent.create({
+        data: {
+          type: isFirst ? "first_purchase" : "purchase",
+          listingId: listing.id,
+          creatorId: listing.creatorId,
+          viewerId: input.buyerId,
+          metaJson: JSON.stringify({
+            amountUsd: purchase.amountUsd,
+            txHash: input.txHash,
+            payNetwork:
+              "payNetwork" in purchase ? purchase.payNetwork : null,
+          }),
+        },
+      });
+    }
+  }
 
-    await prisma.signalEvent.create({
-      data: {
-        type: isFirst ? "first_purchase" : "purchase",
-        listingId: listing.id,
-        creatorId: listing.creatorId,
-        viewerId: input.buyerId,
-        emerging,
-        metaJson: JSON.stringify({
-          amountUsd,
-          txHash,
-          fees,
-          feeRecipients,
-        }),
-      },
+  if (memory && purchase.status !== "completed") {
+    engine.recordPurchase({
+      listingId: purchase.listingId,
+      buyerId: input.buyerId,
+      amountUsd: purchase.amountUsd,
+      isFirstPurchaseForBuyerOnArtifact: true,
     });
   }
 
   return {
     ok: true as const,
-    txHash,
-    isFirst,
-    emerging,
-    walletTx,
-    fees,
-    feeRecipients,
-    chain: listing.chain,
-    network: listing.network,
+    purchaseId: purchase.id,
+    status: "completed" as const,
+    txHash: input.txHash,
+    withdrawnAt,
   };
 }
 
