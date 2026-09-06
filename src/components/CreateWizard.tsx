@@ -159,15 +159,16 @@ export function CreateWizard() {
     return id;
   }
 
-  async function uploadFiles(files: FileList | File[]) {
+  async function uploadFiles(files: File[]) {
     setBusy(true);
     setError(null);
     try {
+      if (!files.length) throw new Error("No files selected");
+      // Snapshot File[] before any await — clearing the input empties a live FileList.
       const id = await ensureCollection();
       const next: Piece[] = [];
-      const list = Array.from(files);
       const capped =
-        intent === "drop" ? list : list.slice(0, Math.max(0, 1 - pieces.length));
+        intent === "drop" ? files : files.slice(0, Math.max(0, 1 - pieces.length));
       for (const file of capped) {
         const fd = new FormData();
         fd.set("file", file);
@@ -658,8 +659,11 @@ export function CreateWizard() {
                 accept={ACCEPT}
                 style={fieldStyle}
                 onChange={(e) => {
-                  if (e.target.files?.length) void uploadFiles(e.target.files);
+                  const selected = e.target.files
+                    ? Array.from(e.target.files)
+                    : [];
                   e.target.value = "";
+                  if (selected.length) void uploadFiles(selected);
                 }}
               />
             </label>

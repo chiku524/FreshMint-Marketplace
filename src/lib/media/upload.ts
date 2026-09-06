@@ -59,10 +59,28 @@ async function storeLocal(
   };
 }
 
+function mimeFromName(name: string): string | null {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  if (ext === "svg") return "image/svg+xml";
+  if (ext === "mp4") return "video/mp4";
+  if (ext === "webm") return "video/webm";
+  if (ext === "mp3") return "audio/mpeg";
+  if (ext === "wav") return "audio/wav";
+  if (ext === "txt") return "text/plain";
+  return null;
+}
+
 export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
   if (file.size <= 0) throw new Error("empty_file");
   if (file.size > MAX_BYTES) throw new Error("file_too_large");
-  const mimeType = file.type || "application/octet-stream";
+  const mimeType =
+    (file.type && ALLOWED.has(file.type) ? file.type : null) ||
+    mimeFromName(file.name) ||
+    "application/octet-stream";
   if (!ALLOWED.has(mimeType)) throw new Error("unsupported_type");
 
   const bytes = Buffer.from(await file.arrayBuffer());
