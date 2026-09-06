@@ -53,6 +53,9 @@ const fieldStyle: CSSProperties = {
 const ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,audio/mpeg,audio/wav";
 
+/** Keep per-piece editors only for small sets — large drops use CSV. */
+const INLINE_DETAIL_LIMIT = 24;
+
 function toLocalInput(ms: number): string {
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, "0");
@@ -108,12 +111,18 @@ export function CreateWizard() {
   const [styleTags, setStyleTags] = useState("");
 
   const [pieces, setPieces] = useState<Piece[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   const steps = useMemo(() => stepDefs(intent), [intent]);
   const step = steps[stepIndex] ?? steps[0];
   const selected = collections.find((c) => c.id === collectionId);
+  const batchUpload = intent === "drop";
   const usedBytes =
     (selected?.mediaBytes ?? 0) + pieces.reduce((sum, item) => sum + item.size, 0);
+  const piecesBytes = pieces.reduce((sum, item) => sum + item.size, 0);
 
   function loadMine() {
     void fetch("/api/collections?mine=1", { credentials: "include" })
@@ -162,14 +171,32 @@ export function CreateWizard() {
   async function uploadFiles(files: File[]) {
     setBusy(true);
     setError(null);
+    setUploadProgress(null);
     try {
       if (!files.length) throw new Error("No files selected");
       // Snapshot File[] before any await — clearing the input empties a live FileList.
       const id = await ensureCollection();
-      const next: Piece[] = [];
-      const capped =
-        intent === "drop" ? files : files.slice(0, Math.max(0, 1 - pieces.length));
-      for (const file of capped) {
+      const capped = batchUpload
+        ? files
+        : files.slice(0, Math.max(0, 1 - pieces.length));
+      if (!capped.length) {
+        throw new Error(
+          intent === "single" || intent === "auction"
+            ? "This listing already has one artwork file"
+            : "No files selected",
+        );
+      }
+
+      setUploadProgress({ current: 0, total: capped.length });
+      let runningBytes = usedBytes;
+
+      for (let i = 0; i < capped.length; i++) {
+        const file = capped[i]!;
+        if (runningBytes + file.size > COLLECTION_MEDIA_CAP_BYTES) {
+          throw new Error(
+            `Stopped at ${i} of ${capped.length} — this collection is at the 10 GB art cap`,
+          );
+        }
         const fd = new FormData();
         fd.set("file", file);
         fd.set("collectionId", id);
@@ -189,8 +216,8 @@ export function CreateWizard() {
                 : (data.error ?? "upload_failed"),
           );
         }
-        next.push({
-          key: `${data.mediaHash}-${file.name}`,
+        const piece: Piece = {
+          key: `${data.mediaHash}-${file.name}-${i}`,
           title: titleFromFile(file.name),
           description: "",
           fileName: file.name,
@@ -199,16 +226,19 @@ export function CreateWizard() {
           size: Number(data.size ?? file.size),
           traits: [],
           maxSupply: dropKind === "limited" ? "1" : "",
-        });
+        };
+        runningBytes += piece.size;
+        setPieces((current) =>
+          batchUpload ? [...current, piece] : [piece],
+        );
+        setUploadProgress({ current: i + 1, total: capped.length });
       }
-      setPieces((current) =>
-        intent === "drop" ? [...current, ...next] : next.length ? next : current,
-      );
       loadMine();
     } catch (e) {
       setError(e instanceof Error ? e.message : "upload_failed");
     } finally {
       setBusy(false);
+      setUploadProgress(null);
     }
   }
 
@@ -647,58 +677,57 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">Upload artwork</h2>
             <p className="create-wizard__lead">
-              {intent === "drop"
-                ? "Add as many files as you need — up to 100 MB each, 10 GB per collection."
+              {batchUpload
+                ? "Select many files at once (Shift or Ctrl/Cmd click). Up to 100 MB each, 10 GB per collection — no previews, just a running count."
                 : "Upload one file for this listing."}
             </p>
             <label>
-              Artwork file{intent === "drop" ? "s" : ""}
+              {batchUpload ? "Artwork files" : "Artwork file"}
               <input
                 type="file"
-                multiple={intent === "drop"}
+                multiple={batchUpload}
                 accept={ACCEPT}
+                disabled={busy}
                 style={fieldStyle}
                 onChange={(e) => {
-                  const selected = e.target.files
+                  const selectedFiles = e.target.files
                     ? Array.from(e.target.files)
                     : [];
                   e.target.value = "";
-                  if (selected.length) void uploadFiles(selected);
+                  if (selectedFiles.length) void uploadFiles(selectedFiles);
                 }}
               />
             </label>
-            <p className="drop-studio__quota">
-              {formatBytes(usedBytes)} of {formatBytes(COLLECTION_MEDIA_CAP_BYTES)}{" "}
-              used · {pieces.length} file{pieces.length === 1 ? "" : "s"}
-            </p>
-            {pieces.length ? (
-              <div className="drop-studio__items">
-                {pieces.map((item) => (
-                  <article key={item.key} className="drop-studio__item">
-                    <div
-                      className="drop-studio__thumb"
-                      style={{ backgroundImage: `url(${item.mediaUrl})` }}
-                    />
-                    <div className="drop-studio__item-body">
-                      <strong className="display">{item.title || item.fileName}</strong>
-                      <span className="create-wizard__hint">{item.fileName}</span>
-                      <button
-                        type="button"
-                        className="badge"
-                        style={{ cursor: "pointer", background: "transparent" }}
-                        onClick={() =>
-                          setPieces((current) =>
-                            current.filter((row) => row.key !== item.key),
-                          )
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : null}
+            <div className="create-wizard__upload-status" aria-live="polite">
+              {uploadProgress ? (
+                <p className="create-wizard__upload-count">
+                  Uploading {uploadProgress.current} of {uploadProgress.total}…
+                </p>
+              ) : null}
+              <p className="drop-studio__quota">
+                {pieces.length
+                  ? `${pieces.length} file${pieces.length === 1 ? "" : "s"} ready · ${formatBytes(piecesBytes)} this batch · ${formatBytes(usedBytes)} of ${formatBytes(COLLECTION_MEDIA_CAP_BYTES)} collection total`
+                  : `0 files ready · ${formatBytes(usedBytes)} of ${formatBytes(COLLECTION_MEDIA_CAP_BYTES)} used`}
+              </p>
+              {pieces.length ? (
+                <button
+                  type="button"
+                  className="badge"
+                  disabled={busy}
+                  style={{
+                    cursor: busy ? "default" : "pointer",
+                    background: "transparent",
+                    justifySelf: "start",
+                  }}
+                  onClick={() => {
+                    setPieces([]);
+                    setError(null);
+                  }}
+                >
+                  Clear files
+                </button>
+              ) : null}
+            </div>
           </>
         ) : null}
 
@@ -706,8 +735,9 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">Titles & traits</h2>
             <p className="create-wizard__lead">
-              Name each piece and add traits by hand
-              {intent === "drop" ? " or import an OpenSea-style CSV" : ""}.
+              {batchUpload && pieces.length > INLINE_DETAIL_LIMIT
+                ? `${pieces.length} files are titled from their filenames. Import a CSV to set names, traits, and supply in bulk.`
+                : `Name each piece and add traits by hand${batchUpload ? " or import an OpenSea-style CSV" : ""}.`}
             </p>
             {intent === "single" ? (
               <div className="create-wizard__grid-2">
@@ -750,7 +780,7 @@ export function CreateWizard() {
                 style={fieldStyle}
               />
             </label>
-            {intent === "drop" ? (
+            {batchUpload ? (
               <div>
                 <label>
                   Traits CSV (OpenSea-style)
@@ -797,59 +827,45 @@ export function CreateWizard() {
                     {csvNote}
                   </p>
                 ) : null}
+                <p className="create-wizard__hint">
+                  {pieces.length} file{pieces.length === 1 ? "" : "s"} ·{" "}
+                  {pieces.filter((p) => p.traits.length).length} with traits
+                  applied
+                </p>
               </div>
             ) : null}
-            <div className="drop-studio__items">
-              {pieces.map((item, index) => (
-                <article key={item.key} className="drop-studio__item">
-                  <div
-                    className="drop-studio__thumb"
-                    style={{ backgroundImage: `url(${item.mediaUrl})` }}
-                  />
-                  <div className="drop-studio__item-body">
-                    <label>
-                      Title
-                      <input
-                        value={item.title}
-                        onChange={(e) =>
-                          setPieces((current) =>
-                            current.map((row, i) =>
-                              i === index ? { ...row, title: e.target.value } : row,
-                            ),
-                          )
-                        }
-                        style={fieldStyle}
-                      />
-                    </label>
-                    <label>
-                      Description
-                      <textarea
-                        rows={2}
-                        value={item.description}
-                        onChange={(e) =>
-                          setPieces((current) =>
-                            current.map((row, i) =>
-                              i === index
-                                ? { ...row, description: e.target.value }
-                                : row,
-                            ),
-                          )
-                        }
-                        style={fieldStyle}
-                      />
-                    </label>
-                    {intent === "drop" && dropKind === "limited" ? (
+            {pieces.length <= INLINE_DETAIL_LIMIT ? (
+              <div className="drop-studio__items">
+                {pieces.map((item, index) => (
+                  <article key={item.key} className="drop-studio__item drop-studio__item--compact">
+                    <div className="drop-studio__item-body">
+                      <p className="create-wizard__hint" style={{ margin: 0 }}>
+                        {item.fileName}
+                      </p>
                       <label>
-                        Supply
+                        Title
                         <input
-                          type="number"
-                          min={1}
-                          value={item.maxSupply}
+                          value={item.title}
+                          onChange={(e) =>
+                            setPieces((current) =>
+                              current.map((row, i) =>
+                                i === index ? { ...row, title: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          style={fieldStyle}
+                        />
+                      </label>
+                      <label>
+                        Description
+                        <textarea
+                          rows={2}
+                          value={item.description}
                           onChange={(e) =>
                             setPieces((current) =>
                               current.map((row, i) =>
                                 i === index
-                                  ? { ...row, maxSupply: e.target.value }
+                                  ? { ...row, description: e.target.value }
                                   : row,
                               ),
                             )
@@ -857,21 +873,47 @@ export function CreateWizard() {
                           style={fieldStyle}
                         />
                       </label>
-                    ) : null}
-                    <TraitEditor
-                      traits={item.traits}
-                      onChange={(traits) =>
-                        setPieces((current) =>
-                          current.map((row, i) =>
-                            i === index ? { ...row, traits } : row,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-                </article>
-              ))}
-            </div>
+                      {batchUpload && dropKind === "limited" ? (
+                        <label>
+                          Supply
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.maxSupply}
+                            onChange={(e) =>
+                              setPieces((current) =>
+                                current.map((row, i) =>
+                                  i === index
+                                    ? { ...row, maxSupply: e.target.value }
+                                    : row,
+                                ),
+                              )
+                            }
+                            style={fieldStyle}
+                          />
+                        </label>
+                      ) : null}
+                      <TraitEditor
+                        traits={item.traits}
+                        onChange={(traits) =>
+                          setPieces((current) =>
+                            current.map((row, i) =>
+                              i === index ? { ...row, traits } : row,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="create-wizard__hint">
+                Inline editors are hidden above {INLINE_DETAIL_LIMIT} files so the
+                page stays responsive. Use the CSV import above for titles and
+                traits.
+              </p>
+            )}
           </>
         ) : null}
 
@@ -914,28 +956,20 @@ export function CreateWizard() {
                 <dd>${priceUsd}</dd>
               </div>
               <div>
-                <dt>Pieces</dt>
+                <dt>Files</dt>
                 <dd>
-                  {pieces.length} · {formatBytes(usedBytes)} media
+                  {pieces.length} ready · {formatBytes(piecesBytes)} this batch ·{" "}
+                  {formatBytes(usedBytes)} collection total
+                </dd>
+              </div>
+              <div>
+                <dt>Traits</dt>
+                <dd>
+                  {pieces.filter((p) => p.traits.length).length} of{" "}
+                  {pieces.length} have traits
                 </dd>
               </div>
             </dl>
-            <ul className="create-wizard__piece-list">
-              {pieces.map((item) => (
-                <li key={item.key}>
-                  <span
-                    className="create-wizard__mini-thumb"
-                    style={{ backgroundImage: `url(${item.mediaUrl})` }}
-                  />
-                  <span>
-                    <strong className="display">{item.title}</strong>
-                    {item.traits.length
-                      ? ` · ${item.traits.length} trait${item.traits.length === 1 ? "" : "s"}`
-                      : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
           </>
         ) : null}
 

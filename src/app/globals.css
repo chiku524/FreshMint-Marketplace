@@ -1447,6 +1447,22 @@ html.fm-intro-pending .fm-intro-cover {
   margin: 0;
 }
 
+.create-wizard__upload-status {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.create-wizard__upload-count {
+  margin: 0;
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.drop-studio__item--compact {
+  grid-template-columns: 1fr;
+}
+
 .create-wizard__piece-list {
   display: grid;
   gap: 0.45rem;
