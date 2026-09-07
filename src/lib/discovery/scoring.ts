@@ -156,6 +156,18 @@ export function computeAuctionEndingBoost(
   return 1;
 }
 
+/** Short look-window so brand-new Open Lane work is not buried under aged signals. */
+export function computeSoftLaunchRecencyBoost(
+  listing: Listing,
+  now = Date.now(),
+): number {
+  const t = listing.softLaunchedAt ?? listing.createdAt;
+  const age = now - t;
+  if (age <= 24 * 60 * 60 * 1000) return 1.35;
+  if (age <= 72 * 60 * 60 * 1000) return 1.15;
+  return 1;
+}
+
 /** Short look-window for newly Rising-eligible singles/collections. */
 export function computeRisingAgeBoost(
   listing: Listing,

@@ -47,7 +47,7 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 ## What’s implemented
 
 ### Discovery core
-- Emerging eligibility with **two-of-three graduation** + **40% Rising quota** + **12% explore**
+- Emerging as a **90-day window** (early graduation on volume + sales) + **40% Rising quota** + **12% explore**
 - Homepage feed mix **40 / 25 / 20 / 15** with session diversity, taste affinity, and chain caps
 - Draft → Soft launch → Rising → Featured staging · Featured-dominance block on Rising
 - Rate-based quality scoring, unique-viewer dedupe, Rising-age burst

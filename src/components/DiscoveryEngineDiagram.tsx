@@ -87,7 +87,7 @@ function buildSteps(): Step[] {
       band: "rising",
       x: 720,
       y: 250,
-      body: `${pct(cfg.emergingRisingQuota)} of Rising (${budgets.risingEmergingReserved} of ${budgets.risingTotal} today) is reserved for Emerging — in the ranker, not a slogan. Another ${budgets.risingExplore} slots are a low-exposure explore slice. Graduation is two-of-three: volume, sales, or age.`,
+      body: `${pct(cfg.emergingRisingQuota)} of Rising (${budgets.risingEmergingReserved} of ${budgets.risingTotal} today) is reserved for Emerging — in the ranker, not a slogan. Another ${budgets.risingExplore} slots are a low-exposure explore slice. Emerging is a 90-day window; volume and sales can graduate you earlier.`,
     },
     {
       id: "mix",
@@ -395,8 +395,8 @@ export function DiscoveryEngineDiagram() {
         <p className="nft-flow__caption-body">{step.body}</p>
         <p className="nft-flow__aside">
           Ranking is chain-agnostic. Paying on Ethereum does not buy a homepage
-          slot. External follower fame is ignored; Emerging is two-of-three
-          graduation, not a badge you keep forever.
+          slot. External follower fame is ignored; Emerging is a 90-day window
+          with early graduation on volume and sales.
         </p>
       </div>
     </div>

@@ -28,7 +28,7 @@ const emptySession = (viewerId: string | null = null): SessionContext => ({
 });
 
 describe("Emerging eligibility", () => {
-  it("locks two-of-three graduation and blocks flagged/wash", () => {
+  it("uses a 90-day window and blocks flagged/wash", () => {
     const now = Date.now();
     const emerging = isEmergingCreator(
       {
@@ -179,6 +179,29 @@ describe("Feed mix", () => {
     const mix = measureFeedMix(feed);
     expect(mix.emerging_rising).toBeGreaterThan(0);
   });
+
+  it("backfills empty Following with more Emerging Rising for guests", () => {
+    const state = buildSeedState();
+    const engine = new DiscoveryEngine(state);
+    const rising = engine.buildRising(emptySession());
+    const featured = engine.buildFeatured(emptySession());
+    const feed = composeHomepageFeed({
+      listings: [...state.listings.values()],
+      creators: state.creators,
+      follows: null,
+      shelves: [],
+      risingPool: rising,
+      featuredPool: featured,
+      session: emptySession(null),
+      pageSize: 20,
+    });
+    const mix = measureFeedMix(feed);
+    const plan = planFeedMix(20);
+    expect(mix.emerging_rising).toBeGreaterThanOrEqual(
+      plan.counts.emerging_rising / 20,
+    );
+    expect(feed.filter((item) => item.bucket === "following")).toHaveLength(0);
+  });
 });
 
 describe("Listing stages", () => {
@@ -210,6 +233,12 @@ describe("Listing stages", () => {
     const creator = state.creators.get("artist-fresh")!;
     const soft = { ...draft, stage: "soft_launch" as const };
     expect(canBecomeRisingEligible(soft, creator).ok).toBe(true);
+
+    const engine = new DiscoveryEngine(state);
+    engine.state.listings.set(draft.id, draft);
+    const auto = engine.transitionListing(draft.id, "soft_launch");
+    expect(auto.ok).toBe(true);
+    expect(auto.listing?.stage).toBe("rising_eligible");
   });
 });
 

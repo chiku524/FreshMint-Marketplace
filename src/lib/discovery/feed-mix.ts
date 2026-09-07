@@ -1,5 +1,5 @@
 import { DISCOVERY_CONFIG, type FeedMixKey } from "./config";
-import { scoreListing } from "./scoring";
+import { computeSoftLaunchRecencyBoost, scoreListing } from "./scoring";
 import { visibilityForStage } from "./staging";
 import { computeTasteAffinity, type ViewerTaste } from "./taste";
 import type {
@@ -58,34 +58,29 @@ function applySessionDiversity(
   candidates: RankedListing[],
   session: SessionContext,
 ): RankedListing[] {
-  const artistCounts = new Map<string, number>();
   const collectionCounts = new Map<string, number>();
+  const onScreenArtists = new Set(
+    session.itemsOnCurrentScreen.map((item) => item.artistId),
+  );
   const out: RankedListing[] = [];
 
-  for (const id of session.seenArtistIds) {
-    artistCounts.set(id, (artistCounts.get(id) ?? 0) + 1);
-  }
   for (const id of session.seenCollectionIds) {
     collectionCounts.set(id, (collectionCounts.get(id) ?? 0) + 1);
   }
 
   for (const item of candidates) {
-    const artistN = artistCounts.get(item.listing.creatorId) ?? 0;
-    if (artistN >= DISCOVERY_CONFIG.maxArtistPerScreen) continue;
+    if (onScreenArtists.has(item.listing.creatorId)) continue;
+    if (out.some((row) => row.listing.creatorId === item.listing.creatorId)) {
+      continue;
+    }
 
     if (item.listing.collectionId) {
       const colN = collectionCounts.get(item.listing.collectionId) ?? 0;
       if (colN >= DISCOVERY_CONFIG.maxCollectionFloodPerSession) continue;
     }
 
-    // Also enforce one artist per screen within this page build.
-    const onPage = out.filter(
-      (o) => o.listing.creatorId === item.listing.creatorId,
-    ).length;
-    if (onPage >= DISCOVERY_CONFIG.maxArtistPerScreen) continue;
-
     out.push(item);
-    artistCounts.set(item.listing.creatorId, artistN + 1);
+    onScreenArtists.add(item.listing.creatorId);
     if (item.listing.collectionId) {
       collectionCounts.set(
         item.listing.collectionId,
@@ -353,7 +348,16 @@ export function rankOpenLane(
   session: SessionContext,
   now = Date.now(),
 ): RankedListing[] {
-  return rankPool(listings, creators, session, "open", now);
+  return rankPool(listings, creators, session, "open", now).map((item) => {
+    const recency = computeSoftLaunchRecencyBoost(item.listing, now);
+    return recency === 1
+      ? item
+      : {
+          ...item,
+          score: item.score * recency,
+          reasons: [...item.reasons, "open_lane_recency"],
+        };
+  }).sort((a, b) => b.score - a.score);
 }
 
 /** Verify feed mix ratios within tolerance for tests / monitoring. */

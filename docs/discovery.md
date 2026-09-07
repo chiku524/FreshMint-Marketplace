@@ -96,8 +96,9 @@ draft → soft_launch → rising_eligible → featured_eligible → featured
 - Metadata complete, original media  
 - Creator not flagged / not wash cluster / not delisted  
 - **New-wallet cooldown** before Rising (72h default)  
-- **Max 3 Rising entries per creator per week**  
+- **Max 3 Rising entries per creator per week** (recounted from `risingEligibleAt`, so the week actually rolls)  
 - OE / auction window validity when applicable  
+- **Auto-promoted** on soft-launch when those gates pass — artists do not have to find a hidden button  
 
 ### Featured
 
@@ -111,17 +112,14 @@ Implemented in `src/lib/discovery/staging.ts`.
 
 ## Emerging eligibility
 
-Emerging is **game-resistant** and ignores external follower fame. Verified badge is **not** required.
+Emerging is a **new-artist window**, not a lifetime poverty badge. Verified badge is **not** required. External follower fame is ignored.
 
-A creator is Emerging if they are not flagged / wash **and** they have exceeded fewer than **2** of these three thresholds (two-of-three graduation):
+A creator is Emerging if they are not flagged / wash **and** their first listing is still within **90 days** **and** they have exceeded fewer than **2** commercial thresholds:
 
 - Lifetime primary volume ≥ **$5,000**
 - Completed sales ≥ **10**
-- First listing older than **90 days**
 
-A high-sale / low-volume artist (or the reverse) graduates instead of camping Emerging forever.
-
-Then Rising applies a hard **Emerging quota** (default **40%** of Rising slots), a **12% explore slice** for low-exposure Emerging work, Featured-dominance blocking, and OE concurrency caps.
+Fast commercial success graduates early. After 90 days they leave the reserved Rising slice even with few sales, so campers cannot crowd out true newcomers. They still compete for the remaining Rising open slots.
 
 See `src/lib/discovery/emerging.ts` and `quotas.ts`.
 
@@ -137,7 +135,7 @@ score = quality × novelty × diversity × spam_inverse × impression_decay × t
 |---|---|
 | **quality** | Bayesian engagement *rate* (saves/follows/dwell/nominations per unique viewer), shrunk toward a prior. Raw click volume does not win. Saves before 3 unique viewers are discounted. |
 | **novelty** | Boost when artist/collection has low prior platform exposure; `discoveryWeightForType` (singles 1.15, collections 0.9) |
-| **diversity** | Downrank if same artist already on this screen / **persisted session** |
+| **diversity** | Hard cap: max 1 artist per screen. Session-seen artists are downranked (not hidden) so a new work can earn a second look. |
 | **spam_inverse** | Report rate, new wallet, flags |
 | **impression_decay** | Fair-share daily/weekly impressions before hard decay |
 | **temporal** | OE drop burst; auction ending-soon; Rising-age burst (48h) for singles/collections |

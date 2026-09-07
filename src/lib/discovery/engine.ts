@@ -46,6 +46,10 @@ import type {
   Collection,
 } from "./types";
 import { emptySession, mergeSession } from "./viewer-session";
+import {
+  refreshAllCreatorPeriodCounters,
+  refreshCreatorPeriodCounters,
+} from "./windows";
 
 export interface HomepageOptions {
   session?: Partial<SessionContext> | SessionContext;
@@ -102,6 +106,7 @@ export class DiscoveryEngine {
     session: SessionContext = emptySession(),
     now = Date.now(),
   ): RankedListing[] {
+    refreshAllCreatorPeriodCounters(this.state, now);
     const retrieved = retrieveRisingCandidates(this.state.listings.values(), now);
     const candidates: RankedListing[] = [];
     for (const listing of retrieved) {
@@ -173,6 +178,7 @@ export class DiscoveryEngine {
     options: HomepageOptions = {},
   ) {
     const session = mergeSession(emptySession(viewerId), options.session);
+    refreshAllCreatorPeriodCounters(this.state, now);
     const rising = this.buildRising(session, now);
     const featured = this.buildFeatured(session, now);
     const follows = viewerId ? this.state.follows.get(viewerId) ?? null : null;
@@ -208,6 +214,8 @@ export class DiscoveryEngine {
   ): { ok: boolean; errors: string[]; listing?: Listing } {
     const creator = this.state.creators.get(listing.creatorId);
     if (!creator) return { ok: false, errors: ["creator_not_found"] };
+
+    refreshCreatorPeriodCounters(creator, this.state.listings.values());
 
     const qualityErrors = validateListingQuality(listing);
     if (qualityErrors.length) return { ok: false, errors: qualityErrors };
@@ -247,11 +255,20 @@ export class DiscoveryEngine {
     return { ok: true, errors: [], listing };
   }
 
-  transitionListing(listingId: string, target: Listing["stage"], now = Date.now()) {
+  transitionListing(
+    listingId: string,
+    target: Listing["stage"],
+    now = Date.now(),
+  ): { ok: boolean; errors: string[]; listing?: Listing } {
     const listing = this.state.listings.get(listingId);
     if (!listing) return { ok: false, errors: ["not_found"] as string[] };
     const creator = this.state.creators.get(listing.creatorId);
     if (!creator) return { ok: false, errors: ["creator_not_found"] as string[] };
+    refreshCreatorPeriodCounters(creator, this.state.listings.values(), now);
+
+    if (listing.stage === target) {
+      return { ok: true, errors: [] as string[], listing };
+    }
 
     if (target === "rising_eligible") {
       const cooldown = checkNewWalletCooldown(creator, now);
@@ -281,6 +298,16 @@ export class DiscoveryEngine {
     this.state.listings.set(listingId, updated);
     if (target === "rising_eligible") {
       creator.risingEntriesThisWeek += 1;
+    }
+    if (target === "soft_launch") {
+      const autoRising = this.transitionListing(
+        listingId,
+        "rising_eligible",
+        now,
+      );
+      if (autoRising.ok && autoRising.listing) {
+        return autoRising;
+      }
     }
     return { ok: true, errors: [] as string[], listing: updated };
   }

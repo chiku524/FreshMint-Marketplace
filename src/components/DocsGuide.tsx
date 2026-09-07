@@ -391,10 +391,12 @@ export function DocsGuide() {
               Emerging
             </h3>
             <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem" }}>
-              A creator is Emerging if they are not flagged or in a wash cluster and
-              they have exceeded fewer than{" "}
-              {cfg.emerging.graduationThresholdsRequired} of the three thresholds
-              below (two-of-three graduation). External follower fame is ignored.
+              A creator is Emerging for the first{" "}
+              {cfg.emerging.maxDaysSinceFirstListing} days after their first
+              listing, unless they already cleared{" "}
+              {cfg.emerging.graduationThresholdsRequired} commercial thresholds.
+              After that window they leave the reserved Rising slice so true
+              newcomers are not crowded out. External follower fame is ignored.
               Verification is not required for Rising.
             </p>
             <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.65 }}>
@@ -435,8 +437,9 @@ export function DocsGuide() {
               viewer), not a raw popularity sum. Saves from
               listings with fewer than {cfg.sybil.minUniqueViewersForSaveTrust} unique
               viewers are discounted. Novelty lifts low-exposure artists and applies
-              listing-type weights. Diversity blocks the same artist from flooding a
-              session. Impression fair-share (
+              listing-type weights. Diversity allows at most one artist per screen;
+              artists already seen this session are downranked, not hidden, so a
+              new work can earn a second look. Impression fair-share (
               {cfg.impressionFairSharePerDay.toLocaleString()}/day) applies decay so
               winners cannot monopolize Rising forever. Singles get a short Rising-age
               burst; open editions and auctions keep their own clocks.

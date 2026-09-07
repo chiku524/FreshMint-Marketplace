@@ -6,12 +6,14 @@ import {
   applyEmergingQuota,
   computeQualitySignal,
   computeRisingAgeBoost,
+  computeSoftLaunchRecencyBoost,
   computeTasteAffinity,
   discoveryWeightForType,
   evaluateDiscoveryPolicy,
   expandFollowGraph,
   getDailySlotBudgets,
   isEmergingCreator,
+  refreshCreatorPeriodCounters,
   retrieveRisingCandidates,
   scoreListing,
 } from "@/lib/discovery";
@@ -38,7 +40,7 @@ function creator(partial: Partial<CreatorProfile> & { id: string }): CreatorProf
   };
 }
 
-describe("Emerging two-of-three graduation", () => {
+describe("Emerging window + early commercial graduation", () => {
   const now = Date.now();
 
   it("graduates when two thresholds are exceeded", () => {
@@ -66,18 +68,32 @@ describe("Emerging two-of-three graduation", () => {
     expect(newButTraction.emerging).toBe(false);
   });
 
-  it("stays Emerging when only one threshold is exceeded", () => {
+  it("stays Emerging when only one commercial threshold is exceeded inside the window", () => {
     const result = isEmergingCreator(
       creator({
         id: "slow",
+        lifetimePrimaryVolumeUsd: 4_999,
+        completedSales: 9,
+        firstListingAt: now - 40 * 86400000,
+      }),
+      now,
+    );
+    expect(result.emerging).toBe(true);
+    expect(result.exceededCount).toBe(0);
+  });
+
+  it("graduates when the 90-day window closes even without sales", () => {
+    const result = isEmergingCreator(
+      creator({
+        id: "camper",
         lifetimePrimaryVolumeUsd: 4_999,
         completedSales: 9,
         firstListingAt: now - 400 * 86400000,
       }),
       now,
     );
-    expect(result.emerging).toBe(true);
-    expect(result.exceededCount).toBe(1);
+    expect(result.emerging).toBe(false);
+    expect(result.reasons).toContain("graduated_tenure_window");
   });
 });
 
@@ -223,6 +239,20 @@ describe("Type weights, rising age, retrieve", () => {
     expect(fresh).toBeGreaterThan(aged);
   });
 
+  it("lifts brand-new Open Lane work over aged listings", () => {
+    const listing = buildSeedState().listings.get("listing-fresh-1")!;
+    const now = Date.now();
+    const fresh = computeSoftLaunchRecencyBoost(
+      { ...listing, softLaunchedAt: now - 2 * 60 * 60 * 1000 },
+      now,
+    );
+    const aged = computeSoftLaunchRecencyBoost(
+      { ...listing, softLaunchedAt: now - 10 * 86400000 },
+      now,
+    );
+    expect(fresh).toBeGreaterThan(aged);
+  });
+
   it("retrieves only Rising-visible listings", () => {
     const state = buildSeedState();
     const retrieved = retrieveRisingCandidates(state.listings.values());
@@ -282,6 +312,16 @@ describe("Session diversity + policy", () => {
     });
     expect(seen.score).toBeLessThan(unseen.score);
     expect(seen.reasons).toContain("diversity_penalty");
+  });
+
+  it("rolls Rising weekly caps from listing timestamps", () => {
+    const state = buildSeedState();
+    const creator = state.creators.get("artist-fresh")!;
+    creator.risingEntriesThisWeek = 99;
+    const listing = state.listings.get("listing-fresh-1")!;
+    listing.risingEligibleAt = Date.now() - 20 * 86400000;
+    refreshCreatorPeriodCounters(creator, state.listings.values());
+    expect(creator.risingEntriesThisWeek).toBe(0);
   });
 
   it("recommends explore when Emerging impressions do not convert", () => {

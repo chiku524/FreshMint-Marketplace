@@ -11,9 +11,10 @@ export interface EmergingResult {
 }
 
 /**
- * Emerging = not flagged/wash AND fewer than N graduation thresholds exceeded.
- * Default N=2 (two-of-three). External follower fame is ignored.
- * Verified creator badge is NOT required.
+ * Emerging = not flagged/wash AND still inside the 90-day first-listing window
+ * AND fewer than N commercial thresholds exceeded (volume, sales).
+ * Tenure is a hard ceiling so unsold artists cannot camp the quota forever.
+ * Fast commercial success can graduate earlier. Follower fame is ignored.
  */
 export function isEmergingCreator(
   creator: CreatorProfile,
@@ -60,9 +61,13 @@ export function isEmergingCreator(
     reasons.push("exceeded_tenure_window");
   }
 
-  const emerging = exceededCount < graduationThresholdsRequired;
+  const commercialExceeded = exceededCount - (withinWindow ? 0 : 1);
+  const emerging =
+    withinWindow && commercialExceeded < graduationThresholdsRequired;
   if (!emerging) {
-    reasons.push("graduated_two_of_three");
+    reasons.push(
+      withinWindow ? "graduated_two_of_three" : "graduated_tenure_window",
+    );
   }
 
   return { emerging, reasons, exceededCount };

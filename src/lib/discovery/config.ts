@@ -50,14 +50,15 @@ export const DISCOVERY_CONFIG = {
   impressionFairSharePerWeek: 8_000,
 
   /**
-   * Emerging eligibility thresholds. Graduation is two-of-three:
-   * exceed this many thresholds → leave Emerging.
+   * Emerging is a new-artist window, not "never commercially successful."
+   * Hard ceiling: first listing within maxDaysSinceFirstListing.
+   * Early exit: exceed this many commercial thresholds (volume, sales).
    */
   emerging: {
     maxLifetimePrimaryVolumeUsd: 5_000,
     maxCompletedSales: 10,
     maxDaysSinceFirstListing: 90,
-    /** Graduate when this many of the three thresholds are exceeded. */
+    /** Graduate early when this many commercial thresholds are exceeded. */
     graduationThresholdsRequired: 2,
   },
 

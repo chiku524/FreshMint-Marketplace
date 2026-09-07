@@ -82,7 +82,7 @@ function cryptoBuy(input: {
 }
 
 describe("marketplace service (memory mode)", () => {
-  it("creates a soft-launched listing after mint", async () => {
+  it("soft-launches and auto-promotes to Rising after mint", async () => {
     const created = await createListingForUser({
       creatorId: "artist-fresh",
       title: "Test Work",
@@ -104,7 +104,7 @@ describe("marketplace service (memory mode)", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.listing.stage).toBe("soft_launch");
+    expect(result.listing.stage).toBe("rising_eligible");
     expect(getMemoryEngine().state.listings.has(result.listing.id)).toBe(true);
   });
 

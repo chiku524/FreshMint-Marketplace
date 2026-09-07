@@ -70,7 +70,7 @@ export function creatorLifecycleHint(
     return "Minted draft — soft-launch to appear on Open Lane";
   }
   if (listing.stage === "soft_launch") {
-    return "Live on Open Lane — push to Rising when you want more reach";
+    return "Live on Open Lane — Rising is automatic once the wallet cooldown and weekly cap allow";
   }
   if (listing.stage === "rising_eligible") {
     return "In Rising — traction can unlock Featured";

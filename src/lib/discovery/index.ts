@@ -10,7 +10,7 @@ export {
   capConcurrentOpenEditions,
   excludeFeaturedDominantFromRising,
 } from "./quotas";
-export { scoreListing, computeQualitySignal, computeRisingAgeBoost } from "./scoring";
+export { scoreListing, computeQualitySignal, computeRisingAgeBoost, computeSoftLaunchRecencyBoost } from "./scoring";
 export {
   advanceStage,
   canSoftLaunch,
@@ -57,4 +57,9 @@ export {
   appendSeenFromFeed,
 } from "./viewer-session";
 export { retrieveRisingCandidates } from "./candidates";
+export {
+  refreshCreatorPeriodCounters,
+  utcDayKey,
+  utcIsoWeekKey,
+} from "./windows";
 export type * from "./types";
