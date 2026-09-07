@@ -84,6 +84,7 @@ export function ListingActions({
   minted = true,
   canStageRising = false,
   pendingPurchase = null,
+  layout = "inline",
 }: {
   listingId: string;
   creatorId?: string;
@@ -100,6 +101,8 @@ export function ListingActions({
   /** Owner or editor — show stage controls. */
   canStageRising?: boolean;
   pendingPurchase?: { purchaseId: string; status: string } | null;
+  /** Menu layout keeps checkout on the listing page so compact tiles stay readable. */
+  layout?: "inline" | "menu";
 }) {
   const router = useRouter();
   const listingNetwork = (network ??
@@ -544,7 +547,9 @@ export function ListingActions({
     `$${priceUsd}`;
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.6rem" }}>
+    <div
+      className={`listing-actions${layout === "menu" ? " listing-actions--menu" : ""}`}
+    >
       {creatorId ? (
         <button
           type="button"
@@ -605,6 +610,11 @@ export function ListingActions({
         </span>
       ) : null}
       {canBuy && !confirmBuy ? (
+        layout === "menu" ? (
+          <Link href={`/listings/${listingId}`} className="badge featured">
+            Buy{priceUsd != null ? ` $${priceUsd}` : ""}
+          </Link>
+        ) : (
         <button
           type="button"
           className="badge featured"
@@ -616,8 +626,9 @@ export function ListingActions({
             <span style={{ opacity: 0.75 }}> · ${priceUsd}</span>
           ) : null}
         </button>
+        )
       ) : null}
-      {canBuy && confirmBuy ? (
+      {canBuy && confirmBuy && layout !== "menu" ? (
         <div
           style={{
             width: "100%",

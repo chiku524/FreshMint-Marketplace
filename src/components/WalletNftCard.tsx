@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import type { WalletNft } from "@/lib/wallet/inventory";
 
 function hueFromId(id: string): number {
@@ -11,33 +8,18 @@ function hueFromId(id: string): number {
 
 export function WalletNftCard({ nft }: { nft: WalletNft }) {
   const hue = hueFromId(nft.id);
-  const [spinning, setSpinning] = useState(false);
   const href = nft.explorerUrl;
   const media = nft.mediaUrl;
 
   return (
-    <article
-      className={`work-tile work-tile--compact${spinning ? " is-spinning" : ""}`}
-      data-tile="compact"
-      onMouseEnter={() => {
-        if (!spinning) setSpinning(true);
-      }}
-      onAnimationEnd={(event) => {
-        if (
-          event.animationName === "work-card-spin" &&
-          event.target === event.currentTarget
-        ) {
-          setSpinning(false);
-        }
-      }}
-    >
+    <article className="work-tile work-tile--compact" data-tile="compact">
       <a href={href} className="work-tile__media-link" tabIndex={-1} aria-hidden>
         <div
           className="work-media"
           style={
             media
               ? {
-                  backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(9,9,11,0.78)), url(${media})`,
+                  backgroundImage: `url(${media})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
@@ -50,18 +32,14 @@ export function WalletNftCard({ nft }: { nft: WalletNft }) {
           }
         />
       </a>
-      <div className="work-tile__body">
-        <div className="work-tile__badges">
-          <span className="badge emerging">Wallet</span>
-          <span className="badge">{nft.networkLabel}</span>
-        </div>
+      <div className="work-tile__caption">
         <h3 className="display work-tile__title">
           <a href={href} target="_blank" rel="noreferrer">
             {nft.title}
           </a>
         </h3>
         <p className="work-tile__meta">
-          {nft.contractAddress.slice(0, 6)}…{nft.contractAddress.slice(-4)}
+          {nft.networkLabel}
           {nft.chain === "evm" ? ` · #${nft.tokenId}` : ""}
         </p>
       </div>

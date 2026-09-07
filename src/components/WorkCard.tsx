@@ -2,16 +2,87 @@
 
 import type { RankedListing, Listing } from "@/lib/discovery/types";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
-import { stageLabel } from "@/lib/marketplace/lifecycle";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
+
+const MENU_HOVER_MS = 1000;
+const MENU_LEAVE_MS = 180;
 
 function hueFromId(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h + id.charCodeAt(i) * 17) % 360;
   return h;
+}
+
+function priceLabel(listing: Listing, bucket?: string) {
+  if (bucket === "sold" && listing.priceUsd != null) {
+    return `sold $${listing.priceUsd}`;
+  }
+  if (listing.priceUsd != null) return `$${listing.priceUsd}`;
+  return "auction";
+}
+
+function useDelayedMenu() {
+  const [open, setOpen] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const enterTimer = useRef<number | null>(null);
+  const leaveTimer = useRef<number | null>(null);
+  const openRef = useRef(false);
+
+  const clearTimers = () => {
+    if (enterTimer.current != null) window.clearTimeout(enterTimer.current);
+    if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+    enterTimer.current = null;
+    leaveTimer.current = null;
+  };
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  useEffect(() => () => clearTimers(), []);
+
+  const onPointerEnter = () => {
+    setHovering(true);
+    if (leaveTimer.current != null) {
+      window.clearTimeout(leaveTimer.current);
+      leaveTimer.current = null;
+    }
+    if (openRef.current || enterTimer.current != null) return;
+    enterTimer.current = window.setTimeout(() => {
+      enterTimer.current = null;
+      setOpen(true);
+    }, MENU_HOVER_MS);
+  };
+
+  const onPointerLeave = () => {
+    setHovering(false);
+    if (enterTimer.current != null) {
+      window.clearTimeout(enterTimer.current);
+      enterTimer.current = null;
+    }
+    leaveTimer.current = window.setTimeout(() => setOpen(false), MENU_LEAVE_MS);
+  };
+
+  const toggle = () => {
+    clearTimers();
+    setOpen((current) => !current);
+  };
+
+  const close = () => {
+    clearTimers();
+    setOpen(false);
+  };
+
+  return { open, hovering, onPointerEnter, onPointerLeave, toggle, close };
 }
 
 export function WorkCard({
@@ -41,91 +112,64 @@ export function WorkCard({
   const media = listing.mediaUrl;
   const featured =
     listing.stage === "featured" || bucket === "featured";
-  const [spinning, setSpinning] = useState(false);
+  const menu = useDelayedMenu();
+  const menuId = useId();
   const supplyCap = primarySupplyCap(listing);
   const dropState = dropWindowFor(listing).state;
+
+  const actions = showActions ? (
+    <ListingActions
+      listingId={listing.id}
+      creatorId={listing.creatorId}
+      priceUsd={listing.priceUsd}
+      stage={listing.stage}
+      sold={sold || bucket === "sold"}
+      listingType={listing.type}
+      chain={listing.chain}
+      network={listing.network}
+      dropState={dropState}
+      repeatable={supplyCap == null || supplyCap > 1}
+      minted={Boolean(
+        listing.tokenId && listing.contractAddress && listing.mintTxHash,
+      )}
+      canStageRising={canStageRising}
+      layout="menu"
+    />
+  ) : null;
+
+  const menuBody = (
+    <>
+      {creatorName ? (
+        <p className="work-tile__menu-meta">
+          <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
+          {emerging ? " · Emerging" : featured ? " · Featured" : ""}
+          {score != null ? ` · ${score.toFixed(1)}` : ""}
+        </p>
+      ) : null}
+      {actions}
+      {footer ? <div className="work-tile__footer">{footer}</div> : null}
+    </>
+  );
 
   const tileClass = [
     "work-tile",
     featured ? "work-tile--featured" : "work-tile--compact",
-    !featured && spinning ? "is-spinning" : "",
+    menu.open ? "is-menu-open" : "",
+    menu.hovering ? "is-hovering" : "",
   ]
     .filter(Boolean)
     .join(" ");
-
-  const meta = (
-    <>
-      <div className="work-tile__badges">
-        {emerging ? <span className="badge emerging">Emerging</span> : null}
-        {featured ? <span className="badge featured">Featured</span> : null}
-        {bucket === "sold" ? (
-          <span className="badge featured">Sold</span>
-        ) : bucket && bucket !== "featured" ? (
-          <span className="badge">{bucket.replace("_", " ")}</span>
-        ) : null}
-          <span className="badge">{listing.network ?? listing.chain}</span>
-          {listing.mintTxHash ? (
-            <span className="badge emerging">Minted</span>
-          ) : null}
-          <span className="badge">{listing.type.replace("_", " ")}</span>
-        {bucket !== "sold" && !featured ? (
-          <span className="badge">{stageLabel(listing.stage)}</span>
-        ) : null}
-      </div>
-      <h3 className="display work-tile__title">
-        <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
-      </h3>
-      <p className="work-tile__meta">
-        {creatorName ? (
-          <>
-            <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
-            {" · "}
-          </>
-        ) : null}
-        {listing.medium}
-        {bucket === "sold" && listing.priceUsd != null
-          ? ` · sold $${listing.priceUsd}`
-          : listing.priceUsd != null
-            ? ` · $${listing.priceUsd}`
-            : " · auction"}
-        {score != null ? ` · score ${score.toFixed(1)}` : ""}
-      </p>
-      {showActions ? (
-        <ListingActions
-          listingId={listing.id}
-          creatorId={listing.creatorId}
-          priceUsd={listing.priceUsd}
-          stage={listing.stage}
-          sold={sold || bucket === "sold"}
-          listingType={listing.type}
-          chain={listing.chain}
-          network={listing.network}
-          dropState={dropState}
-          repeatable={supplyCap == null || supplyCap > 1}
-          minted={Boolean(
-            listing.tokenId && listing.contractAddress && listing.mintTxHash,
-          )}
-          canStageRising={canStageRising}
-        />
-      ) : null}
-      {footer ? <div className="work-tile__footer">{footer}</div> : null}
-    </>
-  );
 
   return (
     <article
       className={tileClass}
       data-tile={featured ? "featured" : "compact"}
-      onMouseEnter={() => {
-        if (!featured && !spinning) setSpinning(true);
-      }}
-      onAnimationEnd={(event) => {
-        if (
-          !featured &&
-          event.animationName === "work-card-spin" &&
-          event.target === event.currentTarget
-        ) {
-          setSpinning(false);
+      onPointerEnter={menu.onPointerEnter}
+      onPointerLeave={menu.onPointerLeave}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && menu.open) {
+          event.stopPropagation();
+          menu.close();
         }
       }}
     >
@@ -143,7 +187,7 @@ export function WorkCard({
           style={
             media
               ? {
-                  backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(9,9,11,0.78)), url(${media})`,
+                  backgroundImage: `url(${media})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
@@ -156,7 +200,36 @@ export function WorkCard({
           }
         />
       </Link>
-      <div className="work-tile__body">{meta}</div>
+      <div className="work-tile__caption">
+        <h3 className="display work-tile__title">
+          <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
+        </h3>
+        <p className="work-tile__meta">{priceLabel(listing, bucket)}</p>
+      </div>
+      <button
+        type="button"
+        className="work-tile__more"
+        aria-expanded={menu.open}
+        aria-controls={menuId}
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          menu.toggle();
+        }}
+      >
+        More
+      </button>
+      {menu.open ? (
+        <div
+          id={menuId}
+          className="work-tile__menu"
+          role="dialog"
+          aria-label={`${listing.title} actions`}
+        >
+          {menuBody}
+        </div>
+      ) : null}
     </article>
   );
 }
