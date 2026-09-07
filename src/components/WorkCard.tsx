@@ -99,6 +99,9 @@ export function WorkCard({
           network={listing.network}
           dropState={dropState}
           repeatable={supplyCap == null || supplyCap > 1}
+          minted={Boolean(
+            listing.tokenId && listing.contractAddress && listing.mintTxHash,
+          )}
         />
       ) : null}
       {footer ? <div className="work-tile__footer">{footer}</div> : null}

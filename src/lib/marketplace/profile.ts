@@ -55,6 +55,8 @@ export type UserAssetProfile = {
     txHash: string | null;
     withdrawTxHash?: string | null;
     withdrawnAt?: number | null;
+    /** Set when bought with crypto (ownership delivered at purchase). */
+    payNetwork?: string | null;
     listing: Listing;
   }>;
   shelves: ProfileShelf[];
@@ -80,6 +82,7 @@ function profileFromMemoryCreator(userId: string): UserAssetProfile | null {
         txHash: p.txHash,
         withdrawTxHash: p.withdrawTxHash ?? null,
         withdrawnAt: p.withdrawnAt ?? null,
+        payNetwork: p.payNetwork ?? null,
         listing,
       };
     })
@@ -215,6 +218,7 @@ async function profileFromPrisma(
         txHash: p.txHash,
         withdrawTxHash: p.withdrawTxHash,
         withdrawnAt: p.withdrawnAt?.getTime() ?? null,
+        payNetwork: p.payNetwork ?? null,
         listing: toListing(p.listing),
       })),
       shelves: user.shelves.map((s) => ({

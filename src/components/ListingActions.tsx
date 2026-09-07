@@ -5,8 +5,9 @@ import {
   splitSaleProceeds,
 } from "@/lib/fees/platform";
 import type { Chain, NetworkId } from "@/lib/discovery/types";
-import { quoteNativeFromUsd } from "@/lib/onchain/fx";
+import { quoteNativeFromUsd, quotePayInFromUsdAt } from "@/lib/onchain/fx";
 import {
+  browserWalletAvailable,
   maybeSendWalletTx,
   requestBuyerAddress,
   sendEvmWalletTx,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const PAY_LABELS: Record<string, string> = {
   ethereum: "Ethereum (ETH)",
@@ -25,10 +26,46 @@ const PAY_LABELS: Record<string, string> = {
   boing: "Boing (BOING)",
 };
 
+const WALLET_HINT: Record<string, string> = {
+  evm: "MetaMask / Rabby",
+  solana: "Phantom",
+  boing: "Boing Express",
+};
+
+type BuyStep =
+  | "idle"
+  | "connecting"
+  | "bridging"
+  | "paying"
+  | "transferring"
+  | "done";
+
 function vmForNetwork(network: string): Chain {
   if (network === "solana") return "solana";
   if (network === "boing") return "boing";
   return "evm";
+}
+
+function shortAddr(addr: string) {
+  if (addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function stepLabel(step: BuyStep, crossChain: boolean): string {
+  switch (step) {
+    case "connecting":
+      return "Connect wallet…";
+    case "bridging":
+      return "Bridge via Relay…";
+    case "paying":
+      return crossChain ? "Confirming bridge…" : "Confirm payment…";
+    case "transferring":
+      return "Transfer NFT to your wallet…";
+    case "done":
+      return "Owned on-chain";
+    default:
+      return crossChain ? "Bridge & buy" : "Confirm buy";
+  }
 }
 
 export function ListingActions({
@@ -42,6 +79,7 @@ export function ListingActions({
   network,
   dropState = "none",
   repeatable = false,
+  minted = true,
 }: {
   listingId: string;
   creatorId?: string;
@@ -53,6 +91,8 @@ export function ListingActions({
   network?: NetworkId | string;
   dropState?: "none" | "upcoming" | "live" | "ended";
   repeatable?: boolean;
+  /** Listing has tokenId + contract + mint tx from publish. */
+  minted?: boolean;
 }) {
   const router = useRouter();
   const listingNetwork = (network ??
@@ -64,27 +104,89 @@ export function ListingActions({
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmBuy, setConfirmBuy] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [buyStep, setBuyStep] = useState<BuyStep>("idle");
   const [justSold, setJustSold] = useState(false);
   const [payNetwork, setPayNetwork] = useState<NetworkId>(listingNetwork);
   const [payNetworks, setPayNetworks] = useState<NetworkId[]>([
     listingNetwork,
   ]);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [serverPayFormatted, setServerPayFormatted] = useState<string | null>(
+    null,
+  );
+  const [paymentAddress, setPaymentAddress] = useState<string | null>(null);
+  const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
 
   const feePreview =
     priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
-  const nativeQuote = useMemo(() => {
+  const settleQuote = useMemo(() => {
     if (priceUsd == null || !(priceUsd > 0)) return null;
     return quoteNativeFromUsd(priceUsd, chain);
   }, [priceUsd, chain]);
+  const localPayQuote = useMemo(() => {
+    if (priceUsd == null || !(priceUsd > 0)) return null;
+    return quotePayInFromUsdAt({
+      amountUsd: priceUsd,
+      listingChain: chain,
+      payNetwork,
+    });
+  }, [priceUsd, chain, payNetwork]);
+
+  const crossChain = payNetwork !== listingNetwork;
   const uniqueSold = sold || justSold;
   const canBuy =
+    minted &&
     priceUsd != null &&
     !uniqueSold &&
     dropState !== "upcoming" &&
     dropState !== "ended";
 
+  const payVm = vmForNetwork(payNetwork);
+  const payWalletReady = browserWalletAvailable(payVm);
+  const recvWalletReady = browserWalletAvailable(chain);
+
+  useEffect(() => {
+    if (!confirmBuy || !priceUsd) return;
+    let cancelled = false;
+    setQuoteBusy(true);
+    void fetch("/api/purchase/quote", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listingId, payNetwork }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          if (data.error === "boing_same_chain_only") {
+            setMsg("Boing listings are same-chain only (pay with BOING)");
+          } else if (data.error === "listing_not_minted") {
+            setMsg("This listing isn't minted on-chain yet");
+          } else if (res.status === 401) {
+            setMsg("sign_in");
+          }
+          setServerPayFormatted(null);
+          return;
+        }
+        if (Array.isArray(data.payNetworks)) {
+          setPayNetworks(data.payNetworks as NetworkId[]);
+        }
+        const pay = data.quote?.pay?.formatted as string | undefined;
+        setServerPayFormatted(pay ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setServerPayFormatted(null);
+      })
+      .finally(() => {
+        if (!cancelled) setQuoteBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmBuy, listingId, payNetwork, priceUsd]);
+
   async function post(url: string, body: Record<string, unknown>) {
-    setMsg(null);
     const res = await fetch(url, {
       method: "POST",
       credentials: "include",
@@ -127,14 +229,12 @@ export function ListingActions({
   async function openCheckout() {
     setMsg(null);
     setConfirmBuy(true);
+    setBuyStep("idle");
     setPayNetwork(listingNetwork);
-    const quote = await post("/api/purchase/quote", {
-      listingId,
-      payNetwork: listingNetwork,
-    });
-    if (quote && !("error" in quote) && Array.isArray(quote.payNetworks)) {
-      setPayNetworks(quote.payNetworks as NetworkId[]);
-    } else if (listingNetwork === "boing") {
+    setPaymentAddress(null);
+    setReceiveAddress(null);
+    setServerPayFormatted(null);
+    if (listingNetwork === "boing") {
       setPayNetworks(["boing"]);
     } else {
       setPayNetworks([
@@ -148,40 +248,56 @@ export function ListingActions({
     }
   }
 
+  async function connectWallets() {
+    setBuyStep("connecting");
+    setMsg(null);
+    const payAddr = await requestBuyerAddress(payVm);
+    if (!payAddr) {
+      setMsg(
+        `Install or unlock ${WALLET_HINT[payVm] ?? "a wallet"} to pay on ${PAY_LABELS[payNetwork] ?? payNetwork}`,
+      );
+      setBuyStep("idle");
+      return null;
+    }
+    setPaymentAddress(payAddr);
+    let recv = payAddr;
+    if (crossChain) {
+      const recvAddr = await requestBuyerAddress(chain);
+      if (!recvAddr) {
+        setMsg(
+          `Also connect ${WALLET_HINT[chain] ?? "a wallet"} on ${chain} to receive the NFT`,
+        );
+        setBuyStep("idle");
+        return null;
+      }
+      recv = recvAddr;
+    }
+    setReceiveAddress(recv);
+    return { payAddr, recv };
+  }
+
   async function completePurchase() {
     const amount = Number(priceUsd);
     if (!Number.isFinite(amount) || amount <= 0 || buying) return;
     setBuying(true);
+    setMsg(null);
     try {
-      const payVm = vmForNetwork(payNetwork);
-      const listingVm = chain;
-      const paymentAddress = await requestBuyerAddress(payVm);
-      if (!paymentAddress) {
-        setMsg(`Connect a ${PAY_LABELS[payNetwork] ?? payNetwork} wallet to pay`);
-        return;
-      }
-      let receiveAddress = paymentAddress;
-      if (payNetwork !== listingNetwork) {
-        const recv = await requestBuyerAddress(listingVm);
-        if (!recv) {
-          setMsg(`Connect a ${chain} wallet to receive the NFT`);
-          return;
-        }
-        receiveAddress = recv;
-      }
+      const wallets = await connectWallets();
+      if (!wallets) return;
 
       const data = await post("/api/purchase", {
         listingId,
         amountUsd: amount,
         payNetwork,
-        buyerPaymentAddress: paymentAddress,
-        buyerReceiveAddress: receiveAddress,
+        buyerPaymentAddress: wallets.payAddr,
+        buyerReceiveAddress: wallets.recv,
       });
       if (!data || "error" in data) {
         if (data && data.error === "already_sold") {
           setJustSold(true);
           setConfirmBuy(false);
         }
+        setBuyStep("idle");
         return;
       }
 
@@ -195,7 +311,8 @@ export function ListingActions({
           ? String((data.bridge as { requestId?: string }).requestId ?? "")
           : "";
 
-      if (payNetwork !== listingNetwork && data.bridge) {
+      if (crossChain && data.bridge) {
+        setBuyStep("bridging");
         const bridge = data.bridge as {
           amount?: string;
           requestId?: string;
@@ -208,7 +325,7 @@ export function ListingActions({
             fromNetwork: payNetwork,
             toNetwork: listingNetwork,
             amount: bridge.amount,
-            userAddress: paymentAddress,
+            userAddress: wallets.payAddr,
             recipientAddress:
               typeof data.settlementAddress === "string"
                 ? data.settlementAddress
@@ -217,7 +334,8 @@ export function ListingActions({
         });
         const prepData = await prep.json();
         if (!prep.ok) {
-          setMsg(prepData.error || "bridge_prepare_failed");
+          setMsg(prepData.error || "Couldn’t prepare the bridge. Try again.");
+          setBuyStep("idle");
           return;
         }
         bridgeRequestId =
@@ -231,12 +349,13 @@ export function ListingActions({
               to: step.to,
               data: step.data,
               value: step.value ?? "0x0",
-              from: paymentAddress,
+              from: wallets.payAddr,
             });
             hashes.push(hash);
           }
         }
         paymentHash = hashes[0] ?? `bridge:${bridgeRequestId || Date.now()}`;
+        setBuyStep("paying");
         await fetch("/api/bridge/confirm", {
           method: "POST",
           credentials: "include",
@@ -247,6 +366,7 @@ export function ListingActions({
           }),
         });
       } else if (data.paymentWalletTx) {
+        setBuyStep("paying");
         paymentHash = await maybeSendWalletTx({
           walletTx: data.paymentWalletTx,
           listingId,
@@ -254,13 +374,15 @@ export function ListingActions({
           amountUsd: amount,
         });
         if (!paymentHash) {
-          setMsg("Confirm the payment in your wallet");
+          setMsg("Confirm the payment in your wallet popup");
+          setBuyStep("idle");
           return;
         }
       }
 
       if (!paymentHash || !purchaseId) {
         setMsg("Payment required to continue");
+        setBuyStep("idle");
         return;
       }
 
@@ -270,10 +392,13 @@ export function ListingActions({
         txHash: paymentHash,
         bridgeRequestId: bridgeRequestId || undefined,
       });
-      if (!paid || "error" in paid) return;
+      if (!paid || "error" in paid) {
+        setBuyStep("idle");
+        return;
+      }
 
-      const transferTx =
-        paid.transferWalletTx ?? data.transferWalletTx;
+      setBuyStep("transferring");
+      const transferTx = paid.transferWalletTx ?? data.transferWalletTx;
       let transferHash: string | null = null;
       if (transferTx) {
         const wt = transferTx as EvmWalletTx & { chain: string };
@@ -289,7 +414,10 @@ export function ListingActions({
         }
       }
       if (!transferHash) {
-        setMsg("Confirm the NFT transfer in your wallet");
+        setMsg(
+          "Payment landed — confirm the NFT transfer in your wallet to finish",
+        );
+        setBuyStep("idle");
         return;
       }
 
@@ -298,14 +426,19 @@ export function ListingActions({
         step: "transfer",
         txHash: transferHash,
       });
-      if (!done || "error" in done) return;
+      if (!done || "error" in done) {
+        setBuyStep("idle");
+        return;
+      }
 
+      setBuyStep("done");
       finishPurchase(
         { ...data, ...done, fees: data.fees },
         "Owned on-chain",
       );
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "purchase_failed");
+      setBuyStep("idle");
     } finally {
       setBuying(false);
     }
@@ -320,10 +453,17 @@ export function ListingActions({
         ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
         : "";
     setConfirmBuy(false);
+    setBuyStep("idle");
     if (!repeatable && listingType !== "open_edition") setJustSold(true);
     setMsg(`${prefix}${feeNote}`);
     router.refresh();
   }
+
+  const payAmountLabel =
+    serverPayFormatted ??
+    localPayQuote?.pay.formatted ??
+    settleQuote?.formatted ??
+    `$${priceUsd}`;
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.6rem" }}>
@@ -334,7 +474,7 @@ export function ListingActions({
           style={{ cursor: "pointer", background: "transparent" }}
           onClick={() =>
             void post("/api/follow", { artistId: creatorId }).then((d) => {
-              if (d) {
+              if (d && !("error" in d)) {
                 setMsg("Following");
                 router.refresh();
               }
@@ -350,7 +490,7 @@ export function ListingActions({
         style={{ cursor: "pointer", background: "transparent" }}
         onClick={() =>
           void post("/api/signals", { listingId, type: "save" }).then((d) => {
-            if (d) {
+            if (d && !("error" in d)) {
               setMsg("Saved");
               router.refresh();
             }
@@ -365,7 +505,7 @@ export function ListingActions({
         style={{ cursor: "pointer", background: "transparent" }}
         onClick={() =>
           void post("/api/nominate", { listingId }).then((d) => {
-            if (d) {
+            if (d && !("error" in d)) {
               setMsg("Nominated (−10 curator pts)");
               router.refresh();
             }
@@ -381,6 +521,11 @@ export function ListingActions({
       {dropState === "ended" && !uniqueSold ? (
         <span className="badge">Drop ended</span>
       ) : null}
+      {!minted && !uniqueSold && priceUsd != null ? (
+        <span className="badge" title="Creator must finish publish mint first">
+          Not minted yet
+        </span>
+      ) : null}
       {canBuy && !confirmBuy ? (
         <button
           type="button"
@@ -388,14 +533,17 @@ export function ListingActions({
           style={{ cursor: "pointer", background: "transparent" }}
           onClick={() => void openCheckout()}
         >
-          Buy {nativeQuote?.formatted ?? `$${priceUsd}`}
+          Buy {settleQuote?.formatted ?? `$${priceUsd}`}
+          {priceUsd != null ? (
+            <span style={{ opacity: 0.75 }}> · ${priceUsd}</span>
+          ) : null}
         </button>
       ) : null}
       {canBuy && confirmBuy ? (
         <div
           style={{
             width: "100%",
-            maxWidth: "22rem",
+            maxWidth: "24rem",
             marginTop: "0.15rem",
             padding: "0.75rem 0.85rem",
             border: "1px solid var(--line)",
@@ -404,31 +552,68 @@ export function ListingActions({
         >
           <p
             className="display"
-            style={{ margin: "0 0 0.35rem", fontSize: "1rem" }}
+            style={{ margin: "0 0 0.25rem", fontSize: "1rem" }}
           >
-            Confirm purchase · {nativeQuote?.formatted ?? `$${priceUsd}`}
+            {payAmountLabel}
+            {priceUsd != null ? (
+              <span
+                style={{
+                  marginLeft: "0.35rem",
+                  color: "var(--ink-muted)",
+                  fontSize: "0.85rem",
+                  fontWeight: 400,
+                }}
+              >
+                ≈ ${priceUsd}
+              </span>
+            ) : null}
           </p>
           {feePreview ? (
             <p
               style={{
-                margin: "0 0 0.75rem",
+                margin: "0 0 0.65rem",
                 color: "var(--ink-muted)",
                 fontSize: "0.8rem",
                 lineHeight: 1.45,
               }}
             >
-              Pay crypto and receive the NFT in your {chain} wallet.{" "}
-              {PLATFORM_FEE_PERCENT.total}% treasury fee. Seller nets $
-              {feePreview.sellerNetUsd.toFixed(2)}.
-              {payNetwork !== listingNetwork
-                ? " Cross-chain: bridge via Relay, then transfer on the listing network."
-                : ""}
+              Lands in your {chain} wallet. {PLATFORM_FEE_PERCENT.total}% treasury
+              · seller ${feePreview.sellerNetUsd.toFixed(2)}.
             </p>
           ) : null}
+
+          <ol
+            style={{
+              margin: "0 0 0.75rem",
+              paddingLeft: "1.1rem",
+              color: "var(--ink-muted)",
+              fontSize: "0.78rem",
+              lineHeight: 1.45,
+            }}
+          >
+            <li style={{ opacity: buyStep === "connecting" ? 1 : 0.75 }}>
+              Connect {WALLET_HINT[payVm]}
+              {crossChain ? ` + ${WALLET_HINT[chain]}` : ""}
+            </li>
+            <li
+              style={{
+                opacity:
+                  buyStep === "bridging" || buyStep === "paying" ? 1 : 0.75,
+              }}
+            >
+              {crossChain
+                ? `Bridge ${PAY_LABELS[payNetwork] ?? payNetwork} → ${PAY_LABELS[listingNetwork] ?? listingNetwork}`
+                : `Pay on ${PAY_LABELS[listingNetwork] ?? listingNetwork}`}
+            </li>
+            <li style={{ opacity: buyStep === "transferring" ? 1 : 0.75 }}>
+              Receive NFT transfer on {chain}
+            </li>
+          </ol>
+
           <label
             style={{
               display: "block",
-              marginBottom: "0.65rem",
+              marginBottom: "0.55rem",
               fontSize: "0.8rem",
               color: "var(--ink-muted)",
             }}
@@ -436,7 +621,13 @@ export function ListingActions({
             Pay with
             <select
               value={payNetwork}
-              onChange={(e) => setPayNetwork(e.target.value as NetworkId)}
+              disabled={buying}
+              onChange={(e) => {
+                setPayNetwork(e.target.value as NetworkId);
+                setPaymentAddress(null);
+                setReceiveAddress(null);
+                setMsg(null);
+              }}
               style={{
                 display: "block",
                 width: "100%",
@@ -447,21 +638,76 @@ export function ListingActions({
               {payNetworks.map((n) => (
                 <option key={n} value={n}>
                   {PAY_LABELS[n] ?? n}
+                  {n === listingNetwork ? " · listing network" : ""}
                 </option>
               ))}
             </select>
           </label>
+
+          <p
+            style={{
+              margin: "0 0 0.65rem",
+              fontSize: "0.75rem",
+              color: "var(--ink-muted)",
+              lineHeight: 1.4,
+            }}
+          >
+            {quoteBusy ? "Updating quote…" : null}
+            {!quoteBusy && crossChain ? (
+              <>
+                Cross-chain via Relay. You pay on{" "}
+                {PAY_LABELS[payNetwork] ?? payNetwork}; NFT stays on{" "}
+                {PAY_LABELS[listingNetwork] ?? listingNetwork}.
+              </>
+            ) : null}
+            {!quoteBusy && !crossChain && !payWalletReady ? (
+              <>Needs {WALLET_HINT[payVm]} in this browser.</>
+            ) : null}
+            {!quoteBusy && crossChain && (!payWalletReady || !recvWalletReady) ? (
+              <>
+                Needs {WALLET_HINT[payVm]}
+                {!recvWalletReady ? ` and ${WALLET_HINT[chain]}` : ""}.
+              </>
+            ) : null}
+            {paymentAddress ? (
+              <>
+                {" "}
+                Pay from {shortAddr(paymentAddress)}
+                {receiveAddress && receiveAddress !== paymentAddress
+                  ? ` · receive ${shortAddr(receiveAddress)}`
+                  : ""}
+                .
+              </>
+            ) : null}
+          </p>
+
+          {buying || buyStep !== "idle" ? (
+            <p
+              style={{
+                margin: "0 0 0.55rem",
+                fontSize: "0.8rem",
+                color: "var(--accent-soft)",
+              }}
+              aria-live="polite"
+            >
+              {stepLabel(buyStep === "idle" && buying ? "connecting" : buyStep, crossChain)}
+            </p>
+          ) : null}
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
             <button
               type="button"
               className="badge featured"
               disabled={buying}
-              style={{ cursor: buying ? "wait" : "pointer", background: "transparent" }}
+              style={{
+                cursor: buying ? "wait" : "pointer",
+                background: "transparent",
+              }}
               onClick={() => void completePurchase()}
             >
               {buying
-                ? "Buying…"
-                : payNetwork !== listingNetwork
+                ? stepLabel(buyStep === "idle" ? "connecting" : buyStep, crossChain)
+                : crossChain
                   ? "Bridge & buy"
                   : "Confirm buy"}
             </button>
@@ -469,8 +715,12 @@ export function ListingActions({
               type="button"
               className="badge"
               disabled={buying}
-              style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => setConfirmBuy(false)}
+              style={{ cursor: buying ? "wait" : "pointer", background: "transparent" }}
+              onClick={() => {
+                setConfirmBuy(false);
+                setBuyStep("idle");
+                setMsg(null);
+              }}
             >
               Cancel
             </button>
@@ -486,7 +736,7 @@ export function ListingActions({
             void post(`/api/listings/${listingId}/stage`, {
               target: "rising_eligible",
             }).then((d) => {
-              if (d) {
+              if (d && !("error" in d)) {
                 setMsg("Pushed to Rising");
                 router.refresh();
               }
@@ -508,7 +758,7 @@ export function ListingActions({
           void post(`/api/listings/${listingId}/report`, {
             reason: "spam",
           }).then((d) => {
-            if (d) setMsg("Reported");
+            if (d && !("error" in d)) setMsg("Reported");
           })
         }
       >
@@ -516,7 +766,11 @@ export function ListingActions({
       </button>
       {msg === "sign_in" ? (
         <span style={{ fontSize: "0.8rem" }}>
-          <Link href="/api/auth/signin">Sign in</Link> to collect
+          <Link href="/sign-in">Sign in</Link> to collect
+        </span>
+      ) : msg === "already_sold" ? (
+        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+          Already sold
         </span>
       ) : msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>

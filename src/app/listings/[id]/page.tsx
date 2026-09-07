@@ -206,6 +206,9 @@ export default async function ListingDetailPage({
             network={listing.network}
             dropState={drop.state}
             repeatable={cap == null || cap > 1}
+            minted={Boolean(
+              listing.tokenId && listing.contractAddress && listing.mintTxHash,
+            )}
           />
 
           <dl

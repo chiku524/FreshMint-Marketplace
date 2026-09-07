@@ -10,20 +10,23 @@ export function WithdrawCollectedButton({
   chain,
   withdrawn = false,
   withdrawTxHash = null,
+  cryptoOwned = false,
 }: {
   purchaseId: string;
   chain: Chain;
   withdrawn?: boolean;
   withdrawTxHash?: string | null;
+  /** Crypto primary buy — ownership already delivered at purchase. */
+  cryptoOwned?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  if (withdrawn) {
+  if (withdrawn || cryptoOwned) {
     return (
       <span className="badge emerging">
-        In wallet
+        {cryptoOwned && !withdrawn ? "Owned on buy" : "In wallet"}
         {withdrawTxHash ? ` · ${withdrawTxHash.slice(0, 10)}…` : ""}
       </span>
     );
@@ -47,7 +50,9 @@ export function WithdrawCollectedButton({
             ? `Link a ${chain} wallet in Settings first`
             : data.error === "already_withdrawn"
               ? "Already withdrawn"
-              : data.error || "withdraw_failed",
+              : data.error === "crypto_purchase_owned_at_buy"
+                ? "Already owned on-chain from purchase"
+                : data.error || "withdraw_failed",
         );
       }
       let note = "Withdraw prepared";
@@ -71,7 +76,7 @@ export function WithdrawCollectedButton({
           });
           note = `Withdrawn · ${hash.slice(0, 12)}…`;
         } else {
-          note = "Mint intent recorded — sign in your wallet when ready";
+          note = "Confirm the transfer in your wallet when ready";
         }
       } else if (data.txHash) {
         note = `Withdrawn · ${String(data.txHash).slice(0, 12)}…`;
@@ -93,8 +98,9 @@ export function WithdrawCollectedButton({
         disabled={busy}
         style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
         onClick={() => void onWithdraw()}
+        title="For legacy USD purchases that still need an on-chain transfer"
       >
-        {busy ? "Withdrawing…" : "Withdraw to wallet"}
+        {busy ? "Withdrawing…" : "Withdraw (legacy)"}
       </button>
       {msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>

@@ -120,6 +120,9 @@ export default async function MeCollectionPage() {
                               ? item.withdrawTxHash ?? null
                               : null
                           }
+                          cryptoOwned={Boolean(
+                            "payNetwork" in item && item.payNetwork,
+                          )}
                         />
                       </span>
                     </>
