@@ -22,16 +22,27 @@ export function ResumeCryptoPurchaseButton({
   chain,
   network,
   status,
+  allowCancel = true,
 }: {
   purchaseId: string;
   chain: Chain;
   network?: NetworkId | string | null;
   status: string;
+  allowCancel?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
   const [doneHash, setDoneHash] = useState<string | null>(null);
+
+  if (cancelled) {
+    return (
+      <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+        Checkout cancelled
+      </span>
+    );
+  }
 
   if (status === "completed" || doneHash) {
     return (
@@ -221,6 +232,28 @@ export function ResumeCryptoPurchaseButton({
     }
   }
 
+  async function onCancel() {
+    if (busy) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/purchase/cancel", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purchaseId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "cancel_failed");
+      setCancelled(true);
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "cancel_failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const label =
     status === "pending_payment"
       ? "Finish payment"
@@ -239,6 +272,17 @@ export function ResumeCryptoPurchaseButton({
       >
         {busy ? "Resuming…" : label}
       </button>
+      {allowCancel && status === "pending_payment" ? (
+        <button
+          type="button"
+          className="badge"
+          disabled={busy}
+          style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
+          onClick={() => void onCancel()}
+        >
+          Cancel checkout
+        </button>
+      ) : null}
       {msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
       ) : null}

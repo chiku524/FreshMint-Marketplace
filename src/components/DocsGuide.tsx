@@ -10,12 +10,12 @@ const TOC = [
   {
     id: "flow",
     label: "The life of a work",
-    blurb: "Create, sell, buy, then mint if you want.",
+    blurb: "Mint at publish. Buy with crypto. Own in your wallet.",
   },
   {
     id: "settlement",
     label: "Settlement",
-    blurb: "Ledger first. Chain only when you choose.",
+    blurb: "Primary sales pay native on-chain, then transfer the NFT.",
   },
   {
     id: "fees",
@@ -24,8 +24,8 @@ const TOC = [
   },
   {
     id: "withdraw",
-    label: "Withdraw",
-    blurb: "Collect off-chain. Mint when you take it to a wallet.",
+    label: "Ownership",
+    blurb: "New buys land in your wallet. Withdraw is for legacy holds.",
   },
   {
     id: "discovery",
@@ -97,8 +97,8 @@ export function DocsGuide() {
             maxWidth: "42ch",
           }}
         >
-          Collect and create without gas. Pay a chain only when you withdraw an
-          NFT or move ETH, SOL, or Boing.
+          Collect on FreshMint with crypto. Creators mint when they publish;
+          buyers receive the NFT in-wallet at purchase.
         </p>
       </header>
 
@@ -143,8 +143,9 @@ export function DocsGuide() {
               Settlement
             </h2>
             <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
-              FreshMint is a platform ledger first. That keeps everyday activity
-              cheap and leaves the chain for moments that need a wallet.
+              Primary sales settle on-chain. Discovery — saving, following,
+              nominating, browsing — stays on the FreshMint ledger so ranking
+              stays cheap.
             </p>
             <div
               style={{
@@ -155,20 +156,21 @@ export function DocsGuide() {
             >
               <div>
                 <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
-                  On FreshMint
+                  At publish
                 </h3>
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-                  Create a collection or scheduled drop, buy, save, follow, nominate,
-                  and browse. No wallet prompt and no gas.
+                  Create deploys your collection and mints pieces into it. You pay
+                  gas on those steps. Unminted drafts stay off Open Lane.
                 </p>
               </div>
               <div>
                 <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
-                  On-chain, when you choose
+                  At purchase
                 </h3>
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-                  Withdraw a collected NFT to EVM, Solana, or Boing. Deposit,
-                  withdraw, or <Link href="/bridge">bridge</Link> ETH, SOL, or Boing.
+                  Collectors pay native (or <Link href="/bridge">bridge</Link> via
+                  Relay) and the minted NFT transfers to their wallet. Boing stays
+                  same-chain.
                 </p>
               </div>
             </div>
@@ -189,7 +191,7 @@ export function DocsGuide() {
               <strong style={{ color: "var(--ink)" }}>
                 {PLATFORM_FEE_PERCENT.sellerNet}%
               </strong>
-              . You still pay the listed USD price.
+              . Quote is in USD; you pay the native amount shown at checkout.
             </p>
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
               That cut funds community events, future updates, and running the
@@ -202,16 +204,16 @@ export function DocsGuide() {
           {active === "withdraw" ? (
           <section id="withdraw">
             <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-              Withdraw an NFT
+              Ownership
             </h2>
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
-              Collected work stays in your FreshMint profile until you want it in a
-              wallet. Open{" "}
-              <Link href="/me">your collection</Link>, choose{" "}
-              <strong style={{ color: "var(--ink)" }}>Withdraw to wallet</strong>, and
-              sign the mint for that network. Link a matching wallet in{" "}
-              <Link href="/me/settings">Settings</Link> first. Gas is yours only on
-              that step.
+              Crypto purchases transfer the already-minted token to your wallet
+              when the buy confirms. Open{" "}
+              <Link href="/me">your collection</Link> to resume an interrupted
+              checkout or see explorer links.{" "}
+              <strong style={{ color: "var(--ink)" }}>Withdraw to wallet</strong>{" "}
+              remains only for older USD holds. Link a matching wallet in{" "}
+              <Link href="/me/settings">Settings</Link>.
             </p>
           </section>
           ) : null}
@@ -361,6 +363,10 @@ export function DocsGuide() {
               ))}
             </ol>
             <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.7 }}>
+              <li>
+                <strong style={{ color: "var(--ink)" }}>Draft</strong> — private
+                until mint + soft-launch. Create will not list unminted work.
+              </li>
               <li>
                 <strong style={{ color: "var(--ink)" }}>Soft launch</strong> — Open
                 Lane + profile only; gather early signals

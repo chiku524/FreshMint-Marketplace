@@ -39,26 +39,25 @@ const STEPS: Step[] = [
     realm: "ledger",
     x: 90,
     y: 88,
-    body: "Google, email, a wallet, or a demo persona. Creating and buying never ask you to sign a chain transaction.",
+    body: "Google, email, a wallet, or a demo persona. Creating and buying use your session; crypto checkout asks for a wallet when you pay.",
   },
   {
     id: "collection",
     title: "Collection",
     lane: "Creator",
     realm: "ledger",
-    optional: true,
     x: 310,
     y: 88,
-    body: "Name a collection and pick the network a collector would mint on later. Skip this and list a standalone work.",
+    body: "Name a collection and pick the mint network. Deploying the contract is on-chain — you pay gas from a linked wallet.",
   },
   {
-    id: "list",
-    title: "List or drop",
+    id: "mint",
+    title: "Mint & publish",
     lane: "Creator",
-    realm: "ledger",
+    realm: "chain",
     x: 560,
     y: 88,
-    body: "A 1/1, a collection piece, a timed open edition, or an auction. Soft-launch to Open Lane. Media is hashed. Nothing is minted.",
+    body: "Publish mints pieces into the collection, then soft-launches to Open Lane. Unminted drafts stay off the market.",
   },
   {
     id: "discover",
@@ -73,29 +72,19 @@ const STEPS: Step[] = [
     id: "buy",
     title: "Buy",
     lane: "Collector",
-    realm: "ledger",
+    realm: "chain",
     x: 760,
     y: 228,
-    body: `The collector pays the listed USD. FreshMint takes ${PLATFORM_FEE_PERCENT.total}% for the treasury; the seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%. A 1/1 sells once. An open edition can sell again.`,
+    body: `Pay native (or bridge via Relay) at the listed USD quote. FreshMint takes ${PLATFORM_FEE_PERCENT.total}% for the treasury; the seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%. A 1/1 sells once.`,
   },
   {
-    id: "collect",
-    title: "Collect",
+    id: "own",
+    title: "Own",
     lane: "Collector",
-    realm: "ledger",
-    x: 500,
-    y: 228,
-    body: "The work sits on the collector’s profile — still a FreshMint record. No wallet, no gas, no token yet.",
-  },
-  {
-    id: "withdraw",
-    title: "Withdraw",
-    lane: "Chain",
     realm: "chain",
-    optional: true,
-    x: 220,
+    x: 500,
     y: 368,
-    body: "Link a matching wallet and sign. That is the first mint — on EVM, Solana, or Boing. Gas is only on this step.",
+    body: "The NFT transfers into your wallet at purchase. Your collection tracks explorer links. Withdraw remains only for older USD holds.",
   },
 ];
 
@@ -154,7 +143,7 @@ export function NftLifecycleDiagram() {
         <div>
           <p className="nft-flow__kicker">The life of a work</p>
           <h3 id={headingId} className="display nft-flow__title">
-            From collection to mint
+            From mint to own
           </h3>
         </div>
         <div className="nft-flow__controls">
@@ -179,7 +168,7 @@ export function NftLifecycleDiagram() {
 
       <div className="nft-flow__legend" aria-hidden>
         <span className="nft-flow__legend-item is-ledger">On FreshMint</span>
-        <span className="nft-flow__legend-item is-chain">On-chain, if you choose</span>
+        <span className="nft-flow__legend-item is-chain">On-chain</span>
       </div>
 
       <div className="nft-flow__board" aria-hidden={false}>
@@ -295,13 +284,13 @@ export function NftLifecycleDiagram() {
           {step.lane}
           {step.optional ? " · optional" : ""}
           {" · "}
-          {minted ? "On-chain NFT" : "Off-chain record"}
+          {minted ? "On-chain NFT" : "FreshMint record"}
         </p>
         <p className="display nft-flow__caption-title">{step.title}</p>
         <p className="nft-flow__caption-body">{step.body}</p>
         <p className="nft-flow__aside">
-          ETH, SOL, and Boing move on the bridge. That path moves funds — it does
-          not mint the art.
+          ETH, SOL, and Boing also move on the bridge when you pay from another
+          chain. That path moves funds — the art stays on the listing network.
         </p>
       </div>
     </div>

@@ -129,6 +129,11 @@ export function CreateWizard() {
     total: number;
   } | null>(null);
   const [deployNote, setDeployNote] = useState<string | null>(null);
+  const [published, setPublished] = useState<{
+    listingIds: string[];
+    collectionId: string;
+    label: string;
+  } | null>(null);
 
   const steps = useMemo(() => stepDefs(intent), [intent]);
   const step = steps[stepIndex] ?? steps[0];
@@ -645,13 +650,14 @@ export function CreateWizard() {
           : intent === "auction"
             ? "auction listing"
             : "1/1 listing";
-      setOk(
-        `Published ${label} on-chain. Collectors pay crypto and receive the NFT at purchase.`,
-      );
+      setOk(null);
+      setPublished({
+        listingIds,
+        collectionId: id,
+        label,
+      });
       setPieces([]);
       setMintProgress(null);
-      setStepIndex(0);
-      setIntent(null);
       router.refresh();
       window.dispatchEvent(new Event("fm-collections-changed"));
     } catch (err) {
@@ -660,6 +666,52 @@ export function CreateWizard() {
       setBusy(false);
       setMintProgress(null);
     }
+  }
+
+  if (published) {
+    const firstId = published.listingIds[0];
+    return (
+      <div className="create-wizard">
+        <div className="create-wizard__panel">
+          <h2 className="display create-wizard__title">Published on-chain</h2>
+          <p className="create-wizard__lead">
+            {published.label} is minted and live on Open Lane. Collectors pay
+            crypto and receive the NFT at purchase.
+          </p>
+          <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "1rem 0 0" }}>
+            {firstId ? (
+              <Link href={`/listings/${firstId}`} className="badge featured">
+                Open listing
+              </Link>
+            ) : null}
+            <Link href="/open" className="badge">
+              Open Lane
+            </Link>
+            <Link href={`/collections/${published.collectionId}`} className="badge">
+              Collection
+            </Link>
+            <Link href="/me" className="badge">
+              Your works
+            </Link>
+          </p>
+          <div className="create-wizard__nav">
+            <button
+              type="button"
+              className="badge featured"
+              style={{ cursor: "pointer", background: "transparent" }}
+              onClick={() => {
+                setPublished(null);
+                setStepIndex(0);
+                setIntent(null);
+                setOk(null);
+              }}
+            >
+              Create another
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -706,7 +758,7 @@ export function CreateWizard() {
                   {
                     id: "auction" as const,
                     title: "Scheduled auction",
-                    body: "Fixed USD price with a start and end window on the calendar.",
+                    body: "Fixed USD-quoted price, paid in crypto, with a start and end window.",
                   },
                 ] as const
               ).map((choice) => (
@@ -794,7 +846,7 @@ export function CreateWizard() {
               {intent === "auction" ? "Auction window" : "Drop schedule"}
             </h2>
             <p className="create-wizard__lead">
-              Collectors buy from you in USD while the window is live.
+              Collectors pay crypto at this USD-quoted price while the window is live.
             </p>
             {intent === "drop" ? (
               <>
@@ -1105,9 +1157,9 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">Review & publish</h2>
             <p className="create-wizard__lead">
-              Soft-launch lists the works, then mints them into your collection
-              contract (you pay gas in batches). Collectors buy in USD; withdraw
-              later transfers an already-minted token.
+              Mint into your collection contract first (you pay gas), then
+              soft-launch to Open Lane. Collectors pay crypto and receive the NFT
+              at purchase.
             </p>
             <dl className="create-wizard__summary">
               <div>

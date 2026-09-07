@@ -8,6 +8,7 @@ import {
 } from "@/lib/data/memory-store";
 import type { NetworkId } from "@/lib/discovery/types";
 import {
+  cancelCryptoPurchase,
   confirmCollectionMintBatch,
   confirmCryptoPurchase,
   confirmOnchainTx,
@@ -934,5 +935,86 @@ describe("marketplace service (memory mode)", () => {
     expect(done.ok).toBe(true);
     if (!done.ok) return;
     expect(done.status).toBe("completed");
+  });
+
+  it("holds 1/1 inventory during checkout and releases after cancel", async () => {
+    markListingMintedForTest("listing-nova-1");
+    const started = await cryptoBuy({
+      listingId: "listing-nova-1",
+      buyerId: "collector-kai",
+      amountUsd: 120,
+      simulate: false,
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const blocked = await cryptoBuy({
+      listingId: "listing-nova-1",
+      buyerId: "collector-mira",
+      amountUsd: 120,
+      simulate: false,
+    });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.error).toBe("already_sold");
+
+    const cancelled = await cancelCryptoPurchase({
+      purchaseId: started.purchaseId,
+      buyerId: "collector-kai",
+    });
+    expect(cancelled.ok).toBe(true);
+
+    const retry = await cryptoBuy({
+      listingId: "listing-nova-1",
+      buyerId: "collector-mira",
+      amountUsd: 120,
+    });
+    expect(retry.ok).toBe(true);
+  });
+
+  it("reuses the same buyer's open checkout instead of double-reserving", async () => {
+    markListingMintedForTest("listing-fresh-1");
+    const first = await cryptoBuy({
+      listingId: "listing-fresh-1",
+      buyerId: "collector-kai",
+      amountUsd: 45,
+      simulate: false,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const again = await cryptoBuy({
+      listingId: "listing-fresh-1",
+      buyerId: "collector-kai",
+      amountUsd: 45,
+      simulate: false,
+    });
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    expect(again.purchaseId).toBe(first.purchaseId);
+    expect(again.resumed).toBe(true);
+  });
+
+  it("expires stale unpaid checkouts so the listing can sell", async () => {
+    markListingMintedForTest("listing-nova-1");
+    const started = await cryptoBuy({
+      listingId: "listing-nova-1",
+      buyerId: "collector-kai",
+      amountUsd: 120,
+      simulate: false,
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    const row = getMemoryPurchases().find((p) => p.id === started.purchaseId);
+    expect(row).toBeTruthy();
+    if (row) row.soldAt = Date.now() - 20 * 60 * 1000;
+
+    const retry = await cryptoBuy({
+      listingId: "listing-nova-1",
+      buyerId: "collector-mira",
+      amountUsd: 120,
+    });
+    expect(retry.ok).toBe(true);
   });
 });

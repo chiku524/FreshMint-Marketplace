@@ -4,27 +4,39 @@ import {
   purchaseBodySchema,
 } from "@/lib/marketplace/purchase-request";
 
+const cryptoFields = {
+  payNetwork: "ethereum" as const,
+  buyerPaymentAddress: `0x${"b1".repeat(20)}`,
+  buyerReceiveAddress: `0x${"b2".repeat(20)}`,
+};
+
 describe("purchase body", () => {
   it("accepts a string price from serialized listing props", () => {
     const parsed = purchaseBodySchema.safeParse({
       listingId: "listing-boing-1",
       amountUsd: "32",
+      ...cryptoFields,
+      payNetwork: "boing",
     });
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.amountUsd).toBe(32);
   });
 
-  it("allows listingId only so the server can use the catalog price", () => {
+  it("allows omitting amountUsd so the server can use the catalog price", () => {
     const parsed = purchaseBodySchema.safeParse({
       listingId: "listing-fresh-1",
+      ...cryptoFields,
     });
     expect(parsed.success).toBe(true);
   });
 
-  it("rejects an empty body", () => {
+  it("rejects an empty body and a listingId without payment details", () => {
     expect(purchaseBodySchema.safeParse(null).success).toBe(false);
     expect(purchaseBodySchema.safeParse({}).success).toBe(false);
+    expect(
+      purchaseBodySchema.safeParse({ listingId: "listing-fresh-1" }).success,
+    ).toBe(false);
   });
 });
 

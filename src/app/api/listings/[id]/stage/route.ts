@@ -1,3 +1,4 @@
+import { canUserStageListing } from "@/lib/marketplace/lifecycle";
 import { getSessionUser } from "@/lib/auth/session";
 import { getDiscoveryEngine, transitionListingStage } from "@/lib/marketplace/service";
 import type { LaunchStage } from "@/lib/discovery/types";
@@ -28,7 +29,7 @@ export async function POST(
   if (!listing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  if (listing.creatorId !== user.id && !user.verifiedCreator) {
+  if (!canUserStageListing(user, listing)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

@@ -1,6 +1,7 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { getDropCalendar } from "@/lib/marketplace/calendar";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,12 @@ export default async function CalendarPage() {
       <h2 className="display" style={{ fontSize: "1.5rem" }}>
         Open editions
       </h2>
+      {cal.openEditions.filter((e) => e.status !== "ended").length === 0 ? (
+        <p style={{ color: "var(--ink-muted)", margin: "1rem 0 2.5rem" }}>
+          No live or upcoming open editions. Schedule one from{" "}
+          <Link href="/create">Create</Link>.
+        </p>
+      ) : (
       <PuzzleRail style={{ margin: "1rem 0 2.5rem" }}>
         {cal.openEditions
           .filter((e) => e.status !== "ended")
@@ -78,10 +85,16 @@ export default async function CalendarPage() {
             />
           ))}
       </PuzzleRail>
+      )}
 
       <h2 className="display" style={{ fontSize: "1.5rem" }}>
         Auctions
       </h2>
+      {cal.auctions.filter((e) => e.status !== "ended").length === 0 ? (
+        <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
+          No live or upcoming auctions.
+        </p>
+      ) : (
       <PuzzleRail style={{ marginTop: "1rem" }}>
         {cal.auctions
           .filter((e) => e.status !== "ended")
@@ -99,6 +112,7 @@ export default async function CalendarPage() {
             />
           ))}
       </PuzzleRail>
+      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
+import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 
 const PAY_LABELS: Record<string, string> = {
   ethereum: "Ethereum (ETH)",
@@ -81,6 +82,8 @@ export function ListingActions({
   dropState = "none",
   repeatable = false,
   minted = true,
+  canStageRising = false,
+  pendingPurchase = null,
 }: {
   listingId: string;
   creatorId?: string;
@@ -94,6 +97,9 @@ export function ListingActions({
   repeatable?: boolean;
   /** Listing has tokenId + contract + mint tx from publish. */
   minted?: boolean;
+  /** Owner or editor — show stage controls. */
+  canStageRising?: boolean;
+  pendingPurchase?: { purchaseId: string; status: string } | null;
 }) {
   const router = useRouter();
   const listingNetwork = (network ??
@@ -108,6 +114,11 @@ export function ListingActions({
   const [buying, setBuying] = useState(false);
   const [buyStep, setBuyStep] = useState<BuyStep>("idle");
   const [justSold, setJustSold] = useState(false);
+  const [heldPurchase, setHeldPurchase] = useState<{
+    purchaseId: string;
+    status: string;
+  } | null>(pendingPurchase);
+  const [boughtThisSession, setBoughtThisSession] = useState(false);
   const [payNetwork, setPayNetwork] = useState<NetworkId>(listingNetwork);
   const [payNetworks, setPayNetworks] = useState<NetworkId[]>([
     listingNetwork,
@@ -135,17 +146,23 @@ export function ListingActions({
   }, [priceUsd, chain, payNetwork]);
 
   const crossChain = payNetwork !== listingNetwork;
-  const uniqueSold = sold || justSold;
+  const uniqueSold = (sold || justSold) && !heldPurchase && !pendingPurchase;
   const canBuy =
     minted &&
     priceUsd != null &&
     !uniqueSold &&
+    !heldPurchase &&
+    !pendingPurchase &&
     dropState !== "upcoming" &&
     dropState !== "ended";
 
   const payVm = vmForNetwork(payNetwork);
   const payWalletReady = browserWalletAvailable(payVm);
   const recvWalletReady = browserWalletAvailable(chain);
+
+  useEffect(() => {
+    if (pendingPurchase) setHeldPurchase(pendingPurchase);
+  }, [pendingPurchase]);
 
   useEffect(() => {
     if (!confirmBuy || !priceUsd) return;
@@ -207,7 +224,9 @@ export function ListingActions({
           ? "You can't buy your own work"
           : raw === "already_sold"
             ? "already_sold"
-            : raw === "drop_not_started"
+            : raw === "checkout_expired"
+              ? "This checkout expired — try buying again"
+              : raw === "drop_not_started"
               ? "This drop hasn't started yet"
               : raw === "drop_ended"
                 ? "This drop has ended"
@@ -304,6 +323,54 @@ export function ListingActions({
       }
 
       const purchaseId = String(data.purchaseId ?? "");
+      if (purchaseId) {
+        setHeldPurchase({
+          purchaseId,
+          status: String(data.status ?? "pending_payment"),
+        });
+      }
+
+      if (data.status === "pending_transfer") {
+        setBuyStep("transferring");
+        const transferTx = data.transferWalletTx;
+        let transferHash: string | null = null;
+        if (transferTx) {
+          const wt = transferTx as EvmWalletTx & { chain: string };
+          if (wt.chain === "evm") {
+            transferHash = await sendEvmWalletTx(wt);
+          } else {
+            transferHash = await maybeSendWalletTx({
+              walletTx: transferTx,
+              listingId,
+              action: "buy",
+              amountUsd: amount,
+            });
+          }
+        }
+        if (!transferHash) {
+          setMsg(
+            "Payment already landed — confirm the NFT transfer in your wallet, or finish from your collection",
+          );
+          setBuyStep("idle");
+          return;
+        }
+        const done = await post("/api/purchase/confirm", {
+          purchaseId,
+          step: "transfer",
+          txHash: transferHash,
+        });
+        if (!done || "error" in done) {
+          setBuyStep("idle");
+          return;
+        }
+        setBuyStep("done");
+        finishPurchase(
+          { ...data, ...done, fees: data.fees, transferTxHash: transferHash },
+          "Owned on-chain",
+        );
+        return;
+      }
+
       let paymentHash: string | null = null;
       let bridgeRequestId =
         data.bridge &&
@@ -465,6 +532,8 @@ export function ListingActions({
       typeof data.transferTxHash === "string" ? data.transferTxHash : null;
     setMsg(`${prefix}${feeNote}`);
     setLastTxHash(xfer);
+    setBoughtThisSession(true);
+    setHeldPurchase(null);
     router.refresh();
   }
 
@@ -736,7 +805,7 @@ export function ListingActions({
           </div>
         </div>
       ) : null}
-      {stage === "soft_launch" ? (
+      {stage === "soft_launch" && canStageRising ? (
         <button
           type="button"
           className="badge emerging"
@@ -755,6 +824,25 @@ export function ListingActions({
           Push to Rising
         </button>
       ) : null}
+      {stage === "draft" && minted && canStageRising ? (
+        <button
+          type="button"
+          className="badge emerging"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() =>
+            void post(`/api/listings/${listingId}/stage`, {
+              target: "soft_launch",
+            }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg("Soft-launched to Open Lane");
+                router.refresh();
+              }
+            })
+          }
+        >
+          Soft-launch
+        </button>
+      ) : null}
       <button
         type="button"
         className="badge"
@@ -764,7 +852,8 @@ export function ListingActions({
           color: "var(--danger)",
         }}
         onClick={() =>
-          void post(`/api/listings/${listingId}/report`, {
+          void post("/api/report", {
+            listingId,
             reason: "spam",
           }).then((d) => {
             if (d && !("error" in d)) setMsg("Reported");
@@ -773,13 +862,24 @@ export function ListingActions({
       >
         Report
       </button>
+      {heldPurchase || pendingPurchase ? (
+        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "0.4rem" }}>
+          <ResumeCryptoPurchaseButton
+            purchaseId={(heldPurchase ?? pendingPurchase)!.purchaseId}
+            chain={chain}
+            network={listingNetwork}
+            status={(heldPurchase ?? pendingPurchase)!.status}
+            allowCancel
+          />
+        </span>
+      ) : null}
       {msg === "sign_in" ? (
         <span style={{ fontSize: "0.8rem" }}>
           <Link href="/sign-in">Sign in</Link> to collect
         </span>
       ) : msg === "already_sold" ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-          Already sold
+          Already sold or reserved
         </span>
       ) : msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
@@ -794,6 +894,16 @@ export function ListingActions({
               />
             </>
           ) : null}
+          {boughtThisSession ? (
+            <>
+              {" · "}
+              <Link href="/me">View in collection</Link>
+            </>
+          ) : null}
+        </span>
+      ) : boughtThisSession ? (
+        <span style={{ fontSize: "0.8rem" }}>
+          <Link href="/me">View in collection</Link>
         </span>
       ) : null}
     </div>

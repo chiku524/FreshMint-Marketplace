@@ -2,11 +2,13 @@ import { FollowButton } from "@/components/FollowButton";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { ListingActions } from "@/components/ListingActions";
 import { PageViewTracker } from "@/components/PageViewTracker";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
 import { getSessionUser } from "@/lib/auth/session";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
-import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
+import { canUserStageListing, stageLabel } from "@/lib/marketplace/lifecycle";
+import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -31,7 +33,13 @@ export default async function ListingDetailPage({
     ? isEmergingListing(listing, creator).emerging
     : false;
   const user = await getSessionUser();
+  if (listing.stage === "draft" && user?.id !== listing.creatorId) {
+    notFound();
+  }
   const soldIds = await listClosedPrimarySaleIds();
+  const pendingPurchase = user
+    ? await findBuyerOpenPurchase(listing.id, user.id)
+    : null;
   const following =
     user != null &&
     (engine.state.follows.get(user.id)?.followedArtistIds.includes(
@@ -43,10 +51,9 @@ export default async function ListingDetailPage({
   const media = listing.mediaUrl;
   const network = resolveNetwork(listing.network, listing.chain);
   const net = getNetwork(network);
-  const minted = Boolean(listing.mintTxHash);
-  const explorerTx = listing.mintTxHash
-    ? net.explorerTx(listing.mintTxHash)
-    : null;
+  const minted = Boolean(
+    listing.tokenId && listing.contractAddress && listing.mintTxHash,
+  );
   const drop = dropWindowFor(listing, collection);
   const cap = primarySupplyCap(listing);
   const explorerToken =
@@ -103,7 +110,7 @@ export default async function ListingDetailPage({
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
             <span className="badge">{listing.type.replace("_", " ")}</span>
-            <span className="badge">{listing.stage.replace("_", " ")}</span>
+            <span className="badge">{stageLabel(listing.stage)}</span>
             {cap != null ? (
               <span className="badge">
                 {cap === 1 ? "1/1" : `Limited ${cap}`}
@@ -150,19 +157,28 @@ export default async function ListingDetailPage({
                     : ""}
                 </span>
               ) : null}
-              {explorerTx || explorerToken ? (
+              {listing.mintTxHash ? (
                 <span style={{ display: "block", marginTop: "0.35rem" }}>
-                  {explorerTx ? (
-                    <a href={explorerTx} target="_blank" rel="noreferrer">
-                      View mint tx ↗
-                    </a>
-                  ) : null}
-                  {explorerTx && explorerToken ? " · " : null}
+                  <TxExplorerLink
+                    hash={listing.mintTxHash}
+                    chain={listing.chain}
+                    network={listing.network}
+                    label="View mint tx"
+                  />
                   {explorerToken ? (
-                    <a href={explorerToken} target="_blank" rel="noreferrer">
-                      Explorer ↗
-                    </a>
+                    <>
+                      {" · "}
+                      <a href={explorerToken} target="_blank" rel="noreferrer">
+                        Token ↗
+                      </a>
+                    </>
                   ) : null}
+                </span>
+              ) : explorerToken ? (
+                <span style={{ display: "block", marginTop: "0.35rem" }}>
+                  <a href={explorerToken} target="_blank" rel="noreferrer">
+                    Explorer ↗
+                  </a>
                 </span>
               ) : null}
             </p>
@@ -200,15 +216,22 @@ export default async function ListingDetailPage({
             creatorId={listing.creatorId}
             priceUsd={listing.priceUsd}
             stage={listing.stage}
-            sold={soldIds.has(listing.id)}
+            sold={soldIds.has(listing.id) && !pendingPurchase}
             listingType={listing.type}
             chain={listing.chain}
             network={listing.network}
             dropState={drop.state}
             repeatable={cap == null || cap > 1}
-            minted={Boolean(
-              listing.tokenId && listing.contractAddress && listing.mintTxHash,
-            )}
+            minted={minted}
+            canStageRising={canUserStageListing(user, listing)}
+            pendingPurchase={
+              pendingPurchase
+                ? {
+                    purchaseId: pendingPurchase.id,
+                    status: pendingPurchase.status ?? "pending_payment",
+                  }
+                : null
+            }
           />
 
           <dl

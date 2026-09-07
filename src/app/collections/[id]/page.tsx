@@ -52,8 +52,7 @@ export default async function CollectionDetailPage({
         <Link href={`/creators/${collection.creatorId}`}>
           {creator?.displayName ?? collection.creatorId}
         </Link>
-        . Collect on FreshMint — buy from the artist, then withdraw later if
-        you want it on-chain.
+        . Collectors pay crypto and receive the NFT at purchase.
         {collection.dropStartsAt && collection.dropEndsAt ? (
           <>
             {" "}

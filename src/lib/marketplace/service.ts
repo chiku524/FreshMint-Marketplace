@@ -1808,18 +1808,57 @@ export async function purchaseListing(input: {
     return { ok: false as const, error: "drop_ended" };
   }
 
-  const soldCount = memory
-    ? (await import("@/lib/data/memory-store"))
-        .getMemoryPurchases()
-        .filter(
-          (p) => p.listingId === listing.id && (p.status ?? "completed") !== "failed",
-        ).length
-    : await prisma.purchase.count({
-        where: {
-          listingId: listing.id,
-          NOT: { status: "failed" },
-        },
-      });
+  const {
+    countReservingPurchases,
+    findBuyerOpenPurchase,
+  } = await import("@/lib/marketplace/sales");
+  const existingOpen = await findBuyerOpenPurchase(listing.id, input.buyerId);
+  if (existingOpen) {
+    const resumed = await resumeCryptoPurchase({
+      purchaseId: existingOpen.id,
+      buyerId: input.buyerId,
+      buyerPaymentAddress: input.buyerPaymentAddress,
+    });
+    if (!resumed.ok) return resumed;
+    const settleQuote = (
+      await import("@/lib/onchain/fx")
+    ).quoteNativeFromUsd(amountUsd, listing.chain);
+    return {
+      ok: true as const,
+      purchaseId: resumed.purchaseId,
+      status: resumed.status,
+      txHash: "txHash" in resumed ? resumed.txHash ?? null : null,
+      paymentTxHash:
+        "paymentTxHash" in resumed ? resumed.paymentTxHash ?? null : null,
+      transferTxHash: null,
+      isFirst: false,
+      emerging: false,
+      paymentWalletTx:
+        "paymentWalletTx" in resumed ? resumed.paymentWalletTx : undefined,
+      transferWalletTx:
+        "transferWalletTx" in resumed ? resumed.transferWalletTx : undefined,
+      bridge: "bridge" in resumed ? resumed.bridge ?? null : null,
+      quote: publicPayQuote({
+        settle: settleQuote,
+        pay: settleQuote,
+        bridged: input.payNetwork !== listing.network,
+      }),
+      settlementAddress:
+        "settlementAddress" in resumed
+          ? resumed.settlementAddress
+          : settlementAddressFor(listing.network),
+      fees,
+      feeRecipients,
+      chain: listing.chain,
+      network: listing.network,
+      payNetwork: input.payNetwork,
+      payNetworks: payNetworksForListing(listing.network),
+      buyerReceiveAddress: input.buyerReceiveAddress,
+      resumed: true as const,
+    };
+  }
+
+  const soldCount = await countReservingPurchases(listing.id);
   const cap = primarySupplyCap(listing);
   if (cap != null && soldCount >= cap) {
     return { ok: false as const, error: "already_sold" };
@@ -1852,11 +1891,18 @@ export async function purchaseListing(input: {
   if (memory) {
     const { getMemoryPurchases } = await import("@/lib/data/memory-store");
     isFirst = !getMemoryPurchases().some(
-      (p) => p.buyerId === input.buyerId && p.listingId === input.listingId,
+      (p) =>
+        p.buyerId === input.buyerId &&
+        p.listingId === input.listingId &&
+        (p.status ?? "completed") === "completed",
     );
   } else {
     const prior = await prisma.purchase.count({
-      where: { buyerId: input.buyerId, listingId: input.listingId },
+      where: {
+        buyerId: input.buyerId,
+        listingId: input.listingId,
+        status: "completed",
+      },
     });
     isFirst = prior === 0;
   }
@@ -2154,6 +2200,16 @@ export async function confirmCryptoPurchase(input: {
   if (!purchase || purchase.buyerId !== input.buyerId) {
     return { ok: false as const, error: "unavailable" };
   }
+  if (purchase.status === "failed") {
+    return { ok: false as const, error: "checkout_expired" };
+  }
+  const { purchaseReservesSupply } = await import("@/lib/marketplace/lifecycle");
+  if (
+    purchase.status === "pending_payment" &&
+    !purchaseReservesSupply(purchase)
+  ) {
+    return { ok: false as const, error: "checkout_expired" };
+  }
 
   const listing = engine.state.listings.get(purchase.listingId);
   if (!listing || !listingIsMinted(listing)) {
@@ -2329,8 +2385,15 @@ export async function resumeCryptoPurchase(input: {
   if (!purchase || purchase.buyerId !== input.buyerId) {
     return { ok: false as const, error: "unavailable" };
   }
+  if (purchase.status === "failed") {
+    return { ok: false as const, error: "checkout_expired" };
+  }
 
   const status = ("status" in purchase && purchase.status) || "completed";
+  const { purchaseReservesSupply } = await import("@/lib/marketplace/lifecycle");
+  if (status === "pending_payment" && !purchaseReservesSupply(purchase)) {
+    return { ok: false as const, error: "checkout_expired" };
+  }
   const payNetwork = (
     "payNetwork" in purchase ? purchase.payNetwork : null
   ) as NetworkId | null;
@@ -2476,6 +2539,45 @@ export async function resumeCryptoPurchase(input: {
   }
 
   return { ok: false as const, error: "unavailable" };
+}
+
+/** Release an unpaid checkout so the listing can be bought again. */
+export async function cancelCryptoPurchase(input: {
+  purchaseId: string;
+  buyerId: string;
+}) {
+  const { isMemoryMode, getMemoryPurchases, updateMemoryPurchase } =
+    await import("@/lib/data/memory-store");
+  const memory = (await inMemoryMode()) || isMemoryMode();
+  const purchase = memory
+    ? getMemoryPurchases().find((p) => p.id === input.purchaseId)
+    : await prisma.purchase.findUnique({ where: { id: input.purchaseId } });
+  if (!purchase || purchase.buyerId !== input.buyerId) {
+    return { ok: false as const, error: "unavailable" };
+  }
+  const status = ("status" in purchase && purchase.status) || "completed";
+  if (status === "completed" || purchase.withdrawnAt) {
+    return { ok: false as const, error: "already_complete" };
+  }
+  if (status === "pending_transfer") {
+    return { ok: false as const, error: "payment_already_landed" };
+  }
+  if (status === "failed") {
+    return { ok: true as const, purchaseId: purchase.id, status: "failed" as const };
+  }
+  if (status !== "pending_payment") {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  if (memory) {
+    updateMemoryPurchase(purchase.id, { status: "failed" });
+  } else {
+    await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { status: "failed" },
+    });
+  }
+  return { ok: true as const, purchaseId: purchase.id, status: "failed" as const };
 }
 
 export async function getPersistedMetrics() {

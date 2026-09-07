@@ -2,6 +2,7 @@
 
 import type { RankedListing, Listing } from "@/lib/discovery/types";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
+import { stageLabel } from "@/lib/marketplace/lifecycle";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ImpressionTracker } from "./ImpressionTracker";
@@ -23,6 +24,7 @@ export function WorkCard({
   trackImpression = true,
   footer,
   sold = false,
+  canStageRising = false,
 }: {
   listing: Listing;
   emerging?: boolean;
@@ -33,6 +35,7 @@ export function WorkCard({
   trackImpression?: boolean;
   footer?: ReactNode;
   sold?: boolean;
+  canStageRising?: boolean;
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
@@ -66,7 +69,7 @@ export function WorkCard({
           ) : null}
           <span className="badge">{listing.type.replace("_", " ")}</span>
         {bucket !== "sold" && !featured ? (
-          <span className="badge">{listing.stage.replace("_", " ")}</span>
+          <span className="badge">{stageLabel(listing.stage)}</span>
         ) : null}
       </div>
       <h3 className="display work-tile__title">
@@ -102,6 +105,7 @@ export function WorkCard({
           minted={Boolean(
             listing.tokenId && listing.contractAddress && listing.mintTxHash,
           )}
+          canStageRising={canStageRising}
         />
       ) : null}
       {footer ? <div className="work-tile__footer">{footer}</div> : null}

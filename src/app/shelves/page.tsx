@@ -2,6 +2,7 @@ import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -19,33 +20,43 @@ export default async function ShelvesPage() {
         Collectors amplify emerging work through named curations that others can
         follow — discovery without waiting on a central editorial team.
       </p>
-      {shelves.map((shelf) => {
-        const listings = shelf.listingIds
-          .map((id) => engine.state.listings.get(id))
-          .filter((l): l is NonNullable<typeof l> => !!l);
-        const curator = engine.state.creators.get(shelf.curatorId);
-        return (
-          <section key={shelf.id} style={{ marginBottom: "2.5rem" }}>
-            <h2 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.5rem" }}>
-              {shelf.name}
-            </h2>
-            <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)" }}>
-              Curated by {curator?.displayName ?? shelf.curatorId} ·{" "}
-              {shelf.followerIds.length} followers
-            </p>
-            <PuzzleRail>
-              {listings.map((listing) => (
-                <WorkCard
-                  key={listing.id}
-                  listing={listing}
-                  showActions
-                  sold={soldIds.has(listing.id)}
-                />
-              ))}
-            </PuzzleRail>
-          </section>
-        );
-      })}
+      {shelves.length === 0 ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          No shelves yet. Curate a list from <Link href="/studio">Studio</Link>.
+        </p>
+      ) : (
+        shelves.map((shelf) => {
+          const listings = shelf.listingIds
+            .map((id) => engine.state.listings.get(id))
+            .filter((l): l is NonNullable<typeof l> => !!l);
+          const curator = engine.state.creators.get(shelf.curatorId);
+          return (
+            <section key={shelf.id} style={{ marginBottom: "2.5rem" }}>
+              <h2 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.5rem" }}>
+                {shelf.name}
+              </h2>
+              <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)" }}>
+                Curated by {curator?.displayName ?? shelf.curatorId} ·{" "}
+                {shelf.followerIds.length} followers
+              </p>
+              {listings.length === 0 ? (
+                <p style={{ color: "var(--ink-muted)" }}>This shelf is empty.</p>
+              ) : (
+                <PuzzleRail>
+                  {listings.map((listing) => (
+                    <WorkCard
+                      key={listing.id}
+                      listing={listing}
+                      showActions
+                      sold={soldIds.has(listing.id)}
+                    />
+                  ))}
+                </PuzzleRail>
+              )}
+            </section>
+          );
+        })
+      )}
     </div>
   );
 }

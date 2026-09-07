@@ -62,6 +62,14 @@ export type UserAssetProfile = {
     paymentTxHash?: string | null;
     listing: Listing;
   }>;
+  sales: Array<{
+    purchaseId: string;
+    purchasedAt: number;
+    amountUsd: number;
+    sellerNetUsd?: number;
+    status: string;
+    listing: Listing;
+  }>;
   shelves: ProfileShelf[];
   bridges: ProfileBridge[];
 };
@@ -88,6 +96,22 @@ function profileFromMemoryCreator(userId: string): UserAssetProfile | null {
         payNetwork: p.payNetwork ?? null,
         status: p.status ?? "completed",
         paymentTxHash: p.paymentTxHash ?? null,
+        listing,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+
+  const sales = getMemoryPurchases()
+    .map((p) => {
+      const listing = state.listings.get(p.listingId);
+      if (!listing || listing.creatorId !== userId) return null;
+      if ((p.status ?? "completed") === "failed") return null;
+      return {
+        purchaseId: p.id,
+        purchasedAt: p.soldAt,
+        amountUsd: p.amountUsd,
+        sellerNetUsd: p.sellerNetUsd,
+        status: p.status ?? "completed",
         listing,
       };
     })
@@ -127,6 +151,7 @@ function profileFromMemoryCreator(userId: string): UserAssetProfile | null {
     })),
     created,
     owned,
+    sales,
     shelves,
     bridges: [],
   };
@@ -165,6 +190,7 @@ export function profileFromSession(user: SessionUser): UserAssetProfile {
       })),
       created: [],
       owned: [],
+      sales: [],
       shelves: [],
       bridges: [],
     }
@@ -180,11 +206,11 @@ async function profileFromPrisma(
       where: { id: userId },
       include: {
         wallets: true,
-        listings: { orderBy: { createdAt: "desc" } },
         purchases: {
           orderBy: { createdAt: "desc" },
           include: { listing: true },
         },
+        listings: { orderBy: { createdAt: "desc" } },
         shelves: {
           include: {
             items: { orderBy: { position: "asc" } },
@@ -195,6 +221,16 @@ async function profileFromPrisma(
       },
     });
     if (!user) return null;
+
+    const salesRows = await prisma.purchase.findMany({
+      where: {
+        listing: { creatorId: userId },
+        NOT: { status: "failed" },
+      },
+      include: { listing: true },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    });
 
     return {
       userId: user.id,
@@ -226,6 +262,14 @@ async function profileFromPrisma(
         payNetwork: p.payNetwork ?? null,
         status: p.status ?? "completed",
         paymentTxHash: p.paymentTxHash ?? null,
+        listing: toListing(p.listing),
+      })),
+      sales: salesRows.map((p) => ({
+        purchaseId: p.id,
+        purchasedAt: p.createdAt.getTime(),
+        amountUsd: p.amountUsd,
+        sellerNetUsd: p.sellerNetUsd,
+        status: p.status ?? "completed",
         listing: toListing(p.listing),
       })),
       shelves: user.shelves.map((s) => ({

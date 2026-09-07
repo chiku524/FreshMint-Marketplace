@@ -1,6 +1,7 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { RankedWorkCard } from "@/components/WorkCard";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,19 @@ export default async function FeaturedPage() {
         Featured dominance does not buy Rising monopoly — Emerging Rising stays
         algorithmically reserved.
       </p>
-      <PuzzleRail>
-        {featured.map((item) => (
-          <RankedWorkCard key={item.listing.id} item={item} />
-        ))}
-      </PuzzleRail>
+      {featured.length === 0 ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          No featured works today. Browse{" "}
+          <Link href="/rising">Rising</Link> or the{" "}
+          <Link href="/open">Open Lane</Link>.
+        </p>
+      ) : (
+        <PuzzleRail>
+          {featured.map((item) => (
+            <RankedWorkCard key={item.listing.id} item={item} />
+          ))}
+        </PuzzleRail>
+      )}
     </div>
   );
 }

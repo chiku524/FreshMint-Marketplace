@@ -7,6 +7,7 @@ import { WithdrawCollectedButton } from "@/components/WithdrawCollectedButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
+import { creatorLifecycleHint, purchaseIsOpenCheckout } from "@/lib/marketplace/lifecycle";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import {
   findListingsByWalletNfts,
@@ -53,6 +54,12 @@ export default async function MeCollectionPage() {
     profile.created,
     collected,
   );
+  const openCheckouts = profile.owned.filter((item) =>
+    purchaseIsOpenCheckout(item.status),
+  );
+  const liveSales = (profile.sales ?? []).filter(
+    (sale) => sale.status === "completed" || purchaseIsOpenCheckout(sale.status),
+  );
 
   return (
     <>
@@ -61,6 +68,42 @@ export default async function MeCollectionPage() {
         bridged.
       </p>
       <HowItWorksNote kind="collect" />
+
+      {openCheckouts.length > 0 ? (
+        <section
+          style={{
+            marginBottom: "1.75rem",
+            border: "1px solid var(--line)",
+            padding: "0.9rem 1rem",
+            background: "var(--panel)",
+          }}
+        >
+          <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.15rem" }}>
+            Finish checkout
+          </h2>
+          <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+            An unpaid checkout reserves a 1/1 for 15 minutes. Finish the wallet
+            steps or cancel to release it.
+          </p>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.5rem" }}>
+            {openCheckouts.map((item) => (
+              <li key={item.purchaseId}>
+                <Link href={`/listings/${item.listing.id}`}>{item.listing.title}</Link>
+                {" · "}
+                {item.status === "pending_payment" ? "payment" : "transfer"}
+                <span style={{ display: "block", marginTop: "0.35rem" }}>
+                  <ResumeCryptoPurchaseButton
+                    purchaseId={item.purchaseId}
+                    chain={item.listing.chain}
+                    network={item.listing.network}
+                    status={String(item.status)}
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
@@ -79,9 +122,49 @@ export default async function MeCollectionPage() {
                 showActions
                 sold={soldIds.has(listing.id)}
                 trackImpression={false}
+                canStageRising
+                footer={creatorLifecycleHint(listing, soldIds.has(listing.id))}
               />
             ))}
           </PuzzleRail>
+        )}
+      </section>
+
+      <section style={{ marginBottom: "2.75rem" }}>
+        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+          Sales ({liveSales.length})
+        </h2>
+        {liveSales.length === 0 ? (
+          <p style={{ color: "var(--ink-muted)" }}>
+            No collector checkouts yet. Soft-launch from{" "}
+            <Link href="/create">Create</Link>.
+          </p>
+        ) : (
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.5rem" }}>
+            {liveSales.map((sale) => (
+              <li
+                key={sale.purchaseId}
+                style={{
+                  border: "1px solid var(--line)",
+                  padding: "0.75rem 0.9rem",
+                  fontSize: "0.9rem",
+                }}
+              >
+                <Link href={`/listings/${sale.listing.id}`}>{sale.listing.title}</Link>
+                {" · $"}
+                {sale.amountUsd}
+                {sale.sellerNetUsd != null
+                  ? ` · net $${sale.sellerNetUsd.toFixed(2)}`
+                  : ""}
+                {" · "}
+                {sale.status === "completed"
+                  ? "sold"
+                  : sale.status === "pending_transfer"
+                    ? "paid, transferring"
+                    : "checkout in progress"}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
