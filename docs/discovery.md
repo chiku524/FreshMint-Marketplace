@@ -2,6 +2,8 @@
 
 FreshMint’s differentiator is **deliberate attention allocation**. Discovery is treated as scarce inventory with rules — not a chronological dump and not pure celebrity ranking.
 
+Animated walkthrough (same live constants): `/docs#discovery`.
+
 Settlement is chain-specific (EVM Sepolia / Solana Devnet). **Identity, ranking, and feeds are off-chain and chain-agnostic** so Solana-native new artists are not siloed.
 
 Source of truth in code: `src/lib/discovery/` (especially `config.ts`, `engine.ts`).

@@ -1933,6 +1933,11 @@ html.fm-intro-pending .fm-intro-cover {
   background: rgba(201, 149, 58, 0.07);
 }
 
+.nft-flow__rail-step.is-active.is-rising {
+  border-color: rgba(142, 200, 192, 0.5);
+  background: rgba(142, 200, 192, 0.08);
+}
+
 .nft-flow__rail-index {
   flex-shrink: 0;
   width: 1.35rem;
@@ -2009,5 +2014,121 @@ html.fm-intro-pending .fm-intro-cover {
   .nft-flow__seg.is-current {
     animation: none;
     stroke-dasharray: none;
+  }
+}
+
+/* Discovery engine — three attention bands on /docs#discovery */
+.nft-flow--discovery {
+  max-width: none;
+}
+
+.nft-flow--discovery .nft-flow__board {
+  aspect-ratio: 1000 / 500;
+}
+
+.nft-flow__legend-item.is-rising::before {
+  background: #8ec8c0;
+  box-shadow: 0 0 8px rgba(142, 200, 192, 0.45);
+}
+
+.disc-engine__realm--rising {
+  fill: rgba(142, 200, 192, 0.06);
+}
+
+.disc-engine__label-rising {
+  fill: #8ec8c0;
+}
+
+.nft-flow__node.is-rising .nft-flow__dot {
+  border-color: #8ec8c0;
+}
+
+.nft-flow__node.is-active.is-rising .nft-flow__dot {
+  background: #8ec8c0;
+  box-shadow:
+    0 0 0 6px rgba(9, 9, 11, 0.72),
+    0 0 16px rgba(142, 200, 192, 0.45);
+}
+
+.disc-slot {
+  fill: rgba(244, 244, 245, 0.08);
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+.disc-slot.is-on {
+  animation: disc-slot-on 0.45s ease both;
+}
+
+.disc-slot.is-on.disc-slot--emerging {
+  fill: var(--emergent);
+}
+
+.disc-slot.is-on.disc-slot--explore {
+  fill: var(--accent-soft);
+}
+
+.disc-slot.is-on.disc-slot--open {
+  fill: rgba(244, 244, 245, 0.28);
+}
+
+.disc-mix {
+  opacity: 0.18;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.disc-mix.is-on {
+  animation: disc-mix-on 0.55s ease both;
+  opacity: 0.92;
+}
+
+.disc-engine__formula {
+  margin: 0 0 1rem;
+  color: var(--ink-muted);
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.92rem;
+  letter-spacing: -0.02em;
+}
+
+.disc-engine__factor {
+  opacity: 0.4;
+}
+
+.disc-engine__factor.is-on {
+  opacity: 0.75;
+}
+
+.disc-engine__factor.is-current {
+  color: var(--emergent);
+  opacity: 1;
+}
+
+@keyframes disc-slot-on {
+  from {
+    transform: scaleY(0.25);
+    opacity: 0.25;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes disc-mix-on {
+  from {
+    transform: scaleX(0.2);
+    opacity: 0.2;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 0.92;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disc-slot.is-on,
+  .disc-mix.is-on {
+    animation: none;
   }
 }

@@ -1,10 +1,11 @@
 "use client";
 
+import { DiscoveryEngineDiagram } from "@/components/DiscoveryEngineDiagram";
 import { NftLifecycleDiagram } from "@/components/NftLifecycleDiagram";
 import { DISCOVERY_CONFIG, getDailySlotBudgets } from "@/lib/discovery";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 const TOC = [
   {
@@ -30,7 +31,7 @@ const TOC = [
   {
     id: "discovery",
     label: "Discovery",
-    blurb: "Open Lane, Rising, Featured, and how works are scored.",
+    blurb: "Attention is scarce. Emerging quota is enforced in code.",
   },
 ] as const;
 
@@ -59,7 +60,7 @@ export function DocsGuide() {
   const budgets = getDailySlotBudgets();
   const mix = cfg.feedMix;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const sync = () => setActive(readSection());
     sync();
     window.addEventListener("hashchange", sync);
@@ -220,13 +221,15 @@ export function DocsGuide() {
 
           {active === "discovery" ? (
           <section id="discovery" className="docs-discovery">
+            <DiscoveryEngineDiagram />
             <header className="docs-discovery__lead">
-            <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-              Discovery
+            <h2 className="display" style={{ margin: "1.75rem 0 0.75rem", fontSize: "1.45rem" }}>
+              Rules in code
             </h2>
             <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", maxWidth: "48ch" }}>
-              FreshMint treats attention as scarce inventory. These rules are loaded
-              from live product config — the same constants the ranker enforces.
+              FreshMint treats attention as scarce inventory. These numbers are
+              loaded from live product config — the same constants the ranker
+              enforces.
             </p>
             <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-muted)" }}>
               Deep reference:{" "}

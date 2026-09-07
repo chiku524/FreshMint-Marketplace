@@ -1,5 +1,6 @@
 "use client";
 
+import { DISCOVERY_CONFIG } from "@/lib/discovery";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -11,8 +12,8 @@ const NOTES: Record<
   { href: string; text: string }
 > = {
   home: {
-    href: "/docs#flow",
-    text: `Collect on FreshMint — pay crypto, own on-chain. ${PLATFORM_FEE_PERCENT.total}% treasury.`,
+    href: "/docs#discovery",
+    text: `Fair discovery: ${Math.round(DISCOVERY_CONFIG.feedMix.emerging_rising * 100)}% Emerging Rising on the homepage, quota enforced in code.`,
   },
   create: {
     href: "/docs#flow",
