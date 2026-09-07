@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { WalletNft } from "@/lib/wallet/inventory";
 
 function hueFromId(id: string): number {
@@ -8,11 +11,26 @@ function hueFromId(id: string): number {
 
 export function WalletNftCard({ nft }: { nft: WalletNft }) {
   const hue = hueFromId(nft.id);
+  const [spinning, setSpinning] = useState(false);
   const href = nft.explorerUrl;
   const media = nft.mediaUrl;
 
   return (
-    <article className="work-tile work-tile--compact" data-tile="compact">
+    <article
+      className={`work-tile work-tile--compact${spinning ? " is-spinning" : ""}`}
+      data-tile="compact"
+      onMouseEnter={() => {
+        if (!spinning) setSpinning(true);
+      }}
+      onAnimationEnd={(event) => {
+        if (
+          event.animationName === "work-card-spin" &&
+          event.target === event.currentTarget
+        ) {
+          setSpinning(false);
+        }
+      }}
+    >
       <a href={href} className="work-tile__media-link" tabIndex={-1} aria-hidden>
         <div
           className="work-media"

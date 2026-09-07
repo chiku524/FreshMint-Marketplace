@@ -15,6 +15,7 @@ import { ListingActions } from "./ListingActions";
 
 const MENU_HOVER_MS = 1000;
 const MENU_LEAVE_MS = 180;
+const MENU_FADE_MS = 280;
 
 function hueFromId(id: string): number {
   let h = 0;
@@ -32,23 +33,49 @@ function priceLabel(listing: Listing, bucket?: string) {
 
 function useDelayedMenu() {
   const [open, setOpen] = useState(false);
+  const [rendered, setRendered] = useState(false);
   const [hovering, setHovering] = useState(false);
   const enterTimer = useRef<number | null>(null);
   const leaveTimer = useRef<number | null>(null);
+  const openFrame = useRef<number | null>(null);
   const openRef = useRef(false);
 
   const clearTimers = () => {
     if (enterTimer.current != null) window.clearTimeout(enterTimer.current);
     if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+    if (openFrame.current != null) window.cancelAnimationFrame(openFrame.current);
     enterTimer.current = null;
     leaveTimer.current = null;
+    openFrame.current = null;
   };
 
   useEffect(() => {
-    openRef.current = open;
-  }, [open]);
+    if (open || !rendered) return;
+    const hide = window.setTimeout(() => setRendered(false), MENU_FADE_MS);
+    return () => window.clearTimeout(hide);
+  }, [open, rendered]);
 
   useEffect(() => () => clearTimers(), []);
+
+  const show = () => {
+    openRef.current = true;
+    setRendered(true);
+    openFrame.current = window.requestAnimationFrame(() => {
+      openFrame.current = window.requestAnimationFrame(() => {
+        openFrame.current = null;
+        setOpen(true);
+      });
+    });
+  };
+
+  const hide = () => {
+    openRef.current = false;
+    if (openFrame.current != null) {
+      window.cancelAnimationFrame(openFrame.current);
+      openFrame.current = null;
+    }
+    setOpen(false);
+  };
 
   const onPointerEnter = () => {
     setHovering(true);
@@ -59,7 +86,7 @@ function useDelayedMenu() {
     if (openRef.current || enterTimer.current != null) return;
     enterTimer.current = window.setTimeout(() => {
       enterTimer.current = null;
-      setOpen(true);
+      show();
     }, MENU_HOVER_MS);
   };
 
@@ -69,20 +96,29 @@ function useDelayedMenu() {
       window.clearTimeout(enterTimer.current);
       enterTimer.current = null;
     }
-    leaveTimer.current = window.setTimeout(() => setOpen(false), MENU_LEAVE_MS);
+    leaveTimer.current = window.setTimeout(hide, MENU_LEAVE_MS);
   };
 
   const toggle = () => {
     clearTimers();
-    setOpen((current) => !current);
+    if (openRef.current) hide();
+    else show();
   };
 
   const close = () => {
     clearTimers();
-    setOpen(false);
+    hide();
   };
 
-  return { open, hovering, onPointerEnter, onPointerLeave, toggle, close };
+  return {
+    open,
+    rendered,
+    hovering,
+    onPointerEnter,
+    onPointerLeave,
+    toggle,
+    close,
+  };
 }
 
 export function WorkCard({
@@ -114,6 +150,7 @@ export function WorkCard({
     listing.stage === "featured" || bucket === "featured";
   const menu = useDelayedMenu();
   const menuId = useId();
+  const [spinning, setSpinning] = useState(false);
   const supplyCap = primarySupplyCap(listing);
   const dropState = dropWindowFor(listing).state;
 
@@ -156,6 +193,7 @@ export function WorkCard({
     featured ? "work-tile--featured" : "work-tile--compact",
     menu.open ? "is-menu-open" : "",
     menu.hovering ? "is-hovering" : "",
+    !featured && spinning ? "is-spinning" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -164,8 +202,20 @@ export function WorkCard({
     <article
       className={tileClass}
       data-tile={featured ? "featured" : "compact"}
-      onPointerEnter={menu.onPointerEnter}
+      onPointerEnter={() => {
+        menu.onPointerEnter();
+        if (!featured && !spinning) setSpinning(true);
+      }}
       onPointerLeave={menu.onPointerLeave}
+      onAnimationEnd={(event) => {
+        if (
+          !featured &&
+          event.animationName === "work-card-spin" &&
+          event.target === event.currentTarget
+        ) {
+          setSpinning(false);
+        }
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && menu.open) {
           event.stopPropagation();
@@ -220,12 +270,13 @@ export function WorkCard({
       >
         More
       </button>
-      {menu.open ? (
+      {menu.rendered ? (
         <div
           id={menuId}
           className="work-tile__menu"
           role="dialog"
           aria-label={`${listing.title} actions`}
+          aria-hidden={!menu.open}
         >
           {menuBody}
         </div>
