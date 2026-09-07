@@ -1,5 +1,7 @@
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { PuzzleRail } from "@/components/PuzzleRail";
+import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { WalletNftCard } from "@/components/WalletNftCard";
 import { WithdrawCollectedButton } from "@/components/WithdrawCollectedButton";
 import { WorkCard } from "@/components/WorkCard";
@@ -107,23 +109,47 @@ export default async function MeCollectionPage() {
                     <>
                       Collected {new Date(item.purchasedAt).toLocaleDateString()} · $
                       {item.amountUsd}
-                      {item.txHash ? ` · ${item.txHash.slice(0, 10)}…` : ""}
+                      {item.txHash ? (
+                        <>
+                          {" · "}
+                          <TxExplorerLink
+                            hash={item.txHash}
+                            chain={item.listing.chain}
+                            network={item.listing.network}
+                          />
+                        </>
+                      ) : null}
                       <span style={{ display: "block", marginTop: "0.35rem" }}>
-                        <WithdrawCollectedButton
-                          purchaseId={item.purchaseId}
-                          chain={item.listing.chain}
-                          withdrawn={Boolean(
-                            "withdrawnAt" in item && item.withdrawnAt,
-                          )}
-                          withdrawTxHash={
-                            "withdrawTxHash" in item
-                              ? item.withdrawTxHash ?? null
-                              : null
-                          }
-                          cryptoOwned={Boolean(
-                            "payNetwork" in item && item.payNetwork,
-                          )}
-                        />
+                        {"status" in item &&
+                        (item.status === "pending_payment" ||
+                          item.status === "pending_transfer") ? (
+                          <ResumeCryptoPurchaseButton
+                            purchaseId={item.purchaseId}
+                            chain={item.listing.chain}
+                            network={item.listing.network}
+                            status={String(item.status)}
+                          />
+                        ) : (
+                          <WithdrawCollectedButton
+                            purchaseId={item.purchaseId}
+                            chain={item.listing.chain}
+                            network={item.listing.network}
+                            withdrawn={Boolean(
+                              "withdrawnAt" in item && item.withdrawnAt,
+                            )}
+                            withdrawTxHash={
+                              "withdrawTxHash" in item
+                                ? item.withdrawTxHash ?? null
+                                : null
+                            }
+                            cryptoOwned={Boolean(
+                              "payNetwork" in item &&
+                                item.payNetwork &&
+                                (!("status" in item) ||
+                                  item.status === "completed"),
+                            )}
+                          />
+                        )}
                       </span>
                     </>
                   )

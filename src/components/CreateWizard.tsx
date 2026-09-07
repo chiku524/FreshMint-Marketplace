@@ -532,7 +532,7 @@ export function CreateWizard() {
             oeEndsAt: intent === "drop" ? end : null,
             auctionStartsAt: intent === "auction" ? start : null,
             auctionEndsAt: intent === "auction" ? end : null,
-            publishSoftLaunch: true,
+            publishSoftLaunch: false,
           }),
         });
         const data = await res.json();
@@ -616,6 +616,29 @@ export function CreateWizard() {
         }
       }
 
+      // Soft-launch only after mint confirms — keeps Open Lane buyable.
+      for (const listingId of listingIds) {
+        const stageRes = await fetch(`/api/listings/${listingId}/stage`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target: "soft_launch" }),
+        });
+        const stageData = await stageRes.json();
+        if (!stageRes.ok) {
+          const errs = Array.isArray(stageData.errors)
+            ? stageData.errors.join(", ")
+            : stageData.error;
+          throw new Error(
+            errs === "listing_not_minted" ||
+              (Array.isArray(stageData.errors) &&
+                stageData.errors.includes("listing_not_minted"))
+              ? "Mint must finish before soft-launch. Retry publish mint, then try again."
+              : errs || "soft_launch_failed",
+          );
+        }
+      }
+
       const label =
         intent === "drop"
           ? `${pieces.length} ${dropKind === "open" ? "open-edition" : "limited"} piece${pieces.length === 1 ? "" : "s"}`
@@ -623,7 +646,7 @@ export function CreateWizard() {
             ? "auction listing"
             : "1/1 listing";
       setOk(
-        `Published ${label} and minted on-chain into your collection. Collectors buy in USD; withdraw later transfers the existing token.`,
+        `Published ${label} on-chain. Collectors pay crypto and receive the NFT at purchase.`,
       );
       setPieces([]);
       setMintProgress(null);

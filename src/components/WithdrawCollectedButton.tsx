@@ -1,19 +1,22 @@
 "use client";
 
-import type { Chain } from "@/lib/discovery/types";
+import type { Chain, NetworkId } from "@/lib/discovery/types";
 import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function WithdrawCollectedButton({
   purchaseId,
   chain,
+  network,
   withdrawn = false,
   withdrawTxHash = null,
   cryptoOwned = false,
 }: {
   purchaseId: string;
   chain: Chain;
+  network?: NetworkId | string | null;
   withdrawn?: boolean;
   withdrawTxHash?: string | null;
   /** Crypto primary buy — ownership already delivered at purchase. */
@@ -27,7 +30,16 @@ export function WithdrawCollectedButton({
     return (
       <span className="badge emerging">
         {cryptoOwned && !withdrawn ? "Owned on buy" : "In wallet"}
-        {withdrawTxHash ? ` · ${withdrawTxHash.slice(0, 10)}…` : ""}
+        {withdrawTxHash ? (
+          <>
+            {" · "}
+            <TxExplorerLink
+              hash={withdrawTxHash}
+              chain={chain}
+              network={network}
+            />
+          </>
+        ) : null}
       </span>
     );
   }

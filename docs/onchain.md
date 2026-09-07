@@ -22,8 +22,8 @@ Set `NEXT_PUBLIC_CHAIN_MODE=testnet` (default) or `mainnet`.
 Creates stay on FreshMint; **primary buys are crypto-only** with ownership at purchase. On-chain work happens in two **creator-paid** phases, then a collector-paid settlement:
 
 1. **Create collection** — creator wallet deploys a per-collection contract (`FreshMintERC721` on EVM; Boing `contract_deploy_meta`; Solana collection attestation). Store `contractAddress` / `deployTxHash` on the collection.
-2. **Soft-launch / publish** — creator wallet mints tokens **into that collection** (EVM `safeMintBatch` in chunks of 25). Each listing gets `tokenId` + `mintTxHash`. Unminted listings cannot be bought.
-3. **Buy** — collector pays native on the listing network (or bridges via Relay when paying from another Relay network), then escrow `transferFrom` → buyer wallet. Purchase status: `pending_payment` → `pending_transfer` → `completed` (with `withdrawnAt` set when ownership is delivered).
+2. **Soft-launch / publish** — creator wallet mints tokens **into that collection** (EVM `safeMintBatch` in chunks of 25). Each listing gets `tokenId` + `mintTxHash`. Soft-launch is **blocked** until mint confirms (`listing_not_minted`). Unminted listings cannot be bought.
+3. **Buy** — collector pays native on the listing network (or bridges via Relay when paying from another Relay network), then escrow `transferFrom` → buyer wallet. Purchase status: `pending_payment` → `pending_transfer` → `completed` (with `withdrawnAt` set when ownership is delivered). Interrupted buys can be resumed from `/me` via `POST /api/purchase/resume`.
 
 | Step | On-chain | Who pays gas |
 |------|----------|--------------|

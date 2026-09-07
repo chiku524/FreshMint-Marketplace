@@ -1,6 +1,5 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/db";
-import { transitionListingStage } from "@/lib/marketplace/service";
+import { getDiscoveryEngine, transitionListingStage } from "@/lib/marketplace/service";
 import type { LaunchStage } from "@/lib/discovery/types";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -24,12 +23,12 @@ export async function POST(
   }
 
   const { id } = await ctx.params;
-  const listing = await prisma.listing.findUnique({ where: { id } });
+  const engine = await getDiscoveryEngine();
+  const listing = engine.state.listings.get(id);
   if (!listing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (listing.creatorId !== user.id && !user.verifiedCreator) {
-    // Only owner can advance (editors later)
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -48,6 +47,5 @@ export async function POST(
   return NextResponse.json({
     ok: true,
     listing: result.listing,
-    walletTx: "walletTx" in result ? result.walletTx : undefined,
   });
 }

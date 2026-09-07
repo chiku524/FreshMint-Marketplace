@@ -185,8 +185,23 @@ describe("Listing stages", () => {
   it("gates draft → soft → rising → featured", () => {
     const state = buildSeedState();
     const listing = state.listings.get("listing-fresh-1")!;
-    const draft = { ...listing, stage: "draft" as const, softLaunchedAt: null };
+    const draft = {
+      ...listing,
+      stage: "draft" as const,
+      softLaunchedAt: null,
+      tokenId: "1",
+      contractAddress: "0x1111111111111111111111111111111111111111",
+      mintTxHash: "0xminted",
+    };
     expect(canSoftLaunch(draft).ok).toBe(true);
+    expect(
+      canSoftLaunch({
+        ...draft,
+        tokenId: null,
+        contractAddress: null,
+        mintTxHash: null,
+      }).ok,
+    ).toBe(false);
     expect(visibilityForStage("draft").openLane).toBe(false);
     expect(visibilityForStage("soft_launch").openLane).toBe(true);
     expect(visibilityForStage("rising_eligible").rising).toBe(true);

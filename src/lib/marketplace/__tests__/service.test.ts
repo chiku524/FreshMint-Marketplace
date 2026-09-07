@@ -9,6 +9,7 @@ import {
 import type { NetworkId } from "@/lib/discovery/types";
 import {
   confirmCollectionMintBatch,
+  confirmCryptoPurchase,
   confirmOnchainTx,
   createCollectionForUser,
   createListingForUser,
@@ -21,6 +22,7 @@ import {
   purchaseListing,
   quoteCryptoPurchase,
   recordSignal,
+  resumeCryptoPurchase,
   settleNomination,
   transitionListingStage,
   withdrawPurchaseToWallet,
@@ -79,8 +81,8 @@ function cryptoBuy(input: {
 }
 
 describe("marketplace service (memory mode)", () => {
-  it("creates a soft-launched listing", async () => {
-    const result = await createListingForUser({
+  it("creates a soft-launched listing after mint", async () => {
+    const created = await createListingForUser({
       creatorId: "artist-fresh",
       title: "Test Work",
       description: "memory path",
@@ -90,12 +92,39 @@ describe("marketplace service (memory mode)", () => {
       medium: "digital_ink",
       styleTags: ["test"],
       mediaContent: `unique-media-${Date.now()}`,
-      publishSoftLaunch: true,
+      publishSoftLaunch: false,
     });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    markListingMintedForTest(created.listing.id);
+    const result = await transitionListingStage(
+      created.listing.id,
+      "soft_launch",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.listing.stage).toBe("soft_launch");
     expect(getMemoryEngine().state.listings.has(result.listing.id)).toBe(true);
+  });
+
+  it("blocks soft-launch until the listing is minted", async () => {
+    const result = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Draft Only",
+      description: "needs mint",
+      type: "single",
+      chain: "evm",
+      priceUsd: 12,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: `draft-only-${Date.now()}`,
+      publishSoftLaunch: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.listing.stage).toBe("draft");
+    expect(result.errors).toContain("listing_not_minted");
+    expect("softLaunchBlocked" in result && result.softLaunchBlocked).toBe(true);
   });
 
   it("creates a collection and attaches a scheduled drop", async () => {
@@ -467,7 +496,7 @@ describe("marketplace service (memory mode)", () => {
     expect(shelf.shelf.listingIds.length).toBe(listingIds.length);
   });
 
-  it("soft-launches a Boing listing without minting", async () => {
+  it("keeps an unminted Boing listing in draft on soft-launch attempt", async () => {
     const created = await createListingForUser({
       creatorId: "artist-fresh",
       title: "Boing Work",
@@ -484,7 +513,9 @@ describe("marketplace service (memory mode)", () => {
     if (!created.ok) return;
     expect(created.listing.chain).toBe("boing");
     expect(created.listing.network).toBe("boing");
+    expect(created.listing.stage).toBe("draft");
     expect(created.listing.mintTxHash).toBeFalsy();
+    expect(created.errors).toContain("listing_not_minted");
     expect("walletTx" in created && created.walletTx).toBeFalsy();
   });
 
@@ -552,10 +583,17 @@ describe("marketplace service (memory mode)", () => {
       medium: "generative",
       styleTags: [],
       mediaContent: `stage-media-${Date.now()}`,
-      publishSoftLaunch: true,
+      publishSoftLaunch: false,
     });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
+
+    markListingMintedForTest(created.listing.id);
+    const soft = await transitionListingStage(
+      created.listing.id,
+      "soft_launch",
+    );
+    expect(soft.ok).toBe(true);
 
     const rising = await transitionListingStage(
       created.listing.id,
@@ -853,5 +891,48 @@ describe("marketplace service (memory mode)", () => {
     expect(result.status).toBe("pending_payment");
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("resumes a pending_transfer crypto purchase", async () => {
+    markListingMintedForTest("listing-fresh-1");
+    const started = await cryptoBuy({
+      listingId: "listing-fresh-1",
+      buyerId: "collector-mira",
+      amountUsd: 45,
+      simulate: false,
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    expect(started.status).toBe("pending_payment");
+
+    const paid = await confirmCryptoPurchase({
+      purchaseId: started.purchaseId,
+      buyerId: "collector-mira",
+      step: "payment",
+      txHash: "0xpaymenthash1234567890abcdef",
+    });
+    expect(paid.ok).toBe(true);
+    if (!paid.ok) return;
+    expect(paid.status).toBe("pending_transfer");
+    expect(paid.transferWalletTx).toBeTruthy();
+
+    const resumed = await resumeCryptoPurchase({
+      purchaseId: started.purchaseId,
+      buyerId: "collector-mira",
+    });
+    expect(resumed.ok).toBe(true);
+    if (!resumed.ok) return;
+    expect(resumed.status).toBe("pending_transfer");
+    expect("transferWalletTx" in resumed && resumed.transferWalletTx).toBeTruthy();
+
+    const done = await confirmCryptoPurchase({
+      purchaseId: started.purchaseId,
+      buyerId: "collector-mira",
+      step: "transfer",
+      txHash: "0xtransferhash1234567890abcdef",
+    });
+    expect(done.ok).toBe(true);
+    if (!done.ok) return;
+    expect(done.status).toBe("completed");
   });
 });

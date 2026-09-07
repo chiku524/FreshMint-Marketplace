@@ -33,6 +33,10 @@ export function canSoftLaunch(listing: Listing): StageGateResult {
   if (!listing.title.trim()) errors.push("title_required");
   if (!listing.mediaHash) errors.push("media_required");
   if (!listing.metadataComplete) errors.push("metadata_incomplete");
+  // Crypto buys require ownership at purchase — don't publish unminted inventory.
+  if (!listing.tokenId || !listing.contractAddress || !listing.mintTxHash) {
+    errors.push("listing_not_minted");
+  }
   return {
     ok: errors.length === 0,
     errors,

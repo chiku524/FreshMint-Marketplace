@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
 
 const PAY_LABELS: Record<string, string> = {
   ethereum: "Ethereum (ETH)",
@@ -102,6 +103,7 @@ export function ListingActions({
         ? "boing"
         : "ethereum")) as NetworkId;
   const [msg, setMsg] = useState<string | null>(null);
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [confirmBuy, setConfirmBuy] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buyStep, setBuyStep] = useState<BuyStep>("idle");
@@ -432,8 +434,12 @@ export function ListingActions({
       }
 
       setBuyStep("done");
+      const transferNote =
+        typeof transferHash === "string" && transferHash
+          ? transferHash
+          : null;
       finishPurchase(
-        { ...data, ...done, fees: data.fees },
+        { ...data, ...done, fees: data.fees, transferTxHash: transferNote },
         "Owned on-chain",
       );
     } catch (e) {
@@ -455,7 +461,10 @@ export function ListingActions({
     setConfirmBuy(false);
     setBuyStep("idle");
     if (!repeatable && listingType !== "open_edition") setJustSold(true);
+    const xfer =
+      typeof data.transferTxHash === "string" ? data.transferTxHash : null;
     setMsg(`${prefix}${feeNote}`);
+    setLastTxHash(xfer);
     router.refresh();
   }
 
@@ -773,7 +782,19 @@ export function ListingActions({
           Already sold
         </span>
       ) : msg ? (
-        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
+        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+          {msg}
+          {lastTxHash ? (
+            <>
+              {" · "}
+              <TxExplorerLink
+                hash={lastTxHash}
+                chain={chain}
+                network={listingNetwork}
+              />
+            </>
+          ) : null}
+        </span>
       ) : null}
     </div>
   );

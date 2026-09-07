@@ -255,7 +255,16 @@ export async function createListingForUser(input: {
       }
     }
     if (input.publishSoftLaunch) {
-      return transitionListingStage(id, "soft_launch");
+      const staged = await transitionListingStage(id, "soft_launch");
+      if (staged.ok) return staged;
+      const draftListing = mem.state.listings.get(id);
+      if (!draftListing) return staged;
+      return {
+        ok: true as const,
+        listing: draftListing,
+        errors: staged.errors,
+        softLaunchBlocked: true as const,
+      };
     }
     return { ok: true as const, listing, errors: [] as string[] };
   }
@@ -309,7 +318,14 @@ export async function createListingForUser(input: {
   }
 
   if (input.publishSoftLaunch) {
-    return transitionListingStage(created.id, "soft_launch");
+    const staged = await transitionListingStage(created.id, "soft_launch");
+    if (staged.ok) return staged;
+    return {
+      ok: true as const,
+      listing: toListing(created),
+      errors: staged.errors,
+      softLaunchBlocked: true as const,
+    };
   }
 
   return { ok: true as const, listing: toListing(created), errors: [] as string[] };
@@ -2286,6 +2302,180 @@ export async function confirmCryptoPurchase(input: {
     txHash: input.txHash,
     withdrawnAt,
   };
+}
+
+/** Resume an interrupted crypto buy (payment or NFT transfer still pending). */
+export async function resumeCryptoPurchase(input: {
+  purchaseId: string;
+  buyerId: string;
+  buyerPaymentAddress?: string;
+}) {
+  const {
+    buildCrossChainPayQuote,
+    buildNativePaymentWalletTx,
+    buildPurchaseTransferIntent,
+    listingIsMinted,
+    settlementAddressFor,
+  } = await import("@/lib/marketplace/crypto-purchase");
+  const engine = await getDiscoveryEngine();
+  const { isMemoryMode, getMemoryPurchases } = await import(
+    "@/lib/data/memory-store"
+  );
+  const memory = (await inMemoryMode()) || isMemoryMode();
+
+  const purchase = memory
+    ? getMemoryPurchases().find((p) => p.id === input.purchaseId)
+    : await prisma.purchase.findUnique({ where: { id: input.purchaseId } });
+  if (!purchase || purchase.buyerId !== input.buyerId) {
+    return { ok: false as const, error: "unavailable" };
+  }
+
+  const status = ("status" in purchase && purchase.status) || "completed";
+  const payNetwork = (
+    "payNetwork" in purchase ? purchase.payNetwork : null
+  ) as NetworkId | null;
+  const listing = engine.state.listings.get(purchase.listingId);
+  if (!listing || !listingIsMinted(listing)) {
+    return { ok: false as const, error: "unavailable" };
+  }
+  const network = resolveNetwork(listing.network, listing.chain);
+  const collection = listing.collectionId
+    ? engine.state.collections.get(listing.collectionId)
+    : null;
+  const receiveAddress =
+    purchase.withdrawAddress ||
+    engine.state.creators
+      .get(input.buyerId)
+      ?.wallets.find((w) => w.chain === listing.chain)?.address ||
+    "";
+
+  if (status === "completed" || purchase.withdrawnAt) {
+    return {
+      ok: true as const,
+      purchaseId: purchase.id,
+      status: "completed" as const,
+      listingId: listing.id,
+      chain: listing.chain,
+      network,
+      txHash: purchase.txHash,
+      withdrawTxHash: purchase.withdrawTxHash,
+    };
+  }
+
+  const escrowAddress =
+    collection?.escrowAddress ||
+    listing.contractAddress ||
+    receiveAddress;
+
+  if (status === "pending_transfer") {
+    if (!receiveAddress) {
+      return { ok: false as const, error: "wallet_required" };
+    }
+    const transferIntent = buildPurchaseTransferIntent({
+      listingNetwork: network,
+      listingChain: listing.chain,
+      contractAddress: listing.contractAddress!,
+      tokenId: listing.tokenId!,
+      escrowAddress: escrowAddress!,
+      buyerReceiveAddress: receiveAddress,
+    });
+    return {
+      ok: true as const,
+      purchaseId: purchase.id,
+      status: "pending_transfer" as const,
+      listingId: listing.id,
+      chain: listing.chain,
+      network,
+      payNetwork,
+      receiveAddress,
+      paymentTxHash:
+        "paymentTxHash" in purchase ? purchase.paymentTxHash : null,
+      transferWalletTx: transferIntent.walletTx,
+    };
+  }
+
+  if (status === "pending_payment") {
+    if (!payNetwork) {
+      return { ok: false as const, error: "unavailable" };
+    }
+    if (!input.buyerPaymentAddress) {
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "pending_payment" as const,
+        listingId: listing.id,
+        chain: listing.chain,
+        network,
+        payNetwork,
+        receiveAddress,
+        needsPaymentAddress: true as const,
+        amountUsd: purchase.amountUsd,
+      };
+    }
+    const settlementAddress = settlementAddressFor(network);
+    const crossChain = payNetwork !== network;
+    if (crossChain) {
+      try {
+        const bridgeQuote = await buildCrossChainPayQuote({
+          listingNetwork: network,
+          payNetwork,
+          amountUsd: purchase.amountUsd,
+          buyerPaymentAddress: input.buyerPaymentAddress,
+          settlementAddress,
+        });
+        return {
+          ok: true as const,
+          purchaseId: purchase.id,
+          status: "pending_payment" as const,
+          listingId: listing.id,
+          chain: listing.chain,
+          network,
+          payNetwork,
+          receiveAddress,
+          settlementAddress,
+          amountUsd: purchase.amountUsd,
+          bridge: bridgeQuote.bridge
+            ? {
+                requestId: bridgeQuote.bridge.requestId,
+                fromNetwork: bridgeQuote.bridge.fromNetwork,
+                toNetwork: bridgeQuote.bridge.toNetwork,
+                amount: bridgeQuote.bridge.amount,
+                estimatedOutput: bridgeQuote.bridge.estimatedOutput,
+                feeUsd: bridgeQuote.bridge.feeUsd,
+                steps: bridgeQuote.bridge.steps,
+              }
+            : null,
+        };
+      } catch (e) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : "bridge_quote_failed",
+        };
+      }
+    }
+    const pay = await buildNativePaymentWalletTx({
+      network,
+      fromAddress: input.buyerPaymentAddress,
+      toAddress: settlementAddress,
+      amountUsd: purchase.amountUsd,
+      listingChain: listing.chain,
+    });
+    return {
+      ok: true as const,
+      purchaseId: purchase.id,
+      status: "pending_payment" as const,
+      listingId: listing.id,
+      chain: listing.chain,
+      network,
+      payNetwork,
+      receiveAddress,
+      settlementAddress,
+      amountUsd: purchase.amountUsd,
+      paymentWalletTx: pay.walletTx,
+    };
+  }
+
+  return { ok: false as const, error: "unavailable" };
 }
 
 export async function getPersistedMetrics() {
