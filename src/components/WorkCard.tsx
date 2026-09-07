@@ -13,7 +13,7 @@ import {
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
 
-const MENU_HOVER_MS = 1000;
+const MENU_HOVER_MS = 500;
 const MENU_LEAVE_MS = 180;
 const MENU_FADE_MS = 280;
 
