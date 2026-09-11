@@ -10,12 +10,14 @@ import {
   computeSoftLaunchRecencyBoost,
   computeSpamRiskInverse,
   computeTasteAffinity,
+  diagnoseRisingEligibility,
   discoveryWeightForType,
   evaluateDiscoveryPolicy,
   expandFollowGraph,
   getDailySlotBudgets,
   isEmergingCreator,
   isFirstRisingLook,
+  canBecomeFeaturedEligible,
   refreshCreatorPeriodCounters,
   retrieveRisingCandidates,
   scoreListing,
@@ -188,15 +190,19 @@ describe("Rate-based quality", () => {
 describe("Rising explore + featured dominance", () => {
   it("reserves an explore slice for low-exposure Emerging", () => {
     const state = buildSeedState();
+    const template = state.listings.get("listing-fresh-1")!;
+    const fresh = state.creators.get("artist-fresh")!;
     const fake: RankedListing[] = [];
     for (let i = 0; i < 40; i++) {
+      const creatorId = `em-${i}`;
+      state.creators.set(creatorId, { ...fresh, id: creatorId });
       fake.push({
         listing: {
-          ...state.listings.get("listing-fresh-1")!,
+          ...template,
           id: `e-${i}`,
-          creatorId: "artist-fresh",
+          creatorId,
           signals: {
-            ...state.listings.get("listing-fresh-1")!.signals,
+            ...template.signals,
             impressionsThisWeek: i < 20 ? 800 : 0,
           },
         },
@@ -443,15 +449,19 @@ describe("First-look path for new artists", () => {
 
   it("fills explore from the never-shown pool even when reserved would consume it", () => {
     const state = buildSeedState();
+    const template = state.listings.get("listing-fresh-1")!;
+    const fresh = state.creators.get("artist-fresh")!;
     const fake: RankedListing[] = [];
     for (let i = 0; i < 8; i++) {
+      const creatorId = `tiny-c-${i}`;
+      state.creators.set(creatorId, { ...fresh, id: creatorId });
       fake.push({
         listing: {
-          ...state.listings.get("listing-fresh-1")!,
+          ...template,
           id: `tiny-${i}`,
-          creatorId: "artist-fresh",
+          creatorId,
           signals: {
-            ...state.listings.get("listing-fresh-1")!.signals,
+            ...template.signals,
             impressionsThisWeek: i === 0 ? 0 : 400 + i,
           },
         },
@@ -465,5 +475,131 @@ describe("First-look path for new artists", () => {
     const explore = selected.filter((s) => s.reasons.includes("explore"));
     expect(explore.length).toBeGreaterThan(0);
     expect(explore.some((s) => s.listing.id === "tiny-0")).toBe(true);
+  });
+});
+
+describe("Remaining discovery fairness", () => {
+  it("caps Rising to one work per creator", () => {
+    const state = buildSeedState();
+    const template = state.listings.get("listing-fresh-1")!;
+    const fake: RankedListing[] = [];
+    for (let i = 0; i < 6; i++) {
+      fake.push({
+        listing: { ...template, id: `same-${i}`, creatorId: "artist-fresh" },
+        score: 40 - i,
+        bucket: "rising",
+        emerging: true,
+        reasons: [],
+      });
+    }
+    const selected = applyEmergingQuota(fake, state.creators);
+    expect(selected.filter((s) => s.listing.creatorId === "artist-fresh")).toHaveLength(
+      1,
+    );
+  });
+
+  it("promotes stuck Open Lane work once Rising gates pass", () => {
+    const state = buildSeedState();
+    const now = Date.now();
+    const creator = {
+      ...state.creators.get("artist-fresh")!,
+      id: "artist-wait",
+      walletCreatedAt: now - 80 * 60 * 60 * 1000,
+      risingEntriesThisWeek: 1,
+    };
+    state.creators.set(creator.id, creator);
+    const prior = {
+      ...state.listings.get("listing-fresh-1")!,
+      id: "listing-wait-prior",
+      creatorId: creator.id,
+      stage: "rising_eligible" as const,
+      risingEligibleAt: now - 10 * 86400000,
+    };
+    const stuck = {
+      ...prior,
+      id: "listing-wait-stuck",
+      stage: "soft_launch" as const,
+      risingEligibleAt: null,
+      tokenId: "2",
+      contractAddress: "0x1111111111111111111111111111111111111111",
+      mintTxHash: "0xminted",
+    };
+    state.listings.set(prior.id, prior);
+    state.listings.set(stuck.id, stuck);
+    const engine = new DiscoveryEngine(state);
+    const promoted = engine.promoteEligibleSoftLaunches(now);
+    expect(promoted.some((l) => l.id === "listing-wait-stuck")).toBe(true);
+    expect(engine.state.listings.get("listing-wait-stuck")?.stage).toBe(
+      "rising_eligible",
+    );
+  });
+
+  it("mixes never-shown and recent work when Rising retrieve is capped", () => {
+    const state = buildSeedState();
+    const template = state.listings.get("listing-fresh-1")!;
+    const now = Date.now();
+    const listings = new Map(state.listings);
+    for (let i = 0; i < DISCOVERY_CONFIG.risingCandidateLimit + 40; i++) {
+      listings.set(`cap-${i}`, {
+        ...template,
+        id: `cap-${i}`,
+        risingEligibleAt: now - (i + 1) * 60_000,
+        signals: {
+          ...template.signals,
+          impressionsThisWeek: i < 20 ? 0 : 900 + i,
+        },
+      });
+    }
+    const retrieved = retrieveRisingCandidates(listings.values(), now);
+    expect(retrieved.length).toBe(DISCOVERY_CONFIG.risingCandidateLimit);
+    expect(retrieved.some((l) => l.signals.impressionsThisWeek === 0)).toBe(true);
+    expect(retrieved.some((l) => l.signals.impressionsThisWeek > 800)).toBe(true);
+  });
+
+  it("lets Emerging graduate to Featured with lighter traction", () => {
+    const state = buildSeedState();
+    const listing = {
+      ...state.listings.get("listing-fresh-1")!,
+      stage: "rising_eligible" as const,
+      signals: {
+        ...state.listings.get("listing-fresh-1")!.signals,
+        uniqueViewers: 3,
+        saves: 1,
+        nominationScore: 0,
+      },
+    };
+    const emerging = state.creators.get("artist-fresh")!;
+    const established = state.creators.get("artist-whale")!;
+    expect(canBecomeFeaturedEligible(listing, emerging).ok).toBe(true);
+    expect(canBecomeFeaturedEligible(listing, established).ok).toBe(false);
+  });
+
+  it("explains a remaining new-wallet wait", () => {
+    const state = buildSeedState();
+    const now = Date.now();
+    const creator = {
+      ...state.creators.get("artist-fresh")!,
+      walletCreatedAt: now - 2 * 60 * 60 * 1000,
+    };
+    const listing = {
+      ...state.listings.get("listing-fresh-1")!,
+      stage: "soft_launch" as const,
+      risingEligibleAt: null,
+    };
+    const other = {
+      ...listing,
+      id: "already-rising",
+      stage: "rising_eligible" as const,
+      risingEligibleAt: now - 86400000,
+    };
+    const diagnosis = diagnoseRisingEligibility(
+      listing,
+      creator,
+      [listing, other],
+      now,
+    );
+    expect(diagnosis.ready).toBe(false);
+    expect(diagnosis.errors).toContain("new_wallet_cooldown");
+    expect(diagnosis.cooldownRemainingMs).toBeGreaterThan(0);
   });
 });

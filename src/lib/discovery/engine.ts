@@ -319,6 +319,19 @@ export class DiscoveryEngine {
     return { ok: true, errors: [] as string[], listing: updated };
   }
 
+  /** Soft-launched work that now passes Rising gates is promoted without a button. */
+  promoteEligibleSoftLaunches(now = Date.now()): Listing[] {
+    const promoted: Listing[] = [];
+    for (const listing of [...this.state.listings.values()]) {
+      if (listing.stage !== "soft_launch" || listing.delisted) continue;
+      const result = this.transitionListing(listing.id, "rising_eligible", now);
+      if (result.ok && result.listing?.stage === "rising_eligible") {
+        promoted.push(result.listing);
+      }
+    }
+    return promoted;
+  }
+
   reportListing(input: {
     id: string;
     listingId: string;

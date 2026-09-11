@@ -90,6 +90,9 @@ export const DISCOVERY_CONFIG = {
    */
   exploreRisingShare: 0.12,
 
+  /** Max works from one creator in the daily Rising pool (spreads first looks). */
+  maxWorksPerCreatorOnRising: 1,
+
   /**
    * Rising-age burst for singles/collections (OE/auctions use their own clocks).
    * Newly eligible work gets a look, then decays.
@@ -160,6 +163,16 @@ export const DISCOVERY_CONFIG = {
   /** Diversity: max items from one collection per session window. */
   maxCollectionFloodPerSession: 2,
 
+  /**
+   * Featured traction bar when there is no nomination.
+   * Emerging gets a slightly lower bar so Rising exposure can graduate.
+   */
+  featuredTraction: {
+    uniqueViewers: 5,
+    saves: 2,
+    emergingUniqueViewers: 3,
+    emergingSaves: 1,
+  },
   /** Metadata / quality gates for Rising. */
   risingGates: {
     requireMetadataComplete: true,

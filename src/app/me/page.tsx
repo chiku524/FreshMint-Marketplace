@@ -7,6 +7,7 @@ import { WithdrawCollectedButton } from "@/components/WithdrawCollectedButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
+import { diagnoseRisingEligibility } from "@/lib/discovery";
 import { creatorLifecycleHint, purchaseIsOpenCheckout } from "@/lib/marketplace/lifecycle";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import {
@@ -14,6 +15,7 @@ import {
   getUserAssetProfile,
   profileFromSession,
 } from "@/lib/marketplace/profile";
+import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import {
   fetchLinkedWalletNfts,
   matchWalletNftsToListings,
@@ -32,6 +34,8 @@ export default async function MeCollectionPage() {
   const profile =
     (await getUserAssetProfile(user.id)) ?? profileFromSession(user);
   const soldIds = await listClosedPrimarySaleIds();
+  const engine = await getDiscoveryEngine();
+  const creator = engine.state.creators.get(user.id);
 
   const catalog = [
     ...profile.created,
@@ -123,7 +127,17 @@ export default async function MeCollectionPage() {
                 sold={soldIds.has(listing.id)}
                 trackImpression={false}
                 canStageRising
-                footer={creatorLifecycleHint(listing, soldIds.has(listing.id))}
+                footer={creatorLifecycleHint(
+                  listing,
+                  soldIds.has(listing.id),
+                  creator
+                    ? diagnoseRisingEligibility(
+                        listing,
+                        creator,
+                        engine.state.listings.values(),
+                      )
+                    : null,
+                )}
               />
             ))}
           </PuzzleRail>

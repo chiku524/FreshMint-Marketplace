@@ -97,7 +97,9 @@ draft → soft_launch → rising_eligible → featured_eligible → featured
 - Creator not flagged / not wash cluster / not delisted  
 - **New-wallet cooldown** before *subsequent* Rising entries (72h default)  
 - **First Rising look skips that cooldown** — a debut work auto-enters Rising after quality gates so new artists are not parked on Open Lane for three days  
+- **Stuck Open Lane work is retried automatically** when cooldown or the weekly cap later allow — no “Push to Rising” required  
 - **Max 3 Rising entries per creator per week** (recounted from `risingEligibleAt`, so the week actually rolls)  
+- **Max 1 work per creator in the daily Rising pool** so one artist cannot occupy several first-look slots  
 - OE / auction window validity when applicable  
 - **Auto-promoted** on soft-launch when those gates pass — artists do not have to find a hidden button  
 
@@ -154,6 +156,8 @@ From `DISCOVERY_CONFIG`:
 | Rising slots / day | 36 |
 | Emerging share of Rising | 40% |
 | Rising explore slice | 12% (~4 slots), filled **before** the reserved Emerging quota so debut work is not crowded out |
+| Max works / creator on Rising | 1 |
+| Featured traction (Emerging) | 3 unique viewers or 1 save (vs 5 / 2 for established) |
 | Featured slots / day | 12 |
 | Max chain share / homepage page | 60% |
 | Max concurrent OE on Rising | 3 |

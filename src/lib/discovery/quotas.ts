@@ -97,6 +97,26 @@ export function applyEmergingQuota(
 
   const selected: RankedListing[] = [];
   const usedIds = new Set<string>();
+  const creatorCounts = new Map<string, number>();
+  const perCreator = DISCOVERY_CONFIG.maxWorksPerCreatorOnRising;
+
+  const canTake = (item: RankedListing) => {
+    if (usedIds.has(item.listing.id)) return false;
+    return (creatorCounts.get(item.listing.creatorId) ?? 0) < perCreator;
+  };
+  const take = (item: RankedListing, extraReasons: string[] = []) => {
+    selected.push({
+      ...item,
+      reasons: extraReasons.length
+        ? [...item.reasons, ...extraReasons]
+        : item.reasons,
+    });
+    usedIds.add(item.listing.id);
+    creatorCounts.set(
+      item.listing.creatorId,
+      (creatorCounts.get(item.listing.creatorId) ?? 0) + 1,
+    );
+  };
 
   const explorePool = emergingPool.slice().sort((a, b) => {
     const ia = a.listing.signals.impressionsThisWeek;
@@ -109,13 +129,11 @@ export function applyEmergingQuota(
   for (const item of explorePool) {
     if (exploreTaken >= budget.risingExplore) break;
     if (selected.length >= budget.risingTotal) break;
-    selected.push({
-      ...item,
-      emerging: true,
-      bucket: "rising",
-      reasons: [...item.reasons, "explore"],
-    });
-    usedIds.add(item.listing.id);
+    if (!canTake(item)) continue;
+    take(
+      { ...item, emerging: true, bucket: "rising" },
+      ["explore"],
+    );
     exploreTaken += 1;
   }
 
@@ -123,9 +141,8 @@ export function applyEmergingQuota(
   for (const item of emergingPool) {
     if (reservedTaken >= budget.risingEmergingReserved) break;
     if (selected.length >= budget.risingTotal) break;
-    if (usedIds.has(item.listing.id)) continue;
-    selected.push({ ...item, emerging: true, bucket: "rising" });
-    usedIds.add(item.listing.id);
+    if (!canTake(item)) continue;
+    take({ ...item, emerging: true, bucket: "rising" });
     reservedTaken += 1;
   }
 
@@ -135,12 +152,12 @@ export function applyEmergingQuota(
 
   for (const item of remainder) {
     if (selected.length >= budget.risingTotal) break;
+    if (!canTake(item)) continue;
     const creator = creators.get(item.listing.creatorId);
     const emerging = creator
       ? isEmergingListing(item.listing, creator, now).emerging
       : false;
-    selected.push({ ...item, emerging, bucket: "rising" });
-    usedIds.add(item.listing.id);
+    take({ ...item, emerging, bucket: "rising" });
   }
 
   return selected;

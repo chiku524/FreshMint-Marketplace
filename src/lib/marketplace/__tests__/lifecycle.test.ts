@@ -94,4 +94,24 @@ describe("stage helpers", () => {
       ),
     ).toMatch(/first work auto-enters Rising/i);
   });
+
+  it("names the remaining new-wallet wait", () => {
+    expect(
+      creatorLifecycleHint(
+        {
+          stage: "soft_launch",
+          tokenId: "1",
+          contractAddress: "0xabc",
+          mintTxHash: "0xmint",
+        },
+        false,
+        {
+          ready: false,
+          errors: ["new_wallet_cooldown"],
+          firstRisingLook: false,
+          cooldownRemainingMs: 18 * 60 * 60 * 1000,
+        },
+      ),
+    ).toMatch(/about 18h/i);
+  });
 });

@@ -1,4 +1,5 @@
 import { DISCOVERY_CONFIG } from "./config";
+import { isEmergingListing } from "./emerging";
 import type { CreatorProfile, LaunchStage, Listing, ListingType } from "./types";
 
 export const STAGE_ORDER: LaunchStage[] = [
@@ -123,17 +124,83 @@ export function canBecomeRisingEligible(
   };
 }
 
+export interface RisingDiagnosis {
+  ready: boolean;
+  errors: string[];
+  firstRisingLook: boolean;
+  cooldownRemainingMs: number;
+}
+
+/** Why a listing is or is not Rising — used for creator-facing hints. */
+export function diagnoseRisingEligibility(
+  listing: Listing,
+  creator: CreatorProfile,
+  listings: Iterable<Listing>,
+  now = Date.now(),
+): RisingDiagnosis {
+  const firstRisingLook = isFirstRisingLook(creator.id, listings, listing.id);
+  const elapsed = now - creator.walletCreatedAt;
+  const need = DISCOVERY_CONFIG.newWalletRisingCooldownMs;
+  const cooldownApplies =
+    !firstRisingLook || !DISCOVERY_CONFIG.firstLook.skipWalletCooldown;
+  const cooldownRemainingMs =
+    cooldownApplies && elapsed < need ? need - elapsed : 0;
+
+  if (
+    listing.stage === "rising_eligible" ||
+    listing.stage === "featured_eligible" ||
+    listing.stage === "featured"
+  ) {
+    return {
+      ready: true,
+      errors: [],
+      firstRisingLook,
+      cooldownRemainingMs: 0,
+    };
+  }
+
+  if (listing.stage !== "soft_launch") {
+    return {
+      ready: false,
+      errors: listing.stage === "draft" ? ["must_be_soft_launch"] : [],
+      firstRisingLook,
+      cooldownRemainingMs,
+    };
+  }
+
+  const gate = canBecomeRisingEligible(listing, creator, now, { firstRisingLook });
+  return {
+    ready: gate.ok,
+    errors: gate.errors,
+    firstRisingLook,
+    cooldownRemainingMs,
+  };
+}
+
 /** Featured eligible via curator or collector nomination path. */
-export function canBecomeFeaturedEligible(listing: Listing): StageGateResult {
+export function canBecomeFeaturedEligible(
+  listing: Listing,
+  creator?: CreatorProfile,
+  now = Date.now(),
+): StageGateResult {
   const errors: string[] = [];
   if (listing.stage !== "rising_eligible" && listing.stage !== "featured") {
     errors.push("must_be_rising_or_featured");
   }
   if (listing.delisted) errors.push("listing_delisted");
   if (listing.signals.nominationScore < 1 && listing.stage !== "featured") {
-    // Editors can also promote; nominationScore >= 1 OR explicit editor path (score injected).
-    // Allow if already has quality traction.
-    if (listing.signals.uniqueViewers < 5 && listing.signals.saves < 2) {
+    const traction = DISCOVERY_CONFIG.featuredTraction;
+    const emerging = creator
+      ? isEmergingListing(listing, creator, now).emerging
+      : false;
+    const viewers = emerging
+      ? traction.emergingUniqueViewers
+      : traction.uniqueViewers;
+    const saves = emerging ? traction.emergingSaves : traction.saves;
+    if (
+      listing.signals.uniqueViewers < viewers &&
+      listing.signals.saves < saves
+    ) {
       errors.push("nomination_or_traction_required");
     }
   }
@@ -173,7 +240,7 @@ export function advanceStage(
       result = canBecomeRisingEligible(listing, creator, now, options);
       break;
     case "featured_eligible":
-      result = canBecomeFeaturedEligible(listing);
+      result = canBecomeFeaturedEligible(listing, creator, now);
       break;
     case "featured":
       result = canBecomeFeatured(listing);

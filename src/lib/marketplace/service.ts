@@ -12,6 +12,7 @@ import type {
   Chain,
   Collection,
   LaunchStage,
+  Listing,
   ListingType,
   NetworkId,
   ReportReason,
@@ -54,19 +55,54 @@ export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
   const mode = await ensureDatabaseReady();
   if (mode === "memory") {
     const { getMemoryEngine } = await import("@/lib/data/memory-store");
-    return getMemoryEngine();
+    const engine = getMemoryEngine();
+    engine.promoteEligibleSoftLaunches();
+    return engine;
   }
 
   try {
     const state = await loadMarketplaceState();
-    return new DiscoveryEngine(state);
+    const engine = new DiscoveryEngine(state);
+    const promoted = engine.promoteEligibleSoftLaunches();
+    if (promoted.length) {
+      await persistRisingPromotions(engine, promoted);
+    }
+    return engine;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const { enableMemoryMode, getMemoryEngine } = await import(
       "@/lib/data/memory-store"
     );
     enableMemoryMode(message);
-    return getMemoryEngine();
+    const engine = getMemoryEngine();
+    engine.promoteEligibleSoftLaunches();
+    return engine;
+  }
+}
+
+async function persistRisingPromotions(
+  engine: DiscoveryEngine,
+  promoted: Listing[],
+) {
+  for (const listing of promoted) {
+    await prisma.listing.update({
+      where: { id: listing.id },
+      data: {
+        stage: listing.stage,
+        risingEligibleAt: listing.risingEligibleAt
+          ? new Date(listing.risingEligibleAt)
+          : null,
+      },
+    });
+    const creator = engine.state.creators.get(listing.creatorId);
+    if (!creator) continue;
+    await persistCreatorStats(listing.creatorId, {
+      risingEntriesThisWeek: creator.risingEntriesThisWeek,
+      openLaneListingsToday: creator.openLaneListingsToday,
+      firstListingAt: creator.firstListingAt
+        ? new Date(creator.firstListingAt)
+        : null,
+    });
   }
 }
 

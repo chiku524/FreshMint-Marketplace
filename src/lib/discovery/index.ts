@@ -24,6 +24,7 @@ export {
   canBecomeRisingEligible,
   canBecomeFeaturedEligible,
   isFirstRisingLook,
+  diagnoseRisingEligibility,
   visibilityForStage,
   collectionFeedSurface,
   discoveryWeightForType,
@@ -47,7 +48,7 @@ export {
 } from "./feed-mix";
 export { MetricsCollector, isMeaningfulView } from "./metrics";
 export { evaluateDiscoveryPolicy } from "./policy";
-export type { PolicyReport, PolicyRecommendation } from "./policy";
+export type { RisingDiagnosis } from "./staging";
 export {
   computeTasteAffinity,
   inferTasteFromCatalog,

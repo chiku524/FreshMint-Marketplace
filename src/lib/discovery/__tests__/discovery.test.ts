@@ -124,9 +124,15 @@ describe("Rising / Featured quotas", () => {
 
     // Synthetic quota fill
     const fake: RankedListing[] = [];
+    const fresh = state.creators.get("artist-fresh")!;
+    const whale = state.creators.get("artist-whale")!;
     for (let i = 0; i < 50; i++) {
       const emerging = i < 20;
-      const creatorId = emerging ? "artist-fresh" : "artist-whale";
+      const creatorId = emerging ? `fresh-${i}` : `whale-${i}`;
+      state.creators.set(creatorId, {
+        ...(emerging ? fresh : whale),
+        id: creatorId,
+      });
       fake.push({
         listing: {
           ...state.listings.get("listing-fresh-1")!,

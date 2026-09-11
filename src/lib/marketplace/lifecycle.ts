@@ -1,4 +1,5 @@
 import type { LaunchStage, Listing } from "@/lib/discovery/types";
+import type { RisingDiagnosis } from "@/lib/discovery";
 
 /** Abandoned checkouts release 1/1 inventory after this window. */
 export const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1000;
@@ -58,6 +59,7 @@ export function canUserStageListing(
 export function creatorLifecycleHint(
   listing: Pick<Listing, "stage" | "tokenId" | "contractAddress" | "mintTxHash">,
   sold: boolean,
+  diagnosis?: RisingDiagnosis | null,
 ): string {
   const minted = Boolean(
     listing.tokenId && listing.contractAddress && listing.mintTxHash,
@@ -70,6 +72,19 @@ export function creatorLifecycleHint(
     return "Minted draft — soft-launch to appear on Open Lane";
   }
   if (listing.stage === "soft_launch") {
+    if (diagnosis?.errors.includes("new_wallet_cooldown")) {
+      const hours = Math.max(
+        1,
+        Math.round((diagnosis.cooldownRemainingMs || 0) / (60 * 60 * 1000)),
+      );
+      return `Live on Open Lane — Rising in about ${hours}h when the new-wallet wait ends`;
+    }
+    if (diagnosis?.errors.includes("rising_weekly_cap")) {
+      return "Live on Open Lane — weekly Rising cap reached; it rolls with the UTC week";
+    }
+    if (diagnosis?.ready) {
+      return "Live on Open Lane — Rising is automatic on the next discovery refresh";
+    }
     return "Live on Open Lane — your first work auto-enters Rising; later works wait out the new-wallet cooldown and weekly cap";
   }
   if (listing.stage === "rising_eligible") {
