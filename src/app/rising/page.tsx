@@ -33,8 +33,9 @@ export default async function RisingPage() {
       </p>
       {rising.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
-          Rising is empty right now — soft-launch works and push them to Rising
-          eligibility.
+          Rising is empty right now — publish a minted work and it enters
+          Rising automatically when quality gates pass. Your first work skips
+          the new-wallet wait.
         </p>
       ) : (
         <>

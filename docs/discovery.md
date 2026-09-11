@@ -67,7 +67,7 @@ Locked in `DISCOVERY_CONFIG.feedMix` (must sum to 1):
 
 Diversity: **max 1 artist per screen**; collection flood capped per session.
 
-Anonymous visitors pick a **taste seed** (style tags) for Emerging only — they do not inherit a demo collector’s follow graph. Signed-in users get their Follow graph, including **collectors they follow** (those collectors’ artists and shelves). Taste affinity reranks the Emerging homepage slice only and cannot steal quota.
+Anonymous visitors pick a **taste seed** (style tags) for Emerging only — they do not inherit a demo collector’s follow graph. Unused Following slots (guests, new collectors) **backfill from leftover Emerging Rising** so empty follow graphs do not punch holes in the page. Signed-in users get their Follow graph, including **collectors they follow** (those collectors’ artists and shelves). Taste affinity reranks the Emerging homepage slice only and cannot steal quota.
 
 ---
 
@@ -95,7 +95,8 @@ draft → soft_launch → rising_eligible → featured_eligible → featured
 - Must be soft-launched  
 - Metadata complete, original media  
 - Creator not flagged / not wash cluster / not delisted  
-- **New-wallet cooldown** before Rising (72h default)  
+- **New-wallet cooldown** before *subsequent* Rising entries (72h default)  
+- **First Rising look skips that cooldown** — a debut work auto-enters Rising after quality gates so new artists are not parked on Open Lane for three days  
 - **Max 3 Rising entries per creator per week** (recounted from `risingEligibleAt`, so the week actually rolls)  
 - OE / auction window validity when applicable  
 - **Auto-promoted** on soft-launch when those gates pass — artists do not have to find a hidden button  
@@ -134,9 +135,9 @@ score = quality × novelty × diversity × spam_inverse × impression_decay × t
 | Factor | Intent |
 |---|---|
 | **quality** | Bayesian engagement *rate* (saves/follows/dwell/nominations per unique viewer), shrunk toward a prior. Raw click volume does not win. Saves before 3 unique viewers are discounted. |
-| **novelty** | Boost when artist/collection has low prior platform exposure; `discoveryWeightForType` (singles 1.15, collections 0.9) |
+| **novelty** | Boost when artist/collection has low prior platform exposure; `discoveryWeightForType` (singles 1.15, collections 0.9); first-look lift for never-shown / low-impression Emerging |
 | **diversity** | Hard cap: max 1 artist per screen. Session-seen artists are downranked (not hidden) so a new work can earn a second look. |
-| **spam_inverse** | Report rate, new wallet, flags |
+| **spam_inverse** | Report rate, flags, wash. Age-only risk is scaled down for clean Emerging so a debut wallet is not scored as spam twice |
 | **impression_decay** | Fair-share daily/weekly impressions before hard decay |
 | **temporal** | OE drop burst; auction ending-soon; Rising-age burst (48h) for singles/collections |
 
@@ -152,12 +153,13 @@ From `DISCOVERY_CONFIG`:
 |---|---|
 | Rising slots / day | 36 |
 | Emerging share of Rising | 40% |
-| Rising explore slice | 12% (~4 slots) |
+| Rising explore slice | 12% (~4 slots), filled **before** the reserved Emerging quota so debut work is not crowded out |
 | Featured slots / day | 12 |
 | Max chain share / homepage page | 60% |
 | Max concurrent OE on Rising | 3 |
 | Live auction strip slots | 6 |
 | Rising entries / creator / week | 3 |
+| New-wallet cooldown | 72h for later works; **first Rising look skips** |
 | Open Lane listings / creator / day | 25 |
 | Impression fair-share / day | 2,000 |
 | Impression fair-share / week | 8,000 |

@@ -202,6 +202,51 @@ describe("Feed mix", () => {
     );
     expect(feed.filter((item) => item.bucket === "following")).toHaveLength(0);
   });
+
+  it("fills unused Following slots from leftover Emerging Rising", () => {
+    const state = buildSeedState();
+    const template = state.listings.get("listing-fresh-1")!;
+    const risingPool: RankedListing[] = [];
+    for (let i = 0; i < 16; i++) {
+      const creatorId = `artist-guest-${i}`;
+      state.creators.set(creatorId, {
+        ...state.creators.get("artist-fresh")!,
+        id: creatorId,
+        displayName: creatorId,
+        firstListingAt: Date.now() - 2 * 86400000,
+        lifetimePrimaryVolumeUsd: 0,
+        completedSales: 0,
+      });
+      risingPool.push({
+        listing: {
+          ...template,
+          id: `guest-rising-${i}`,
+          creatorId,
+        },
+        score: 20 - i,
+        bucket: "rising",
+        emerging: true,
+        reasons: ["emerging"],
+      });
+    }
+    const plan = planFeedMix(20);
+    const feed = composeHomepageFeed({
+      listings: risingPool.map((r) => r.listing),
+      creators: state.creators,
+      follows: null,
+      shelves: [],
+      risingPool,
+      featuredPool: [],
+      session: emptySession(null),
+      pageSize: 20,
+    });
+    const emergingCount = feed.filter(
+      (item) => item.bucket === "emerging_rising",
+    ).length;
+    expect(emergingCount).toBeGreaterThan(plan.counts.emerging_rising);
+    expect(feed.filter((item) => item.bucket === "following")).toHaveLength(0);
+    expect(feed.length).toBeGreaterThan(plan.counts.emerging_rising);
+  });
 });
 
 describe("Listing stages", () => {
@@ -255,6 +300,9 @@ describe("Anti-spam", () => {
       walletCreatedAt: now - 1000,
     };
     expect(checkNewWalletCooldown(freshWallet, now).allowed).toBe(false);
+    expect(
+      checkNewWalletCooldown(freshWallet, now, { firstRisingLook: true }).allowed,
+    ).toBe(true);
   });
 
   it("delists under report pressure", () => {

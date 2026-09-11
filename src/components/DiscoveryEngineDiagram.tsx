@@ -78,7 +78,7 @@ function buildSteps(): Step[] {
       band: "rising",
       x: 200,
       y: 250,
-      body: `Rising is a daily pool of ${budgets.risingTotal} slots. Gates: complete metadata, original media, ${hours(cfg.newWalletRisingCooldownMs)} new-wallet cooldown, ${cfg.risingEntriesPerCreatorPerWeek} entries/creator/week. Verification is not required.`,
+      body: `Rising is a daily pool of ${budgets.risingTotal} slots. Gates: complete metadata, original media, ${cfg.risingEntriesPerCreatorPerWeek} entries/creator/week. Your first work skips the ${hours(cfg.newWalletRisingCooldownMs)} new-wallet cooldown. Verification is not required.`,
     },
     {
       id: "quota",
@@ -87,7 +87,7 @@ function buildSteps(): Step[] {
       band: "rising",
       x: 720,
       y: 250,
-      body: `${pct(cfg.emergingRisingQuota)} of Rising (${budgets.risingEmergingReserved} of ${budgets.risingTotal} today) is reserved for Emerging — in the ranker, not a slogan. Another ${budgets.risingExplore} slots are a low-exposure explore slice. Emerging is a 90-day window; volume and sales can graduate you earlier.`,
+      body: `${pct(cfg.emergingRisingQuota)} of Rising (${budgets.risingEmergingReserved} of ${budgets.risingTotal} today) is reserved for Emerging — in the ranker, not a slogan. ${budgets.risingExplore} never-shown explore slots are filled first so debut work is not crowded out. Emerging is a 90-day window; volume and sales can graduate you earlier.`,
     },
     {
       id: "mix",

@@ -45,6 +45,24 @@ export function canSoftLaunch(listing: Listing): StageGateResult {
 }
 
 /**
+ * True when this creator has never held a Rising-or-later listing.
+ * Used so a debut work can skip the new-wallet cooldown.
+ */
+export function isFirstRisingLook(
+  creatorId: string,
+  listings: Iterable<Listing>,
+  exceptListingId?: string,
+): boolean {
+  for (const listing of listings) {
+    if (listing.creatorId !== creatorId) continue;
+    if (exceptListingId && listing.id === exceptListingId) continue;
+    if (listing.risingEligibleAt != null) return false;
+    if (stageIndex(listing.stage) >= stageIndex("rising_eligible")) return false;
+  }
+  return true;
+}
+
+/**
  * Rising eligibility after light quality gates.
  * Verification badge is NOT required.
  */
@@ -52,6 +70,7 @@ export function canBecomeRisingEligible(
   listing: Listing,
   creator: CreatorProfile,
   now = Date.now(),
+  options?: { firstRisingLook?: boolean },
 ): StageGateResult {
   const errors: string[] = [];
   if (listing.stage !== "soft_launch") errors.push("must_be_soft_launch");
@@ -69,9 +88,13 @@ export function canBecomeRisingEligible(
   }
   if (creator.washCluster) errors.push("wash_cluster");
 
-  const walletAge = now - creator.walletCreatedAt;
-  if (walletAge < DISCOVERY_CONFIG.newWalletRisingCooldownMs) {
-    errors.push("new_wallet_cooldown");
+  const skipCooldown =
+    options?.firstRisingLook && DISCOVERY_CONFIG.firstLook.skipWalletCooldown;
+  if (!skipCooldown) {
+    const walletAge = now - creator.walletCreatedAt;
+    if (walletAge < DISCOVERY_CONFIG.newWalletRisingCooldownMs) {
+      errors.push("new_wallet_cooldown");
+    }
   }
 
   if (
@@ -139,6 +162,7 @@ export function advanceStage(
   creator: CreatorProfile,
   target: LaunchStage,
   now = Date.now(),
+  options?: { firstRisingLook?: boolean },
 ): { listing: Listing; result: StageGateResult } {
   let result: StageGateResult;
   switch (target) {
@@ -146,7 +170,7 @@ export function advanceStage(
       result = canSoftLaunch(listing);
       break;
     case "rising_eligible":
-      result = canBecomeRisingEligible(listing, creator, now);
+      result = canBecomeRisingEligible(listing, creator, now, options);
       break;
     case "featured_eligible":
       result = canBecomeFeaturedEligible(listing);

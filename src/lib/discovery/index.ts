@@ -10,12 +10,20 @@ export {
   capConcurrentOpenEditions,
   excludeFeaturedDominantFromRising,
 } from "./quotas";
-export { scoreListing, computeQualitySignal, computeRisingAgeBoost, computeSoftLaunchRecencyBoost } from "./scoring";
+export {
+  scoreListing,
+  computeQualitySignal,
+  computeRisingAgeBoost,
+  computeSoftLaunchRecencyBoost,
+  computeFirstLookBoost,
+  computeSpamRiskInverse,
+} from "./scoring";
 export {
   advanceStage,
   canSoftLaunch,
   canBecomeRisingEligible,
   canBecomeFeaturedEligible,
+  isFirstRisingLook,
   visibilityForStage,
   collectionFeedSurface,
   discoveryWeightForType,

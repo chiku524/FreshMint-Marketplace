@@ -31,8 +31,30 @@ export const DISCOVERY_CONFIG = {
   /** Collection feed surface: hero + samples until traction. */
   collectionSampleSize: 3,
 
-  /** New-wallet cooldown before Rising eligibility (ms). */
+  /**
+   * New-wallet cooldown before *subsequent* Rising entries (ms).
+   * A creator's first Rising look can skip this — see firstLook.
+   */
   newWalletRisingCooldownMs: 72 * 60 * 60 * 1000,
+
+  /**
+   * First-look path so a new artist can earn exposure without waiting
+   * out sybil cooldown or losing the reserved Emerging slice to campers.
+   */
+  firstLook: {
+    /** Debut Rising entry skips the new-wallet cooldown. Later works still wait. */
+    skipWalletCooldown: true,
+    /** Multiplier when an Emerging work has had no weekly impressions. */
+    neverShownBoost: 1.22,
+    /** Weekly impressions below this still get a lighter first-look lift. */
+    lowExposureImpressions: 12,
+    lowExposureBoost: 1.1,
+    /**
+     * Scale age-only spam risk for clean Emerging (no reports/flags).
+     * Cooldown + quality gates already handle sybil; do not double-punish.
+     */
+    emergingWalletAgeRiskScale: 0.2,
+  },
 
   /** Soft reputation stake cost for a Rising nomination (points). */
   nominationStakePoints: 10,

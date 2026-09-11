@@ -169,7 +169,7 @@ export function composeHomepageFeed(input: ComposeFeedInput): RankedListing[] {
       })
       .sort((a, b) => b.score - a.score),
     input.session,
-  ).slice(0, plan.counts.emerging_rising);
+  );
 
   const expanded = expandFollowGraph(input.follows, input.followGraphs);
   const followedArtistIds = expanded.artistIds;
@@ -293,6 +293,8 @@ export function composeHomepageFeed(input: ComposeFeedInput): RankedListing[] {
     }
   }
 
+  // Unused Following / Featured / auction slots go to leftover Emerging first
+  // so guests and new collectors still see new artists, not empty holes.
   if (result.length < pageSize) {
     const leftovers = order.flatMap((b) => queues[b]);
     for (const item of leftovers) {

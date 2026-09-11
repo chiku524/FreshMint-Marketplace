@@ -65,16 +65,37 @@ export function computeQualitySignal(listing: Listing): number {
   );
 }
 
+/** Extra lift for never-shown / low-exposure Emerging so debut work is not buried. */
+export function computeFirstLookBoost(
+  listing: Listing,
+  creator: CreatorProfile,
+  now = Date.now(),
+): number {
+  if (!isEmergingListing(listing, creator, now).emerging) return 1;
+  const weekly = listing.signals.impressionsThisWeek;
+  const { neverShownBoost, lowExposureImpressions, lowExposureBoost } =
+    DISCOVERY_CONFIG.firstLook;
+  if (weekly <= 0) return neverShownBoost;
+  if (weekly < lowExposureImpressions) return lowExposureBoost;
+  return 1;
+}
+
 export function computeNoveltyBoost(
   listing: Listing,
   creator: CreatorProfile,
+  now = Date.now(),
 ): number {
   const exposure = listing.signals.impressionsThisWeek;
   const typeBoost = discoveryWeightForType(listing.type);
   const exposureFactor = 1 / (1 + Math.log10(1 + exposure));
   const creatorExposurePenalty =
     creator.lifetimePrimaryVolumeUsd > 50_000 ? 0.7 : 1;
-  return typeBoost * exposureFactor * creatorExposurePenalty;
+  return (
+    typeBoost *
+    exposureFactor *
+    creatorExposurePenalty *
+    computeFirstLookBoost(listing, creator, now)
+  );
 }
 
 export function computeDiversityPenaltyInverse(
@@ -105,10 +126,20 @@ export function computeSpamRiskInverse(
   if (creator.flagged) risk += 2;
   if (creator.washCluster) risk += 3;
 
+  const emerging = isEmergingListing(listing, creator, now).emerging;
+  const cleanEmerging =
+    emerging &&
+    listing.signals.reportRate === 0 &&
+    !creator.flagged &&
+    !creator.washCluster;
+  const ageScale = cleanEmerging
+    ? DISCOVERY_CONFIG.firstLook.emergingWalletAgeRiskScale
+    : 1;
+
   const walletAgeDays =
     (now - creator.walletCreatedAt) / (24 * 60 * 60 * 1000);
-  if (walletAgeDays < 3) risk += 1.2;
-  else if (walletAgeDays < 14) risk += 0.4;
+  if (walletAgeDays < 3) risk += 1.2 * ageScale;
+  else if (walletAgeDays < 14) risk += 0.4 * ageScale;
 
   if (creator.openLaneListingsToday > 15) risk += 1;
   if (creator.risingEntriesThisWeek >= DISCOVERY_CONFIG.risingEntriesPerCreatorPerWeek) {
@@ -202,7 +233,7 @@ export function scoreListing(
   now = Date.now(),
 ): ScoreBreakdown {
   const quality = computeQualitySignal(listing);
-  const novelty = computeNoveltyBoost(listing, creator);
+  const novelty = computeNoveltyBoost(listing, creator, now);
   const diversity = computeDiversityPenaltyInverse(listing, session);
   const spamInverse = computeSpamRiskInverse(listing, creator, now);
   const decay = computeImpressionDecay(listing);
@@ -228,6 +259,9 @@ export function scoreListing(
   }
   if (temporal > 1.05 && listing.type !== "open_edition" && listing.type !== "auction") {
     reasons.push("rising_age_burst");
+  }
+  if (computeFirstLookBoost(listing, creator, now) > 1) {
+    reasons.push("first_look");
   }
 
   return {

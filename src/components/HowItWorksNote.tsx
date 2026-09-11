@@ -16,8 +16,8 @@ const NOTES: Record<
     text: `Fair discovery: ${Math.round(DISCOVERY_CONFIG.feedMix.emerging_rising * 100)}% Emerging Rising on the homepage, quota enforced in code.`,
   },
   create: {
-    href: "/docs#flow",
-    text: "Create deploys your collection; publish mints into it. Collectors buy with crypto.",
+    href: "/docs#discovery",
+    text: "Publish mints into your collection. Your first work auto-enters Rising — no Featured pin required.",
   },
   buy: {
     href: "/docs#fees",

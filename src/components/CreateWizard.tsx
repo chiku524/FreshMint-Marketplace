@@ -675,8 +675,9 @@ export function CreateWizard() {
         <div className="create-wizard__panel">
           <h2 className="display create-wizard__title">Published on-chain</h2>
           <p className="create-wizard__lead">
-            {published.label} is minted and live on Open Lane. Collectors pay
-            crypto and receive the NFT at purchase.
+            {published.label} is minted and live. Your first work auto-enters
+            Rising so collectors can find it without a Featured pin. Later works
+            wait out the new-wallet cooldown and weekly cap.
           </p>
           <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "1rem 0 0" }}>
             {firstId ? (
@@ -684,6 +685,9 @@ export function CreateWizard() {
                 Open listing
               </Link>
             ) : null}
+            <Link href="/rising" className="badge emerging">
+              Rising
+            </Link>
             <Link href="/open" className="badge">
               Open Lane
             </Link>

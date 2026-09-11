@@ -376,8 +376,10 @@ export function DocsGuide() {
               </li>
               <li>
                 <strong style={{ color: "var(--ink)" }}>Rising</strong> — after
-                quality gates, wallet cooldown ({hours(cfg.newWalletRisingCooldownMs)}),
-                and weekly Rising cap ({cfg.risingEntriesPerCreatorPerWeek}/creator)
+                quality gates and the weekly cap (
+                {cfg.risingEntriesPerCreatorPerWeek}/creator). A first work skips
+                the {hours(cfg.newWalletRisingCooldownMs)} new-wallet cooldown;
+                later works still wait.
               </li>
               <li>
                 <strong style={{ color: "var(--ink)" }}>Featured</strong> — scarce
@@ -412,7 +414,8 @@ export function DocsGuide() {
             <p style={{ margin: "1.15rem 0 0", color: "var(--emergent)" }}>
               Rising reserves {pct(cfg.emergingRisingQuota)} of its daily slots for
               Emerging works ({budgets.risingEmergingReserved} of {budgets.risingTotal}{" "}
-              today) and {budgets.risingExplore} low-exposure explore slots.
+              today). {budgets.risingExplore} never-shown explore slots are filled
+              first so debut work is not crowded out.
             </p>
             </div>
 
@@ -436,8 +439,10 @@ export function DocsGuide() {
               listing-page views versus feed impressions, and nominations per unique
               viewer), not a raw popularity sum. Saves from
               listings with fewer than {cfg.sybil.minUniqueViewersForSaveTrust} unique
-              viewers are discounted. Novelty lifts low-exposure artists and applies
-              listing-type weights. Diversity allows at most one artist per screen;
+              viewers are discounted. Novelty lifts low-exposure artists, applies
+              listing-type weights, and gives never-shown Emerging a first-look
+              boost. Clean new wallets are not double-punished after they pass
+              Rising gates. Diversity allows at most one artist per screen;
               artists already seen this session are downranked, not hidden, so a
               new work can earn a second look. Impression fair-share (
               {cfg.impressionFairSharePerDay.toLocaleString()}/day) applies decay so

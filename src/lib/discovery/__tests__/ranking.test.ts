@@ -4,15 +4,18 @@ import {
   DISCOVERY_CONFIG,
   DiscoveryEngine,
   applyEmergingQuota,
+  computeFirstLookBoost,
   computeQualitySignal,
   computeRisingAgeBoost,
   computeSoftLaunchRecencyBoost,
+  computeSpamRiskInverse,
   computeTasteAffinity,
   discoveryWeightForType,
   evaluateDiscoveryPolicy,
   expandFollowGraph,
   getDailySlotBudgets,
   isEmergingCreator,
+  isFirstRisingLook,
   refreshCreatorPeriodCounters,
   retrieveRisingCandidates,
   scoreListing,
@@ -318,8 +321,12 @@ describe("Session diversity + policy", () => {
     const state = buildSeedState();
     const creator = state.creators.get("artist-fresh")!;
     creator.risingEntriesThisWeek = 99;
-    const listing = state.listings.get("listing-fresh-1")!;
-    listing.risingEligibleAt = Date.now() - 20 * 86400000;
+    for (const listing of state.listings.values()) {
+      if (listing.creatorId !== creator.id) continue;
+      if (listing.risingEligibleAt != null) {
+        listing.risingEligibleAt = Date.now() - 20 * 86400000;
+      }
+    }
     refreshCreatorPeriodCounters(creator, state.listings.values());
     expect(creator.risingEntriesThisWeek).toBe(0);
   });
@@ -358,5 +365,105 @@ describe("Locked explore budget", () => {
     expect(
       budgets.risingEmergingReserved + budgets.risingExplore,
     ).toBeLessThanOrEqual(budgets.risingTotal);
+  });
+});
+
+describe("First-look path for new artists", () => {
+  it("treats a creator with no prior Rising work as a first look", () => {
+    const state = buildSeedState();
+    expect(isFirstRisingLook("artist-unknown", state.listings.values())).toBe(
+      true,
+    );
+    expect(isFirstRisingLook("artist-fresh", state.listings.values())).toBe(
+      false,
+    );
+  });
+
+  it("lets a new artist's first work skip the wallet cooldown", () => {
+    const state = buildSeedState();
+    const now = Date.now();
+    const creator = {
+      ...state.creators.get("artist-fresh")!,
+      id: "artist-debut",
+      walletCreatedAt: now - 1000,
+      firstListingAt: now,
+      risingEntriesThisWeek: 0,
+    };
+    state.creators.set(creator.id, creator);
+    const listing = {
+      ...state.listings.get("listing-fresh-1")!,
+      id: "listing-debut",
+      creatorId: creator.id,
+      stage: "soft_launch" as const,
+      risingEligibleAt: null,
+    };
+    state.listings.set(listing.id, listing);
+    const engine = new DiscoveryEngine(state);
+    const result = engine.transitionListing(listing.id, "rising_eligible", now);
+    expect(result.ok).toBe(true);
+    expect(result.listing?.stage).toBe("rising_eligible");
+
+    const second = {
+      ...listing,
+      id: "listing-debut-2",
+      stage: "soft_launch" as const,
+      risingEligibleAt: null,
+    };
+    state.listings.set(second.id, second);
+    const blocked = engine.transitionListing(second.id, "rising_eligible", now);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.errors).toContain("new_wallet_cooldown");
+  });
+
+  it("boosts never-shown Emerging over the same work after impressions", () => {
+    const state = buildSeedState();
+    const listing = state.listings.get("listing-fresh-1")!;
+    const creator = state.creators.get("artist-fresh")!;
+    const unseen = computeFirstLookBoost(
+      { ...listing, signals: { ...listing.signals, impressionsThisWeek: 0 } },
+      creator,
+    );
+    const seen = computeFirstLookBoost(
+      { ...listing, signals: { ...listing.signals, impressionsThisWeek: 80 } },
+      creator,
+    );
+    expect(unseen).toBeGreaterThan(seen);
+    expect(unseen).toBe(DISCOVERY_CONFIG.firstLook.neverShownBoost);
+  });
+
+  it("does not crush clean Emerging new wallets on spam risk", () => {
+    const state = buildSeedState();
+    const listing = state.listings.get("listing-fresh-1")!;
+    const young = {
+      ...state.creators.get("artist-fresh")!,
+      walletCreatedAt: Date.now() - 60 * 60 * 1000,
+    };
+    expect(computeSpamRiskInverse(listing, young)).toBeGreaterThan(0.7);
+  });
+
+  it("fills explore from the never-shown pool even when reserved would consume it", () => {
+    const state = buildSeedState();
+    const fake: RankedListing[] = [];
+    for (let i = 0; i < 8; i++) {
+      fake.push({
+        listing: {
+          ...state.listings.get("listing-fresh-1")!,
+          id: `tiny-${i}`,
+          creatorId: "artist-fresh",
+          signals: {
+            ...state.listings.get("listing-fresh-1")!.signals,
+            impressionsThisWeek: i === 0 ? 0 : 400 + i,
+          },
+        },
+        score: i === 0 ? 1 : 40 - i,
+        bucket: "rising",
+        emerging: true,
+        reasons: [],
+      });
+    }
+    const selected = applyEmergingQuota(fake, state.creators);
+    const explore = selected.filter((s) => s.reasons.includes("explore"));
+    expect(explore.length).toBeGreaterThan(0);
+    expect(explore.some((s) => s.listing.id === "tiny-0")).toBe(true);
   });
 });

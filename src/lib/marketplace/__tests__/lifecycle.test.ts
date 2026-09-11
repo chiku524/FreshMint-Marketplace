@@ -80,4 +80,18 @@ describe("stage helpers", () => {
       ),
     ).toMatch(/soft-launch/i);
   });
+
+  it("tells artists their first work auto-enters Rising", () => {
+    expect(
+      creatorLifecycleHint(
+        {
+          stage: "soft_launch",
+          tokenId: "1",
+          contractAddress: "0xabc",
+          mintTxHash: "0xmint",
+        },
+        false,
+      ),
+    ).toMatch(/first work auto-enters Rising/i);
+  });
 });

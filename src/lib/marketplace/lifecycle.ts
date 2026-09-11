@@ -70,10 +70,10 @@ export function creatorLifecycleHint(
     return "Minted draft — soft-launch to appear on Open Lane";
   }
   if (listing.stage === "soft_launch") {
-    return "Live on Open Lane — Rising is automatic once the wallet cooldown and weekly cap allow";
+    return "Live on Open Lane — your first work auto-enters Rising; later works wait out the new-wallet cooldown and weekly cap";
   }
   if (listing.stage === "rising_eligible") {
-    return "In Rising — traction can unlock Featured";
+    return "In Rising — collectors can find you without a Featured pin";
   }
   if (listing.stage === "featured_eligible") {
     return "Featured-eligible — Studio can pin it";

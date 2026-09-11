@@ -47,7 +47,14 @@ export function checkRisingRateLimit(creator: CreatorProfile): RateLimitResult {
 export function checkNewWalletCooldown(
   creator: CreatorProfile,
   now = Date.now(),
+  options?: { firstRisingLook?: boolean },
 ): RateLimitResult {
+  if (
+    options?.firstRisingLook &&
+    DISCOVERY_CONFIG.firstLook.skipWalletCooldown
+  ) {
+    return { allowed: true };
+  }
   const elapsed = now - creator.walletCreatedAt;
   const need = DISCOVERY_CONFIG.newWalletRisingCooldownMs;
   if (elapsed < need) {

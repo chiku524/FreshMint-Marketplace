@@ -31,7 +31,7 @@ import {
   selectLiveAuctionStrip,
 } from "./quotas";
 import { scoreListing } from "./scoring";
-import { advanceStage, collectionFeedSurface } from "./staging";
+import { advanceStage, collectionFeedSurface, isFirstRisingLook } from "./staging";
 import type { ViewerTaste } from "./taste";
 import type {
   Appeal,
@@ -270,8 +270,14 @@ export class DiscoveryEngine {
       return { ok: true, errors: [] as string[], listing };
     }
 
+    const firstRisingLook = isFirstRisingLook(
+      creator.id,
+      this.state.listings.values(),
+      listingId,
+    );
+
     if (target === "rising_eligible") {
-      const cooldown = checkNewWalletCooldown(creator, now);
+      const cooldown = checkNewWalletCooldown(creator, now, { firstRisingLook });
       if (!cooldown.allowed) {
         return { ok: false, errors: [cooldown.reason ?? "cooldown"] };
       }
@@ -292,6 +298,7 @@ export class DiscoveryEngine {
       creator,
       target,
       now,
+      { firstRisingLook },
     );
     if (!result.ok) return { ok: false, errors: result.errors };
 

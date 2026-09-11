@@ -77,8 +77,10 @@ export function excludeFeaturedDominantFromRising(
 }
 
 /**
- * Enforce Emerging quota, then a low-exposure explore slice,
- * then remaining slots by fairness ranker order.
+ * Guarantee a never-shown explore slice first, then fill the Emerging
+ * reserved quota, then remaining slots by fairness ranker order.
+ * Explore-first keeps debut work from being crowded out when the
+ * Emerging pool is small.
  */
 export function applyEmergingQuota(
   ranked: RankedListing[],
@@ -96,21 +98,12 @@ export function applyEmergingQuota(
   const selected: RankedListing[] = [];
   const usedIds = new Set<string>();
 
-  for (const item of emergingPool) {
-    if (selected.length >= budget.risingEmergingReserved) break;
-    if (usedIds.has(item.listing.id)) continue;
-    selected.push({ ...item, emerging: true, bucket: "rising" });
-    usedIds.add(item.listing.id);
-  }
-
-  const explorePool = emergingPool
-    .filter((r) => !usedIds.has(r.listing.id))
-    .sort((a, b) => {
-      const ia = a.listing.signals.impressionsThisWeek;
-      const ib = b.listing.signals.impressionsThisWeek;
-      if (ia !== ib) return ia - ib;
-      return a.listing.id.localeCompare(b.listing.id);
-    });
+  const explorePool = emergingPool.slice().sort((a, b) => {
+    const ia = a.listing.signals.impressionsThisWeek;
+    const ib = b.listing.signals.impressionsThisWeek;
+    if (ia !== ib) return ia - ib;
+    return a.listing.id.localeCompare(b.listing.id);
+  });
 
   let exploreTaken = 0;
   for (const item of explorePool) {
@@ -124,6 +117,16 @@ export function applyEmergingQuota(
     });
     usedIds.add(item.listing.id);
     exploreTaken += 1;
+  }
+
+  let reservedTaken = 0;
+  for (const item of emergingPool) {
+    if (reservedTaken >= budget.risingEmergingReserved) break;
+    if (selected.length >= budget.risingTotal) break;
+    if (usedIds.has(item.listing.id)) continue;
+    selected.push({ ...item, emerging: true, bucket: "rising" });
+    usedIds.add(item.listing.id);
+    reservedTaken += 1;
   }
 
   const remainder = [...emergingPool, ...generalPool]
