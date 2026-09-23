@@ -57,7 +57,7 @@ async function main() {
   const createKey = keypairFromSecret(secrets.treasury.solanaCreateKey);
   const members = secrets.treasury.solanaMembers.map((m) => ({
     key: new PublicKey(m.publicKey),
-    permissions: multisig.Permissions.all(),
+    permissions: multisig.types.Permissions.all(),
   }));
 
   const [multisigPda] = multisig.getMultisigPda({
