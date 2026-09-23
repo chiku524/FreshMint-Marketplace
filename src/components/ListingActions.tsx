@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  PLATFORM_FEE_PERCENT,
-  splitSaleProceeds,
-} from "@/lib/fees/platform";
+import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import type { Chain, NetworkId } from "@/lib/discovery/types";
 import { quoteNativeFromUsd, quotePayInFromUsdAt } from "@/lib/onchain/fx";
 import {
@@ -18,6 +15,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 
 const PAY_LABELS: Record<string, string> = {
   ethereum: "Ethereum (ETH)",
@@ -132,9 +131,15 @@ export function ListingActions({
   );
   const [paymentAddress, setPaymentAddress] = useState<string | null>(null);
   const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
+  const [bridgeFeeUsd, setBridgeFeeUsd] = useState<string | null>(null);
+  const [bridgeEstimatedOutput, setBridgeEstimatedOutput] = useState<
+    string | null
+  >(null);
+  const [bridgeQuoteRequestId, setBridgeQuoteRequestId] = useState<
+    string | null
+  >(null);
+  const [bridgeQuoteLoading, setBridgeQuoteLoading] = useState(false);
 
-  const feePreview =
-    priceUsd != null && priceUsd > 0 ? splitSaleProceeds(priceUsd) : null;
   const settleQuote = useMemo(() => {
     if (priceUsd == null || !(priceUsd > 0)) return null;
     return quoteNativeFromUsd(priceUsd, chain);
@@ -170,12 +175,33 @@ export function ListingActions({
   useEffect(() => {
     if (!confirmBuy || !priceUsd) return;
     let cancelled = false;
+    const cross = payNetwork !== listingNetwork;
+    // Live Relay fee quotes require a connected payment wallet (P1).
+    const canLiveBridge = cross && Boolean(paymentAddress);
     setQuoteBusy(true);
+    setBridgeQuoteLoading(canLiveBridge);
+    if (cross && !paymentAddress) {
+      setBridgeFeeUsd(null);
+      setBridgeEstimatedOutput(null);
+      setBridgeQuoteRequestId(null);
+    }
+    if (!cross) {
+      setBridgeFeeUsd(null);
+      setBridgeEstimatedOutput(null);
+      setBridgeQuoteRequestId(null);
+      setBridgeQuoteLoading(false);
+    }
     void fetch("/api/purchase/quote", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listingId, payNetwork }),
+      body: JSON.stringify({
+        listingId,
+        payNetwork,
+        ...(canLiveBridge && paymentAddress
+          ? { buyerPaymentAddress: paymentAddress }
+          : {}),
+      }),
     })
       .then(async (res) => {
         const data = await res.json();
@@ -189,6 +215,9 @@ export function ListingActions({
             setMsg("sign_in");
           }
           setServerPayFormatted(null);
+          setBridgeFeeUsd(null);
+          setBridgeEstimatedOutput(null);
+          setBridgeQuoteRequestId(null);
           return;
         }
         if (Array.isArray(data.payNetworks)) {
@@ -196,17 +225,45 @@ export function ListingActions({
         }
         const pay = data.quote?.pay?.formatted as string | undefined;
         setServerPayFormatted(pay ?? null);
+        const bridge = data.bridge as
+          | {
+              feeUsd?: string;
+              estimatedOutput?: string;
+              requestId?: string;
+            }
+          | null
+          | undefined;
+        if (bridge) {
+          setBridgeFeeUsd(bridge.feeUsd ?? null);
+          setBridgeEstimatedOutput(bridge.estimatedOutput ?? null);
+          setBridgeQuoteRequestId(bridge.requestId ?? null);
+        } else if (canLiveBridge) {
+          // Live quote attempted but feeUsd missing — still allow Bridge & buy.
+          setBridgeFeeUsd(null);
+          setBridgeEstimatedOutput(null);
+          setBridgeQuoteRequestId(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setServerPayFormatted(null);
+        if (!cancelled) {
+          setServerPayFormatted(null);
+          if (canLiveBridge) {
+            setBridgeFeeUsd(null);
+            setBridgeEstimatedOutput(null);
+            setBridgeQuoteRequestId(null);
+          }
+        }
       })
       .finally(() => {
-        if (!cancelled) setQuoteBusy(false);
+        if (!cancelled) {
+          setQuoteBusy(false);
+          setBridgeQuoteLoading(false);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [confirmBuy, listingId, payNetwork, priceUsd]);
+  }, [confirmBuy, listingId, payNetwork, priceUsd, paymentAddress, listingNetwork]);
 
   async function post(url: string, body: Record<string, unknown>) {
     const res = await fetch(url, {
@@ -258,6 +315,9 @@ export function ListingActions({
     setPaymentAddress(null);
     setReceiveAddress(null);
     setServerPayFormatted(null);
+    setBridgeFeeUsd(null);
+    setBridgeEstimatedOutput(null);
+    setBridgeQuoteRequestId(null);
     if (listingNetwork === "boing") {
       setPayNetworks(["boing"]);
     } else {
@@ -657,18 +717,28 @@ export function ListingActions({
               </span>
             ) : null}
           </p>
-          {feePreview ? (
-            <p
-              style={{
-                margin: "0 0 0.65rem",
-                color: "var(--ink-muted)",
-                fontSize: "0.8rem",
-                lineHeight: 1.45,
+          <p
+            style={{
+              margin: "0 0 0.45rem",
+              color: "var(--ink-muted)",
+              fontSize: "0.8rem",
+              lineHeight: 1.45,
+            }}
+          >
+            Lands in your {chain} wallet.
+          </p>
+          <PlatformFeeBreakdown priceUsd={priceUsd} />
+          {crossChain ? (
+            <BridgeQuoteSummary
+              feeUsd={bridgeFeeUsd}
+              estimatedOutput={bridgeEstimatedOutput}
+              requestId={bridgeQuoteRequestId}
+              loading={bridgeQuoteLoading}
+              needsWallet={!paymentAddress}
+              onConnectWallet={() => {
+                void connectWallets();
               }}
-            >
-              Lands in your {chain} wallet. {PLATFORM_FEE_PERCENT.total}% treasury
-              · seller ${feePreview.sellerNetUsd.toFixed(2)}.
-            </p>
+            />
           ) : null}
 
           <ol

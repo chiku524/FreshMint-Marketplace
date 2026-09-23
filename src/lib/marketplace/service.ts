@@ -2161,9 +2161,12 @@ export async function purchaseListing(input: {
 export async function quoteCryptoPurchase(input: {
   listingId: string;
   payNetwork: NetworkId;
+  /** Live Relay quotes require a connected payment wallet address. */
+  buyerPaymentAddress?: string;
 }) {
   const {
     assertCryptoPayAllowed,
+    buildCrossChainPayQuote,
     listingIsMinted,
     payNetworksForListing,
     publicPayQuote,
@@ -2196,6 +2199,48 @@ export async function quoteCryptoPurchase(input: {
     payNetwork: input.payNetwork,
   });
   const bridged = input.payNetwork !== listing.network;
+  const settlementAddress = settlementAddressFor(listing.network);
+
+  let bridge: {
+    requestId?: string;
+    fromNetwork?: string;
+    toNetwork?: string;
+    amount?: string;
+    estimatedOutput?: string;
+    feeUsd?: string;
+  } | null = null;
+  let needsPaymentAddress = false;
+
+  if (bridged) {
+    if (!input.buyerPaymentAddress) {
+      // FX-only until the payment wallet is connected (P1: no Relay without wallet).
+      needsPaymentAddress = true;
+    } else {
+      try {
+        const live = await buildCrossChainPayQuote({
+          listingNetwork: listing.network,
+          payNetwork: input.payNetwork,
+          amountUsd,
+          buyerPaymentAddress: input.buyerPaymentAddress,
+          settlementAddress,
+        });
+        if (live.bridge) {
+          bridge = {
+            requestId: live.bridge.requestId,
+            fromNetwork: live.bridge.fromNetwork,
+            toNetwork: live.bridge.toNetwork,
+            amount: live.bridge.amount,
+            estimatedOutput: live.bridge.estimatedOutput,
+            feeUsd: live.bridge.feeUsd,
+          };
+        }
+      } catch {
+        // feeUsd is best-effort — still return FX quote so checkout can proceed.
+        bridge = null;
+      }
+    }
+  }
+
   return {
     ok: true as const,
     listingId: listing.id,
@@ -2205,12 +2250,14 @@ export async function quoteCryptoPurchase(input: {
     payNetworks: payNetworksForListing(listing.network),
     amountUsd,
     fees: splitSaleProceeds(amountUsd),
-    settlementAddress: settlementAddressFor(listing.network),
+    settlementAddress,
     quote: publicPayQuote({
       settle: quotes.settle,
       pay: quotes.pay,
       bridged,
     }),
+    bridge,
+    needsPaymentAddress,
   };
 }
 

@@ -121,6 +121,9 @@ export function buildSolanaPurchaseIntent(input: {
     mode: "memo_fallback";
   };
 } {
+  // Legacy memo-only buy intent. Primary marketplace settlement uses
+  // PLATFORM_FEE_BPS (0.5% treasury) via splitSaleProceeds — not this path.
+  // Mirrors optional on-chain EVM buy() 2.5% (1.5% treasury + 1% operator).
   const feeBps = { treasury: 150, operator: 100, total: 250 };
   const memo = JSON.stringify({
     kind: "freshmint_buy",

@@ -45,12 +45,12 @@ Creates stay on FreshMint; **primary buys are crypto-only** with ownership at pu
 
 ## Platform fees (primary sales)
 
-Every purchase takes a **3%** treasury fee from the listed price (buyer still pays the listed amount):
+Every purchase takes a **0.5%** treasury fee from the listed price (buyer still pays the listed amount):
 
 | Share | BPS | Recipient |
 |-------|-----|-----------|
-| 3%    | 300 | Marketplace treasury — community, events, and future updates (EVM Safe 2-of-3 + Solana Squads vault) |
-| 97%   | —   | Seller |
+| 0.5%  | 50  | Marketplace treasury — community, events, and future updates (EVM Safe 2-of-3 + Solana Squads vault) |
+| 99.5% | —   | Seller |
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 
@@ -63,7 +63,7 @@ npm run wallets:deploy-squads
 
 Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
-Platform sales record the 3% split on each `Purchase` row. Primary checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
+Platform sales record the 0.5% split on each `Purchase` row. Primary checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
 
 ## Bridge
 

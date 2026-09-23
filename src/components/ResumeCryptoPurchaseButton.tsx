@@ -8,6 +8,7 @@ import {
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
+import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -35,6 +36,13 @@ export function ResumeCryptoPurchaseButton({
   const [msg, setMsg] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
   const [doneHash, setDoneHash] = useState<string | null>(null);
+  const [confirmResume, setConfirmResume] = useState(false);
+  const [bridgeFeeUsd, setBridgeFeeUsd] = useState<string | null>(null);
+  const [bridgeEstimatedOutput, setBridgeEstimatedOutput] = useState<
+    string | null
+  >(null);
+  const [bridgeLoading, setBridgeLoading] = useState(false);
+  const [crossChainResume, setCrossChainResume] = useState(false);
 
   if (cancelled) {
     return (
@@ -56,6 +64,58 @@ export function ResumeCryptoPurchaseButton({
         ) : null}
       </span>
     );
+  }
+
+  async function peekBridgeQuote() {
+    setBridgeLoading(true);
+    setMsg(null);
+    try {
+      const resumePeek = await fetch("/api/purchase/resume", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purchaseId }),
+      });
+      const peek = await resumePeek.json();
+      if (!resumePeek.ok) throw new Error(peek.error || "resume_failed");
+      const payNet = String(peek.payNetwork || network || "ethereum");
+      const listingNet = String(peek.network || network || "ethereum");
+      const cross = payNet !== listingNet;
+      setCrossChainResume(cross);
+      if (!cross || peek.status !== "pending_payment") {
+        setBridgeFeeUsd(null);
+        setBridgeEstimatedOutput(null);
+        return;
+      }
+      const addr = await requestBuyerAddress(vmForNetwork(payNet));
+      if (!addr) {
+        setMsg("Connect your payment wallet to see the Relay fee");
+        return;
+      }
+      const resumeRes = await fetch("/api/purchase/resume", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          purchaseId,
+          buyerPaymentAddress: addr,
+        }),
+      });
+      const data = await resumeRes.json();
+      if (!resumeRes.ok) throw new Error(data.error || "resume_failed");
+      const bridge = data.bridge as
+        | { feeUsd?: string; estimatedOutput?: string }
+        | null
+        | undefined;
+      setBridgeFeeUsd(bridge?.feeUsd ?? null);
+      setBridgeEstimatedOutput(bridge?.estimatedOutput ?? null);
+      setCrossChainResume(Boolean(data.bridge) || cross);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "quote_failed");
+      setBridgeFeeUsd(null);
+    } finally {
+      setBridgeLoading(false);
+    }
   }
 
   async function onResume() {
@@ -222,6 +282,7 @@ export function ResumeCryptoPurchaseButton({
         if (!done.ok) throw new Error(doneData.error || "transfer_confirm_failed");
         setDoneHash(transferHash);
         setMsg(null);
+        setConfirmResume(false);
       }
 
       router.refresh();
@@ -261,31 +322,101 @@ export function ResumeCryptoPurchaseButton({
         ? "Finish transfer"
         : "Resume purchase";
 
+  if (!confirmResume) {
+    return (
+      <span style={{ display: "inline-flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+        <button
+          type="button"
+          className="badge featured"
+          disabled={busy}
+          style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
+          onClick={() => {
+            setConfirmResume(true);
+            setMsg(null);
+            if (status === "pending_payment") {
+              void peekBridgeQuote();
+            }
+          }}
+        >
+          {label}
+        </button>
+        {allowCancel && status === "pending_payment" ? (
+          <button
+            type="button"
+            className="badge"
+            disabled={busy}
+            style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
+            onClick={() => void onCancel()}
+          >
+            Cancel checkout
+          </button>
+        ) : null}
+        {msg ? (
+          <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
+        ) : null}
+      </span>
+    );
+  }
+
   return (
-    <span style={{ display: "inline-flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
-      <button
-        type="button"
-        className="badge featured"
-        disabled={busy}
-        style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
-        onClick={() => void onResume()}
-      >
-        {busy ? "Resuming…" : label}
-      </button>
-      {allowCancel && status === "pending_payment" ? (
+    <div
+      style={{
+        display: "grid",
+        gap: "0.45rem",
+        maxWidth: "22rem",
+        padding: "0.65rem 0.75rem",
+        border: "1px solid var(--line)",
+        background: "var(--panel-solid)",
+      }}
+    >
+      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink)" }}>
+        Confirm before continuing — this resumes an irreversible wallet step.
+      </p>
+      {status === "pending_payment" && crossChainResume ? (
+        <BridgeQuoteSummary
+          feeUsd={bridgeFeeUsd}
+          estimatedOutput={bridgeEstimatedOutput}
+          loading={bridgeLoading}
+          needsWallet={false}
+        />
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+        <button
+          type="button"
+          className="badge featured"
+          disabled={busy}
+          style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
+          onClick={() => void onResume()}
+        >
+          {busy ? "Resuming…" : `Confirm · ${label}`}
+        </button>
         <button
           type="button"
           className="badge"
           disabled={busy}
           style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
-          onClick={() => void onCancel()}
+          onClick={() => {
+            setConfirmResume(false);
+            setMsg(null);
+          }}
         >
-          Cancel checkout
+          Back
         </button>
-      ) : null}
+        {allowCancel && status === "pending_payment" ? (
+          <button
+            type="button"
+            className="badge"
+            disabled={busy}
+            style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
+            onClick={() => void onCancel()}
+          >
+            Cancel checkout
+          </button>
+        ) : null}
+      </div>
       {msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
       ) : null}
-    </span>
+    </div>
   );
 }

@@ -1,5 +1,4 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { getRelayStatus } from "@/lib/bridge/relay";
 import { prisma } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/db-ready";
 import { NextRequest, NextResponse } from "next/server";
@@ -22,21 +21,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  let status = "submitted";
-  let raw: unknown = {};
-  if (body.data.requestId) {
-    try {
-      const s = await getRelayStatus(body.data.requestId);
-      status = s.status.toLowerCase().includes("success")
-        ? "completed"
-        : s.status.toLowerCase().includes("fail")
-          ? "failed"
-          : s.status || "submitted";
-      raw = s.raw;
-    } catch {
-      status = "submitted";
-    }
-  }
+  // Fire-and-forget after wallet submit: do not Relay-poll when status is submitted.
+  const status = "submitted";
 
   await ensureDatabaseReady();
   const { isMemoryMode } = await import("@/lib/data/memory-store");
@@ -47,7 +33,6 @@ export async function POST(req: NextRequest) {
         status,
         requestId: body.data.requestId ?? undefined,
         txHashesJson: JSON.stringify(body.data.txHashes),
-        quoteJson: JSON.stringify(raw),
       },
     });
   }

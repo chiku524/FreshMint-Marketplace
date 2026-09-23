@@ -1,6 +1,7 @@
 "use client";
 
 import { TraitEditor } from "@/components/TraitEditor";
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import type { NftTrait } from "@/lib/discovery/types";
 import {
   COLLECTION_MEDIA_CAP_BYTES,
@@ -908,6 +909,12 @@ export function CreateWizard() {
                   onChange={(e) => setPriceUsd(e.target.value)}
                   style={fieldStyle}
                 />
+                <span style={{ display: "block", marginTop: "0.35rem" }}>
+                  <PlatformFeeBreakdown
+                    priceUsd={Number(priceUsd) > 0 ? Number(priceUsd) : null}
+                    compact
+                  />
+                </span>
               </label>
             </div>
           </>
@@ -991,6 +998,12 @@ export function CreateWizard() {
                     onChange={(e) => setPriceUsd(e.target.value)}
                     style={fieldStyle}
                   />
+                  <span style={{ display: "block", marginTop: "0.35rem" }}>
+                    <PlatformFeeBreakdown
+                      priceUsd={Number(priceUsd) > 0 ? Number(priceUsd) : null}
+                      compact
+                    />
+                  </span>
                 </label>
                 <label>
                   Medium
@@ -1194,7 +1207,15 @@ export function CreateWizard() {
               ) : null}
               <div>
                 <dt>Price</dt>
-                <dd>${priceUsd}</dd>
+                <dd>
+                  ${priceUsd}
+                  <div style={{ marginTop: "0.35rem" }}>
+                    <PlatformFeeBreakdown
+                      priceUsd={Number(priceUsd) > 0 ? Number(priceUsd) : null}
+                      compact
+                    />
+                  </div>
+                </dd>
               </div>
               <div>
                 <dt>Files</dt>

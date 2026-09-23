@@ -34,6 +34,8 @@ export const purchaseConfirmSchema = z.object({
 export const purchaseQuoteSchema = z.object({
   listingId: z.string().trim().min(1),
   payNetwork: networkId,
+  /** Required for a live Relay fee quote when payNetwork !== listing network. */
+  buyerPaymentAddress: z.string().trim().min(1).optional(),
 });
 
 export const prepareBodySchema = z.object({

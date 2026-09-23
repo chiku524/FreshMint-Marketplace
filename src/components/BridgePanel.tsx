@@ -1,6 +1,7 @@
 "use client";
 
 import { sendEvmWalletTx } from "@/lib/onchain/wallet-client";
+import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { useEffect, useState, type CSSProperties } from "react";
 
 type NetworkOption = {
@@ -262,17 +263,11 @@ export function BridgePanel() {
       </div>
 
       {quote ? (
-        <div style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-          {quote.estimatedOutput ? (
-            <div>Est. output: {quote.estimatedOutput}</div>
-          ) : null}
-          {quote.feeUsd ? <div>Fee ≈ ${quote.feeUsd}</div> : null}
-          {quote.requestId ? (
-            <div style={{ wordBreak: "break-all" }}>
-              Request: {quote.requestId}
-            </div>
-          ) : null}
-        </div>
+        <BridgeQuoteSummary
+          feeUsd={quote.feeUsd}
+          estimatedOutput={quote.estimatedOutput}
+          requestId={quote.requestId}
+        />
       ) : null}
 
       {status ? (

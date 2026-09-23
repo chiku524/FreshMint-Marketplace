@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const result = await quoteCryptoPurchase({
     listingId: body.data.listingId,
     payNetwork: body.data.payNetwork,
+    buyerPaymentAddress: body.data.buyerPaymentAddress,
   });
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
