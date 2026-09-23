@@ -68,6 +68,9 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M5 15.8L12 19l7-3.2" />
     </>
   ),
+  trending: (
+    <path d="M12 3.6c.5 2.3-.7 3.7-1.7 4.9 1.1-.7 2.4-.4 3.1.9 1.5 2.1 1 5.1-.9 6.7-1.7 1.4-4.3 1.3-5.8-.4-1.6-1.8-1.5-4.5-.1-6.3.7 1.2 1.8 1.6 1.8 1.6.1-2.3 1.6-4.6 3.6-7.4Z" />
+  ),
   shelves: (
     <>
       <path d="M4.5 7h15M4.5 12h15M4.5 17h15" />
@@ -173,6 +176,7 @@ export const NAV_ITEM_ICON: Record<string, string> = {
   "/auctions": "auctions",
   "/calendar": "calendar",
   "/collections": "collections",
+  "/trending": "trending",
   "/shelves": "shelves",
   "/docs": "docs",
   "/create": "create",

@@ -6,6 +6,7 @@ import { BrandMark } from "@/components/MintLeaf";
 import { LogoIntroSplash } from "@/components/LogoIntroSplashLoader";
 import { PageEngraveBackground } from "@/components/PageEngraveBackground";
 import { ReplayIntroButton } from "@/components/ReplayIntroButton";
+import { DiscoverySidebar } from "@/components/DiscoverySidebar";
 import { SiteNav } from "@/components/SiteNav";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
 import "./globals.css";
@@ -69,18 +70,23 @@ export default async function RootLayout({
             </div>
             <SiteNav signedIn={Boolean(initialUser)} area="account" />
           </header>
-          <main style={{ flex: 1 }}>{children}</main>
-          <footer className="site-footer">
-            <span>
-              Attention is scarce. Emerging artists get a coded quota — not a
-              slogan.
-            </span>
-            <span className="site-footer__links">
-              <Link href="/docs#settlement">How it works</Link>
-              <Link href="/docs#discovery">Discovery</Link>
-              <ReplayIntroButton />
-            </span>
-          </footer>
+          <div className="site-frame">
+            <DiscoverySidebar />
+            <div className="site-frame__main">
+              <main style={{ flex: 1 }}>{children}</main>
+              <footer className="site-footer">
+                <span>
+                  Attention is scarce. Emerging artists get a coded quota — not a
+                  slogan.
+                </span>
+                <span className="site-footer__links">
+                  <Link href="/docs#settlement">How it works</Link>
+                  <Link href="/docs#discovery">Discovery</Link>
+                  <ReplayIntroButton />
+                </span>
+              </footer>
+            </div>
+          </div>
         </div>
       </body>
     </html>
