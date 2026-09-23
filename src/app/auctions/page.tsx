@@ -39,7 +39,7 @@ function DiscoverLinks() {
       <Link href="/calendar" className="badge">
         Calendar
       </Link>
-      <Link href="/create" className="badge">
+      <Link href="/create?intent=auction" className="badge">
         Schedule an auction
       </Link>
     </p>
@@ -78,10 +78,10 @@ export default async function AuctionsPage() {
             No auctions live or cleared yet
           </h2>
           <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
-            This lane stays empty until a creator schedules a window from Create
-            and collectors finish a primary sale. We do not invent live auctions.
-            Browse discovery lanes meanwhile, or check the calendar for upcoming
-            starts.
+            This lane stays empty until a creator schedules a timed window and
+            collectors finish a primary sale. We do not invent live auctions.
+            Start from Create with the auction intent, or browse discovery /
+            calendar while you wait for the first window.
           </p>
           <DiscoverLinks />
         </section>

@@ -1,5 +1,6 @@
 import { CreateWizard } from "@/components/CreateWizard";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
+import { Suspense } from "react";
 
 export default function CreatePage() {
   return (
@@ -13,7 +14,13 @@ export default function CreatePage() {
         and receive the NFT at purchase.
       </p>
       <HowItWorksNote kind="create" />
-      <CreateWizard />
+      <Suspense
+        fallback={
+          <p style={{ color: "var(--ink-muted)" }}>Loading create wizard…</p>
+        }
+      >
+        <CreateWizard />
+      </Suspense>
     </div>
   );
 }

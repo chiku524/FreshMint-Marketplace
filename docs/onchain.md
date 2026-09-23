@@ -70,10 +70,20 @@ Platform sales record the 0.5% split on each `Purchase` row. Primary checkout se
 Creators can pay a fixed **$15 USD** promotional fee (native-quoted) to activate Featured placement for a listing. Payment goes to the same public treasury addresses as primary sale fees (`NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS` / `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`). Rising / Open Lane scoring is never affected.
 
 - Prepare: `POST /api/listings/[id]/boost` with `{ payNetwork, fromAddress }` → returns `walletTx` + quote
-- Confirm: `POST /api/listings/[id]/boost/confirm` with `{ payNetwork, txHash }` → sets `featuredBoostedAt` after hash validation (optional live RPC verify via `FEATURED_BOOST_REQUIRE_CONFIRM`)
+- Confirm: `POST /api/listings/[id]/boost/confirm` with `{ payNetwork, txHash }` → sets `featuredBoostedAt` after hash validation
+- Set `FEATURED_BOOST_REQUIRE_CONFIRM=true` in production so soft-accept of unverified hashes is off (live on Vercel)
 - UI: `FeaturedBoostButton` on the listing page (owner only)
 
-Treasury Safe / Squads must be deployed and funded separately (`npm run wallets:deploy-safe`, `npm run wallets:deploy-squads`).
+### Treasury deploy status (testnets)
+
+| Chain | Multisig | Address | Status |
+|-------|----------|---------|--------|
+| Ethereum Sepolia | Safe 2-of-3 | `0x6E481562F3ecC39405Dc8F8B17F6c754B36D0C14` | Deployed |
+| Solana Devnet | Squads vault | `96rDHepuNiz1eDDMikrkHqtM51Sw8s6miUxKhwtTn7YR` | Deployed |
+
+Operator EOAs (constructor leftovers / ops): EVM `0xc1AE84cEc6839683D562aC9011ADF21c31A3f869`, Solana `QzQR6DPw8VD5uU47uiAJYA95jt61ExFNHXhC3EF6MDY`.
+
+New EVM collections pick treasury + operator from env at deploy time. Redeploy or call `setFeeRecipients` on older markets when you migrate chains. Mainnet Safe / Squads still need a separate funded deploy when you leave testnets.
 
 ## Bridge
 

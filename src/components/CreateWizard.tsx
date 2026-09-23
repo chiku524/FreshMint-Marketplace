@@ -18,7 +18,7 @@ import {
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
   useMemo,
@@ -99,6 +99,7 @@ function stepDefs(intent: Intent | null) {
 
 export function CreateWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const now = Date.now();
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -143,6 +144,17 @@ export function CreateWizard() {
   const usedBytes =
     (selected?.mediaBytes ?? 0) + pieces.reduce((sum, item) => sum + item.size, 0);
   const piecesBytes = pieces.reduce((sum, item) => sum + item.size, 0);
+
+
+  useEffect(() => {
+    const raw = searchParams.get("intent");
+    if (raw === "drop" || raw === "single" || raw === "auction") {
+      setIntent(raw);
+      // Skip the intent picker when deep-linked from Auctions / Calendar.
+      setStepIndex((idx) => (idx === 0 ? 1 : idx));
+    }
+  }, [searchParams]);
+
 
   function loadMine() {
     void fetch("/api/collections?mine=1", { credentials: "include" })

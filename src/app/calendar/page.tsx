@@ -65,7 +65,7 @@ export default async function CalendarPage() {
       {cal.openEditions.filter((e) => e.status !== "ended").length === 0 ? (
         <p style={{ color: "var(--ink-muted)", margin: "1rem 0 2.5rem" }}>
           No live or upcoming open editions. Schedule one from{" "}
-          <Link href="/create">Create</Link>.
+          <Link href="/create?intent=drop">Create</Link>.
         </p>
       ) : (
       <PuzzleRail style={{ margin: "1rem 0 2.5rem" }}>
@@ -92,7 +92,7 @@ export default async function CalendarPage() {
       </h2>
       {cal.auctions.filter((e) => e.status !== "ended").length === 0 ? (
         <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
-          No live or upcoming auctions.
+          No live or upcoming auctions. Schedule one from <Link href="/create?intent=auction">Create</Link>.
         </p>
       ) : (
       <PuzzleRail style={{ marginTop: "1rem" }}>
