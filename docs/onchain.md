@@ -65,6 +65,16 @@ Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOL
 
 Platform sales record the 0.5% split on each `Purchase` row. Primary checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
 
+## Featured boost
+
+Creators can pay a fixed **$15 USD** promotional fee (native-quoted) to activate Featured placement for a listing. Payment goes to the same public treasury addresses as primary sale fees (`NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS` / `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`). Rising / Open Lane scoring is never affected.
+
+- Prepare: `POST /api/listings/[id]/boost` with `{ payNetwork, fromAddress }` → returns `walletTx` + quote
+- Confirm: `POST /api/listings/[id]/boost/confirm` with `{ payNetwork, txHash }` → sets `featuredBoostedAt` after hash validation (optional live RPC verify via `FEATURED_BOOST_REQUIRE_CONFIRM`)
+- UI: `FeaturedBoostButton` on the listing page (owner only)
+
+Treasury Safe / Squads must be deployed and funded separately (`npm run wallets:deploy-safe`, `npm run wallets:deploy-squads`).
+
 ## Bridge
 
 - UI: `/bridge`

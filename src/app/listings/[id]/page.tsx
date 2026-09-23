@@ -260,6 +260,7 @@ export default async function ListingDetailPage({
             <FeaturedBoostButton
               listingId={listing.id}
               alreadyBoosted={listing.featuredBoostedAt != null}
+              defaultNetwork={listing.network}
             />
           ) : null}
 

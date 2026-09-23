@@ -1,14 +1,14 @@
 import { getSessionUser } from "@/lib/auth/session";
 import {
-  boostPrepareSchema,
+  boostConfirmSchema,
   readJsonBody,
 } from "@/lib/marketplace/boost-request";
-import { prepareFeaturedBoost } from "@/lib/marketplace/featured-boost";
+import { confirmFeaturedBoost } from "@/lib/marketplace/featured-boost";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-/** Prepare Featured boost treasury payment (does not activate the boost). */
+/** Confirm Featured boost after native payment to the platform treasury. */
 export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -18,16 +18,16 @@ export async function POST(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  const body = boostPrepareSchema.safeParse(await readJsonBody(req));
+  const body = boostConfirmSchema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const result = await prepareFeaturedBoost({
+  const result = await confirmFeaturedBoost({
     actorId: user.id,
     listingId: id,
     payNetwork: body.data.payNetwork,
-    fromAddress: body.data.fromAddress,
+    txHash: body.data.txHash,
   });
   if (!result.ok) {
     const status =
