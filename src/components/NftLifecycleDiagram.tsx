@@ -84,7 +84,7 @@ const STEPS: Step[] = [
     realm: "chain",
     x: 500,
     y: 368,
-    body: "The NFT transfers into your wallet at purchase. Your collection tracks explorer links. Withdraw remains only for older USD holds.",
+    body: "The already-minted NFT transfers into your wallet at purchase (mint happened at publish). Withdraw is only for older USD holds.",
   },
 ];
 
@@ -205,7 +205,7 @@ export function NftLifecycleDiagram() {
             Platform ledger
           </text>
           <text className="nft-flow__realm-label is-chain" x="44" y="344">
-            Wallet mint
+            On-chain (mint / transfer)
           </text>
           <path className="nft-flow__path-base" d={pathD} />
           {steps.slice(1).map((node, i) => {

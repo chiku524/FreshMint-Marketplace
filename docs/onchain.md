@@ -33,6 +33,8 @@ Creates stay on FreshMint; **primary buys are crypto-only** with ownership at pu
 | Buy (cross-chain) | Relay bridge + NFT transfer on listing chain | Collector |
 | Withdraw | Legacy USD holds only | Collector |
 
+**Withdraw is not mint.** Mint happens at publish (step 2). Crypto buys transfer that NFT at purchase (step 3). Withdraw remains only for older USD holds that never settled on-chain. The `withdrawnAt` purchase field means ownership was delivered — not that a mint ran.
+
 **Cross-chain:** Relay covers EVM natives ↔ Solana (e.g. pay ETH for a Solana NFT). **Boing is not on Relay** — Boing listings are same-chain BOING only.
 
 - **EVM:** Deploy bytecode from `src/lib/onchain/evm-artifacts/freshMintErc721Bytecode.ts`. Mint URI should point at media (Blob URL). Settlement prefers escrow `transferFrom` over listing `buy()`.

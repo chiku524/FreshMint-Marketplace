@@ -24,8 +24,8 @@ const NOTES: Record<
     text: `This buy pays native (or bridges via Relay) and transfers the NFT to your wallet. ${PLATFORM_FEE_PERCENT.total}% treasury.`,
   },
   collect: {
-    href: "/docs#withdraw",
-    text: "New buys already land in your wallet. Withdraw remains for legacy USD holds only.",
+    href: "/docs#ownership",
+    text: "Mint at publish; buys transfer that NFT to your wallet. Withdraw is legacy USD holds only.",
   },
   funds: {
     href: "/docs#settlement",

@@ -24,9 +24,9 @@ const TOC = [
     blurb: `${PLATFORM_FEE_PERCENT.total}% treasury. Seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%.`,
   },
   {
-    id: "withdraw",
+    id: "ownership",
     label: "Ownership",
-    blurb: "New buys land in your wallet. Withdraw is for legacy holds.",
+    blurb: "Mint happens at publish. Buys transfer that NFT — withdraw is legacy only.",
   },
   {
     id: "discovery",
@@ -38,7 +38,9 @@ const TOC = [
 type SectionId = (typeof TOC)[number]["id"];
 
 function readSection(): SectionId {
-  const id = window.location.hash.replace(/^#/, "");
+  const raw = window.location.hash.replace(/^#/, "");
+  // Old links used #withdraw for this section — treat as ownership.
+  const id = raw === "withdraw" ? "ownership" : raw;
   return TOC.some((item) => item.id === id) ? (id as SectionId) : "flow";
 }
 
@@ -98,8 +100,8 @@ export function DocsGuide() {
             maxWidth: "42ch",
           }}
         >
-          Collect on FreshMint with crypto. Creators mint when they publish;
-          buyers receive the NFT in-wallet at purchase.
+          Collect on FreshMint with crypto. Creators deploy a collection and mint
+          at publish; buyers receive that NFT in-wallet at purchase — not at withdraw.
         </p>
       </header>
 
@@ -202,19 +204,23 @@ export function DocsGuide() {
           </section>
           ) : null}
 
-          {active === "withdraw" ? (
-          <section id="withdraw">
+          {active === "ownership" ? (
+          <section id="ownership">
             <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
               Ownership
             </h2>
+            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+              <strong style={{ color: "var(--ink)" }}>Minting is not tied to withdraw.</strong>{" "}
+              Creators mint when they publish into the collection contract. Collectors
+              who buy with crypto receive that already-minted NFT in their wallet when
+              the purchase confirms — no second mint step.
+            </p>
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
-              Crypto purchases transfer the already-minted token to your wallet
-              when the buy confirms. Open{" "}
-              <Link href="/me">your collection</Link> to resume an interrupted
-              checkout or see explorer links.{" "}
+              Open <Link href="/me">your collection</Link> for explorer links or to
+              resume an interrupted checkout.{" "}
               <strong style={{ color: "var(--ink)" }}>Withdraw to wallet</strong>{" "}
-              remains only for older USD holds. Link a matching wallet in{" "}
-              <Link href="/me/settings">Settings</Link>.
+              is only for older USD holds that never settled on-chain at purchase.
+              Link a matching wallet in <Link href="/me/settings">Settings</Link>.
             </p>
           </section>
           ) : null}
