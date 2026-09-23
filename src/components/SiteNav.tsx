@@ -30,6 +30,7 @@ const GROUPS: NavGroup[] = [
       { href: "/auctions", label: "Auctions" },
       { href: "/calendar", label: "Calendar" },
       { href: "/collections", label: "Collections" },
+      { href: "/trending", label: "Trending NFTs" },
       { href: "/shelves", label: "Shelves" },
       { href: "/docs", label: "How it works" },
     ],
