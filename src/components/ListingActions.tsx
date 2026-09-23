@@ -139,6 +139,10 @@ export function ListingActions({
     string | null
   >(null);
   const [bridgeQuoteLoading, setBridgeQuoteLoading] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(
+    undefined,
+  );
+  const signInHref = `/sign-in?next=${encodeURIComponent(`/listings/${listingId}`)}`;
 
   const settleQuote = useMemo(() => {
     if (priceUsd == null || !(priceUsd > 0)) return null;
@@ -171,6 +175,24 @@ export function ListingActions({
   useEffect(() => {
     if (pendingPurchase) setHeldPurchase(pendingPurchase);
   }, [pendingPurchase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me", { credentials: "include" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (cancelled) return;
+        setSessionUserId(
+          data.user && typeof data.user.id === "string" ? data.user.id : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSessionUserId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!confirmBuy || !priceUsd) return;
@@ -309,6 +331,25 @@ export function ListingActions({
 
   async function openCheckout() {
     setMsg(null);
+    // Prefer FreshMint session before wallet connect for purchase.
+    let signedIn = sessionUserId;
+    if (signedIn === undefined) {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        const data = await res.json();
+        signedIn =
+          data.user && typeof data.user.id === "string" ? data.user.id : null;
+        setSessionUserId(signedIn);
+      } catch {
+        signedIn = null;
+        setSessionUserId(null);
+      }
+    }
+    if (!signedIn) {
+      setMsg("sign_in");
+      setConfirmBuy(false);
+      return;
+    }
     setConfirmBuy(true);
     setBuyStep("idle");
     setPayNetwork(listingNetwork);
@@ -366,6 +407,12 @@ export function ListingActions({
     setBuying(true);
     setMsg(null);
     try {
+      if (!sessionUserId) {
+        setMsg("sign_in");
+        setBuyStep("idle");
+        setConfirmBuy(false);
+        return;
+      }
       const wallets = await connectWallets();
       if (!wallets) return;
 
@@ -674,6 +721,10 @@ export function ListingActions({
           <Link href={`/listings/${listingId}`} className="badge featured">
             Buy{priceUsd != null ? ` $${priceUsd}` : ""}
           </Link>
+        ) : sessionUserId === null ? (
+          <Link href={signInHref} className="badge featured">
+            Sign in to buy {settleQuote?.formatted ?? `$${priceUsd}`}
+          </Link>
         ) : (
         <button
           type="button"
@@ -955,8 +1006,10 @@ export function ListingActions({
         </span>
       ) : null}
       {msg === "sign_in" ? (
-        <span style={{ fontSize: "0.8rem" }}>
-          <Link href="/sign-in">Sign in</Link> to collect
+        <span style={{ fontSize: "0.8rem", maxWidth: "22rem" }}>
+          <Link href={signInHref}>Sign in</Link> to FreshMint first, then
+          connect a wallet to pay — wallet linking stays under{" "}
+          <Link href="/me/settings">/me/settings</Link>.
         </span>
       ) : msg === "already_sold" ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>

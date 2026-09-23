@@ -270,7 +270,7 @@ export function DocsGuide() {
                 {
                   name: "Featured",
                   href: "/featured",
-                  job: `Editorial / trust inventory — ${cfg.featuredSlotsPerDay} slots per day.`,
+                  job: `Editorial / trust inventory — ${cfg.featuredSlotsPerDay} slots per day. Featured boost is optional paid placement; Rising remains a free fairness quota.`,
                 },
                 {
                   name: "Homepage",
@@ -389,7 +389,8 @@ export function DocsGuide() {
               </li>
               <li>
                 <strong style={{ color: "var(--ink)" }}>Featured</strong> — scarce
-                editorial inventory; nomination + Studio controls
+                editorial inventory; nomination + Studio controls. Optional paid
+                Featured boost is promotional only and never feeds Rising scoring
               </li>
             </ul>
             </div>

@@ -1,5 +1,6 @@
 import { FollowButton } from "@/components/FollowButton";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
+import { FeaturedBoostButton } from "@/components/FeaturedBoostButton";
 import { ListingActions } from "@/components/ListingActions";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
@@ -210,6 +211,28 @@ export default async function ListingDetailPage({
             />
           </div>
           <HowItWorksNote kind="buy" />
+          {listing.type === "auction" ? (
+            <p
+              style={{
+                margin: "0.85rem 0 0",
+                color: "var(--ink-muted)",
+                fontSize: "0.9rem",
+                maxWidth: "42ch",
+                lineHeight: 1.5,
+              }}
+            >
+              Timed auction window
+              {drop.state === "upcoming"
+                ? " (not started)"
+                : drop.state === "live"
+                  ? " (live now)"
+                  : drop.state === "ended"
+                    ? " (ended)"
+                    : ""}
+              . Buy at the fixed USD-quoted price in crypto while the window is
+              open — FreshMint does not run an open English bidding board.
+            </p>
+          ) : null}
 
           <ListingActions
             listingId={listing.id}
@@ -233,6 +256,12 @@ export default async function ListingDetailPage({
                 : null
             }
           />
+          {user?.id === listing.creatorId && listing.stage !== "draft" ? (
+            <FeaturedBoostButton
+              listingId={listing.id}
+              alreadyBoosted={listing.featuredBoostedAt != null}
+            />
+          ) : null}
 
           <dl
             style={{

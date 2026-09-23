@@ -208,6 +208,7 @@ export async function createListingForUser(input: {
     softLaunchedAt: null,
     risingEligibleAt: null,
     featuredAt: null,
+    featuredBoostedAt: null,
     oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt).getTime() : null,
     oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt).getTime() : null,
     auctionStartsAt: input.auctionStartsAt

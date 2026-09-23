@@ -130,6 +130,8 @@ model Listing {
   softLaunchedAt   DateTime?
   risingEligibleAt DateTime?
   featuredAt       DateTime?
+  /// Paid Featured boost (promotional); does not affect Rising/Open ranking.
+  featuredBoostedAt DateTime?
   oeStartsAt       DateTime?
   oeEndsAt         DateTime?
   auctionStartsAt  DateTime?

@@ -79,6 +79,7 @@ export function toListing(listing: DbListing): Listing {
     softLaunchedAt: listing.softLaunchedAt?.getTime() ?? null,
     risingEligibleAt: listing.risingEligibleAt?.getTime() ?? null,
     featuredAt: listing.featuredAt?.getTime() ?? null,
+    featuredBoostedAt: listing.featuredBoostedAt?.getTime() ?? null,
     oeStartsAt: listing.oeStartsAt?.getTime() ?? null,
     oeEndsAt: listing.oeEndsAt?.getTime() ?? null,
     auctionStartsAt: listing.auctionStartsAt?.getTime() ?? null,

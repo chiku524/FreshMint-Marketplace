@@ -10,36 +10,96 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Auctions — FreshMint Marketplace",
-  description: "Live auction strip and successfully cleared past auctions.",
+  description:
+    "Timed auction windows with fixed USD-quoted crypto checkout, plus cleared past sales.",
 };
+
+function DiscoverLinks() {
+  return (
+    <p
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.45rem",
+        margin: "0.85rem 0 0",
+      }}
+    >
+      <Link href="/open" className="badge emerging">
+        Open Lane
+      </Link>
+      <Link href="/rising" className="badge emerging">
+        Rising
+      </Link>
+      <Link href="/featured" className="badge featured">
+        Featured
+      </Link>
+      <Link href="/trending" className="badge">
+        Trending
+      </Link>
+      <Link href="/calendar" className="badge">
+        Calendar
+      </Link>
+      <Link href="/create" className="badge">
+        Schedule an auction
+      </Link>
+    </p>
+  );
+}
 
 export default async function AuctionsPage() {
   const engine = await getDiscoveryEngine();
   const live = selectLiveAuctionStrip([...engine.state.listings.values()]);
   const sold = await listSoldAuctions(36);
+  const empty = live.length === 0 && sold.length === 0;
 
   return (
     <div className="page-wrap">
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Auctions
       </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "48ch", marginBottom: "2rem" }}>
-        Live endings share a scarce strip on the homepage. Cleared auctions land
-        here as proof of discovery converting into primary sales.
+      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "2rem" }}>
+        Scheduled windows with a fixed USD-quoted price paid in crypto — not an
+        open English bidding board. Live endings can surface on the homepage
+        strip; cleared sales land here as proof of discovery converting into
+        primary sales.
       </p>
+
+      {empty ? (
+        <section
+          style={{
+            marginBottom: "2.5rem",
+            border: "1px solid var(--line)",
+            padding: "1.1rem 1.15rem",
+            background: "var(--panel)",
+            maxWidth: "40rem",
+          }}
+        >
+          <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
+            No auctions live or cleared yet
+          </h2>
+          <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
+            This lane stays empty until a creator schedules a window from Create
+            and collectors finish a primary sale. We do not invent live auctions.
+            Browse discovery lanes meanwhile, or check the calendar for upcoming
+            starts.
+          </p>
+          <DiscoverLinks />
+        </section>
+      ) : null}
 
       <section style={{ marginBottom: "3rem" }}>
         <h2 className="display" style={{ margin: "0 0 1rem", fontSize: "1.45rem" }}>
           Live now ({live.length})
         </h2>
         {live.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
-            No auctions in window — check the{" "}
-            <Link href="/calendar" style={{ color: "var(--accent-soft)" }}>
-              calendar
-            </Link>{" "}
-            for upcoming starts.
-          </p>
+          <>
+            <p style={{ color: "var(--ink-muted)", margin: 0, maxWidth: "48ch" }}>
+              No auction windows are open right now. When one is live, you buy at
+              the listed USD quote in crypto before the end time — there is no
+              separate bid CTA.
+            </p>
+            {!empty ? <DiscoverLinks /> : null}
+          </>
         ) : (
           <PuzzleRail>
             {live.map((listing) => (
@@ -50,6 +110,11 @@ export default async function AuctionsPage() {
                 showActions
                 creatorName={
                   engine.state.creators.get(listing.creatorId)?.displayName
+                }
+                collection={
+                  listing.collectionId
+                    ? engine.state.collections.get(listing.collectionId) ?? null
+                    : null
                 }
               />
             ))}
@@ -62,13 +127,13 @@ export default async function AuctionsPage() {
           Cleared auctions ({sold.length})
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
-          Past artwork that sold successfully at hammer — Emerging and established
-          alike.
+          Past artwork that sold successfully during an auction window —
+          Emerging and established alike.
         </p>
         {sold.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No cleared auctions yet. When a collector wins an auction, it appears
-            here.
+            No cleared auctions yet. When a collector completes checkout during a
+            window, it appears here.
           </p>
         ) : (
           <PuzzleRail>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { RankedListing, Listing } from "@/lib/discovery/types";
+import type { RankedListing, Listing, Collection } from "@/lib/discovery/types";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import Link from "next/link";
 import {
@@ -128,6 +128,7 @@ export function WorkCard({
   score,
   showActions = false,
   creatorName,
+  collection = null,
   trackImpression = true,
   footer,
   sold = false,
@@ -139,6 +140,7 @@ export function WorkCard({
   score?: number;
   showActions?: boolean;
   creatorName?: string;
+  collection?: Pick<Collection, "id" | "title"> | null;
   trackImpression?: boolean;
   footer?: ReactNode;
   sold?: boolean;
@@ -176,9 +178,17 @@ export function WorkCard({
 
   const menuBody = (
     <>
-      {creatorName ? (
+      {creatorName || collection ? (
         <p className="work-tile__menu-meta">
-          <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
+          {creatorName ? (
+            <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
+          ) : null}
+          {collection ? (
+            <>
+              {creatorName ? " · " : null}
+              <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+            </>
+          ) : null}
           {emerging ? " · Emerging" : featured ? " · Featured" : ""}
           {score != null ? ` · ${score.toFixed(1)}` : ""}
         </p>
@@ -254,7 +264,15 @@ export function WorkCard({
         <h3 className="display work-tile__title">
           <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
         </h3>
-        <p className="work-tile__meta">{priceLabel(listing, bucket)}</p>
+        <p className="work-tile__meta">
+          {priceLabel(listing, bucket)}
+          {collection ? (
+            <>
+              {" · "}
+              <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+            </>
+          ) : null}
+        </p>
       </div>
       <button
         type="button"
@@ -289,10 +307,12 @@ export function RankedWorkCard({
   item,
   showActions = true,
   creatorName,
+  collection = null,
 }: {
   item: RankedListing;
   showActions?: boolean;
   creatorName?: string;
+  collection?: Pick<Collection, "id" | "title"> | null;
 }) {
   return (
     <WorkCard
@@ -302,6 +322,7 @@ export function RankedWorkCard({
       score={item.score}
       showActions={showActions}
       creatorName={creatorName}
+      collection={collection}
     />
   );
 }

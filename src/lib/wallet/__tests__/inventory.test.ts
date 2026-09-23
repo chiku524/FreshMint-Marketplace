@@ -43,6 +43,7 @@ function listing(partial: Partial<Listing> & Pick<Listing, "id">): Listing {
     softLaunchedAt: 1,
     risingEligibleAt: null,
     featuredAt: null,
+    featuredBoostedAt: null,
     oeStartsAt: null,
     oeEndsAt: null,
     auctionStartsAt: null,

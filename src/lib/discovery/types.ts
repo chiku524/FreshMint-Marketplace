@@ -92,6 +92,8 @@ export interface Listing {
   softLaunchedAt: number | null;
   risingEligibleAt: number | null;
   featuredAt: number | null;
+  /** Paid Featured boost timestamp; never feeds Rising/Open scoring. */
+  featuredBoostedAt: number | null;
   /** Open edition drop window. */
   oeStartsAt: number | null;
   oeEndsAt: number | null;
