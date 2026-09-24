@@ -18,6 +18,9 @@
     "wallets:create": "node scripts/create-platform-wallets.mjs",
     "wallets:deploy-safe": "node scripts/deploy-treasury-safe.mjs",
     "wallets:deploy-squads": "node scripts/deploy-treasury-squads.mjs",
+    "wallets:fund-treasuries": "node scripts/fund-treasuries.mjs",
+    "wallets:set-fee-recipients": "node scripts/set-collection-fee-recipients.mjs",
+    "contracts:bytecode": "forge build && node scripts/update-erc721-bytecode.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

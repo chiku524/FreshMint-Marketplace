@@ -83,7 +83,21 @@ Creators can pay a fixed **$15 USD** promotional fee (native-quoted) to activate
 
 Operator EOAs (constructor leftovers / ops): EVM `0xc1AE84cEc6839683D562aC9011ADF21c31A3f869`, Solana `QzQR6DPw8VD5uU47uiAJYA95jt61ExFNHXhC3EF6MDY`.
 
-New EVM collections pick treasury + operator from env at deploy time. Redeploy or call `setFeeRecipients` on older markets when you migrate chains. Mainnet Safe / Squads still need a separate funded deploy when you leave testnets.
+New EVM collections pick treasury + operator from env at deploy time and use the 0.5% on-chain `buy()` split after `npm run contracts:bytecode`. Older live collections keep their prior BPS until redeployed; the collection **owner** (creator deployer) can retarget recipients with:
+
+```bash
+COLLECTION_CONTRACT=0x... COLLECTION_OWNER_PRIVATE_KEY=0x... npm run wallets:set-fee-recipients
+# dry-run:
+DRY_RUN=1 COLLECTION_CONTRACT=0x... npm run wallets:set-fee-recipients
+```
+
+Top up testnet treasuries for Safe/Squads gas:
+
+```bash
+npm run wallets:fund-treasuries
+```
+
+Mainnet Safe / Squads still need a separate funded deploy when you leave testnets. Shared `NEXT_PUBLIC_EVM_MARKET_ADDRESS_*` markets remain optional — per-collection ERC-721 deploys are the primary path.
 
 ## Bridge
 

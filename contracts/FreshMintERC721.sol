@@ -3,7 +3,8 @@ pragma solidity ^0.8.24;
 
 /// @notice Minimal ERC-721 for FreshMint primary mints across EVM testnets/mainnets.
 /// Compatible with OpenZeppelin-style interfaces without requiring forge install in CI.
-/// Primary `buy` takes a 2.5% platform fee: 1.5% treasury + 1% operator; seller gets 97.5%.
+/// Primary `buy` takes a 0.5% treasury fee (operator cut 0); seller gets 99.5%.
+/// Matches off-chain marketplace settlement (`PLATFORM_FEE_BPS`).
 contract FreshMintERC721 {
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
@@ -21,9 +22,9 @@ contract FreshMintERC721 {
     );
     event FeeRecipientsUpdated(address treasury, address operatorWallet);
 
-    uint16 public constant TREASURY_FEE_BPS = 150; // 1.5%
-    uint16 public constant OPERATOR_FEE_BPS = 100; // 1.0%
-    uint16 public constant TOTAL_FEE_BPS = 250; // 2.5%
+    uint16 public constant TREASURY_FEE_BPS = 50; // 0.5%
+    uint16 public constant OPERATOR_FEE_BPS = 0; // 0%
+    uint16 public constant TOTAL_FEE_BPS = 50; // 0.5%
 
     string public name;
     string public symbol;

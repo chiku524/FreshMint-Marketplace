@@ -441,6 +441,59 @@ export function buildEvmCollectionDeployIntent(input: {
   };
 }
 
+
+/** Collection-owner wallet tx to point fee recipients at current platform treasury/operator. */
+export function buildEvmSetFeeRecipientsIntent(input: {
+  network: NetworkId;
+  contractAddress: string;
+  ownerAddress: string;
+}): {
+  chain: "evm";
+  network: NetworkId;
+  contractAddress: string;
+  status: "pending_wallet" | "simulated";
+  walletTx?: WalletTxRequest;
+} {
+  const network = input.network;
+  const def = getNetwork(network);
+  if (def.vm !== "evm" || !def.viemChain || def.chainId == null) {
+    throw new Error(`evm_fee_recipients_requires_evm_network:${network}`);
+  }
+  if (!isAddress(input.contractAddress)) {
+    throw new Error("invalid_contract");
+  }
+  const { treasury, operator } = feeAddresses(input.ownerAddress);
+  const from = isAddress(input.ownerAddress) ? input.ownerAddress : undefined;
+  if (!from) {
+    return {
+      chain: "evm",
+      network,
+      contractAddress: input.contractAddress,
+      status: "simulated",
+    };
+  }
+  const data = encodeFunctionData({
+    abi: freshMintErc721Abi,
+    functionName: "setFeeRecipients",
+    args: [treasury, operator],
+  });
+  return {
+    chain: "evm",
+    network,
+    contractAddress: input.contractAddress,
+    status: "pending_wallet",
+    walletTx: {
+      chain: "evm",
+      network,
+      chainId: def.chainId,
+      to: input.contractAddress as Hex,
+      data,
+      value: "0x0",
+      from,
+    },
+  };
+}
+
 /** Creator-signed batch mint into an existing collection contract. */
 export function buildEvmBatchMintIntent(input: {
   network: NetworkId;
