@@ -100,6 +100,12 @@ export interface Listing {
   /** Auction window. */
   auctionStartsAt: number | null;
   auctionEndsAt: number | null;
+  /** fixed | timed_window | english — creator sale mode (type stays for discovery). */
+  saleMode?: "fixed" | "timed_window" | "english" | string;
+  startingBidUsd?: number | null;
+  reserveUsd?: number | null;
+  currentHighBidUsd?: number | null;
+  highBidderId?: string | null;
   collectionId: string | null;
   isCollectionHero: boolean;
   traits?: NftTrait[];
@@ -131,6 +137,8 @@ export interface Collection {
   deployTxHash?: string | null;
   deployStatus?: "none" | "pending_wallet" | "confirmed" | "failed" | string;
   escrowAddress?: string | null;
+  packageSellEnabled?: boolean;
+  packagePriceUsd?: number | null;
 }
 
 export interface Shelf {

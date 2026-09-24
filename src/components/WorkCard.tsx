@@ -14,6 +14,7 @@ import {
   placementBadgeText,
   placementLabel,
 } from "@/lib/marketplace/placement-label";
+import { saleModeBadge } from "@/lib/marketplace/sale-mode";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
 import { SaveButton } from "./SaveButton";
@@ -276,7 +277,7 @@ export function WorkCard({
         </h3>
         <p className="work-tile__meta">
           {priceLabel(listing, bucket)}
-          {listing.type === "auction" ? " · Timed window · buy at list price" : ""}
+          {listing.type === "auction" ? ` · ${saleModeBadge(listing)}` : ""}
           {placeText ? (
             <>
               {" · "}

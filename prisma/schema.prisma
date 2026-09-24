@@ -53,6 +53,9 @@ model User {
   sessions     Session[]
   signalEvents SignalEvent[]
   purchases    Purchase[]
+  bids         Bid[]
+  highBids     Listing[] @relation("HighBidder")
+  packagePurchases PackagePurchase[]
   moderationActions ModerationAction[]
   bridgeTransfers BridgeTransfer[]
 }
@@ -136,6 +139,12 @@ model Listing {
   oeEndsAt         DateTime?
   auctionStartsAt  DateTime?
   auctionEndsAt    DateTime?
+  /// fixed | timed_window | english — sale/bidding mode (type stays for discovery)
+  saleMode         String   @default("fixed")
+  startingBidUsd   Float?
+  reserveUsd       Float?
+  currentHighBidUsd Float?
+  highBidderId     String?
   collectionId     String?
   isCollectionHero Boolean  @default(false)
   /// [{ trait_type, value }]
@@ -167,12 +176,16 @@ model Listing {
   signalEvents SignalEvent[]
   purchases    Purchase[]
   shelfItems   ShelfItem[]
+  bids         Bid[]
+  highBidder   User?     @relation("HighBidder", fields: [highBidderId], references: [id], onDelete: SetNull)
 
   @@index([creatorId])
   @@index([stage])
   @@index([chain])
   @@index([network])
   @@index([mediaHash])
+  @@index([saleMode])
+  @@index([highBidderId])
 }
 
 model BridgeTransfer {
@@ -218,9 +231,13 @@ model Collection {
   deployStatus    String  @default("none")
   /// Custody address holding minted tokens until withdraw
   escrowAddress   String?
+  /// Sell remaining unsold minted works as one package
+  packageSellEnabled Boolean @default(false)
+  packagePriceUsd    Float?
 
   creator  User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   listings Listing[]
+  packagePurchases PackagePurchase[]
 }
 
 model Shelf {
@@ -349,12 +366,51 @@ model Purchase {
   withdrawAddress String?
   withdrawnAt     DateTime?
   createdAt DateTime @default(now())
+  packagePurchaseId String?
 
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   buyer   User    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  packagePurchase PackagePurchase? @relation(fields: [packagePurchaseId], references: [id], onDelete: SetNull)
+
+  @@index([packagePurchaseId])
 }
 
 model MetricCounter {
   id    String @id
   value Float  @default(0)
+}
+
+model Bid {
+  id        String   @id @default(cuid())
+  listingId String
+  bidderId  String
+  amountUsd Float
+  createdAt DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  bidder  User    @relation(fields: [bidderId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, createdAt])
+  @@index([bidderId])
+}
+
+model PackagePurchase {
+  id             String   @id @default(cuid())
+  collectionId   String
+  buyerId        String
+  amountUsd      Float
+  listingIdsJson String   @default("[]")
+  /// pending_payment | pending_transfer | completed | failed
+  status         String   @default("pending_payment")
+  payNetwork     String?
+  paymentTxHash  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  buyer      User       @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  purchases  Purchase[]
+
+  @@index([collectionId])
+  @@index([buyerId])
 }

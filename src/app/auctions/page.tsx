@@ -58,8 +58,8 @@ export default async function AuctionsPage() {
         Timed drops
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "2rem" }}>
-        Scheduled auction windows with a fixed USD-quoted price paid in crypto —
-        not an open English bidding board. Live endings can surface on the
+        Timed windows (buy at list price) and English auctions (open bidding) —
+        English auctions show open bidding on the listing page. Live endings can surface on the
         homepage strip; cleared sales land here as proof of discovery converting
         into primary sales.
       </p>

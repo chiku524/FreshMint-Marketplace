@@ -1,5 +1,6 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
+import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
@@ -85,6 +86,11 @@ export default async function CollectionDetailPage({
         ) : null}
       </p>
 
+
+      <CollectionPackagePanel
+        collectionId={collection.id}
+        isOwner={isOwner}
+      />
 
       {canUpdateFeeRecipients && collection.contractAddress ? (
         <UpdateFeeRecipientsButton

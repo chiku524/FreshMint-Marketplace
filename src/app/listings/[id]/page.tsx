@@ -1,7 +1,10 @@
 import { FollowButton } from "@/components/FollowButton";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { FeaturedBoostButton } from "@/components/FeaturedBoostButton";
+import { BidPanel } from "@/components/BidPanel";
 import { ListingActions } from "@/components/ListingActions";
+import { SaleModeEditor } from "@/components/SaleModeEditor";
+import { minNextBidUsd, resolveSaleMode, saleModeBadge } from "@/lib/marketplace/sale-mode";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
@@ -56,6 +59,28 @@ export default async function ListingDetailPage({
     listing.tokenId && listing.contractAddress && listing.mintTxHash,
   );
   const drop = dropWindowFor(listing, collection);
+  const saleMode = resolveSaleMode(listing);
+  const now = Date.now();
+  const auctionLive =
+    saleMode !== "fixed" &&
+    listing.auctionStartsAt != null &&
+    listing.auctionEndsAt != null &&
+    now >= listing.auctionStartsAt &&
+    now <= listing.auctionEndsAt;
+  const auctionEnded =
+    saleMode !== "fixed" &&
+    listing.auctionEndsAt != null &&
+    now > listing.auctionEndsAt;
+  const minBid = minNextBidUsd({
+    startingBidUsd: listing.startingBidUsd,
+    priceUsd: listing.priceUsd,
+    currentHighBidUsd: listing.currentHighBidUsd,
+  });
+  const reserveMet =
+    !listing.reserveUsd ||
+    (listing.currentHighBidUsd != null &&
+      listing.currentHighBidUsd >= listing.reserveUsd);
+
   const cap = primarySupplyCap(listing);
   const explorerToken =
     listing.contractAddress && listing.tokenId && net.explorerToken
@@ -110,14 +135,7 @@ export default async function ListingDetailPage({
             {emerging ? <span className="badge emerging">Emerging</span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
-            <span className="badge">
-              {listing.type === "auction"
-                ? "Timed window · buy at list price"
-                : listing.type.replace("_", " ")}
-            </span>
-            {listing.type === "auction" ? (
-              <span className="badge">No open bidding</span>
-            ) : null}
+            <span className="badge">{saleModeBadge(listing)}</span>
             <span className="badge">{stageLabel(listing.stage)}</span>
             {cap != null ? (
               <span className="badge">
@@ -239,6 +257,27 @@ export default async function ListingDetailPage({
               . Buy at the fixed USD-quoted list price in crypto while the window
               is open — no open bidding.
             </p>
+          ) : null}
+
+          
+          {user?.id === listing.creatorId ? (
+            <SaleModeEditor
+              listingId={listing.id}
+              saleMode={saleMode}
+              startingBidUsd={listing.startingBidUsd}
+              reserveUsd={listing.reserveUsd}
+            />
+          ) : null}
+          {saleMode === "english" ? (
+            <BidPanel
+              listingId={listing.id}
+              minBidUsd={minBid}
+              live={auctionLive}
+              ended={Boolean(auctionEnded)}
+              isHighBidder={user?.id === listing.highBidderId}
+              winningBidUsd={listing.currentHighBidUsd}
+              reserveMet={Boolean(reserveMet)}
+            />
           ) : null}
 
           <ListingActions

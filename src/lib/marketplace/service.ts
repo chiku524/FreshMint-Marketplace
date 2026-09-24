@@ -130,6 +130,9 @@ export async function createListingForUser(input: {
   oeEndsAt?: string | null;
   auctionStartsAt?: string | null;
   auctionEndsAt?: string | null;
+  saleMode?: "fixed" | "timed_window" | "english" | string | null;
+  startingBidUsd?: number | null;
+  reserveUsd?: number | null;
   collectionId?: string | null;
   isCollectionHero?: boolean;
   traits?: { trait_type: string; value: string }[];
@@ -217,6 +220,12 @@ export async function createListingForUser(input: {
     auctionEndsAt: input.auctionEndsAt
       ? new Date(input.auctionEndsAt).getTime()
       : null,
+    saleMode: (input.saleMode as string | undefined)
+      ?? (input.type === "auction" ? "timed_window" : "fixed"),
+    startingBidUsd: input.startingBidUsd ?? null,
+    reserveUsd: input.reserveUsd ?? null,
+    currentHighBidUsd: null,
+    highBidderId: null,
     collectionId: input.collectionId ?? null,
     isCollectionHero: Boolean(input.isCollectionHero),
     traits: parseTraits(input.traits ?? []),
@@ -330,6 +339,10 @@ export async function createListingForUser(input: {
       auctionEndsAt: input.auctionEndsAt
         ? new Date(input.auctionEndsAt)
         : null,
+      saleMode: (input.saleMode as string | undefined)
+        ?? (input.type === "auction" ? "timed_window" : "fixed"),
+      startingBidUsd: input.startingBidUsd ?? null,
+      reserveUsd: input.reserveUsd ?? null,
       collectionId: input.collectionId ?? null,
       isCollectionHero: Boolean(input.isCollectionHero),
       traitsJson: JSON.stringify(parseTraits(input.traits ?? [])),
@@ -1683,6 +1696,11 @@ async function loadPurchaseListingRow(listingId: string) {
     chain: Chain;
     network: NetworkId;
     type: string;
+    saleMode?: string | null;
+    startingBidUsd?: number | null;
+    reserveUsd?: number | null;
+    currentHighBidUsd?: number | null;
+    highBidderId?: string | null;
     contractAddress: string | null;
     tokenId: string | null;
     mintTxHash: string | null;
@@ -1708,6 +1726,11 @@ async function loadPurchaseListingRow(listingId: string) {
         chain: l.chain,
         network: resolveNetwork(l.network, l.chain),
         type: l.type,
+        saleMode: (l as { saleMode?: string | null }).saleMode ?? null,
+        startingBidUsd: (l as { startingBidUsd?: number | null }).startingBidUsd ?? null,
+        reserveUsd: (l as { reserveUsd?: number | null }).reserveUsd ?? null,
+        currentHighBidUsd: (l as { currentHighBidUsd?: number | null }).currentHighBidUsd ?? null,
+        highBidderId: (l as { highBidderId?: string | null }).highBidderId ?? null,
         contractAddress: l.contractAddress ?? null,
         tokenId: l.tokenId ?? null,
         mintTxHash: l.mintTxHash ?? null,
@@ -1737,6 +1760,11 @@ async function loadPurchaseListingRow(listingId: string) {
           chain: listing.chain as Chain,
           network: resolveNetwork(listing.network, listing.chain as Chain),
           type: listing.type,
+          saleMode: listing.saleMode,
+          startingBidUsd: listing.startingBidUsd,
+          reserveUsd: listing.reserveUsd,
+          currentHighBidUsd: listing.currentHighBidUsd,
+          highBidderId: listing.highBidderId,
           contractAddress: listing.contractAddress,
           tokenId: listing.tokenId,
           mintTxHash: listing.mintTxHash,
@@ -1814,7 +1842,7 @@ export async function purchaseListing(input: {
   if (!loaded.ok) return loaded;
   const { listing, memory, engine } = loaded;
 
-  const amountUsd = input.amountUsd ?? listing.priceUsd ?? 0;
+  let amountUsd = input.amountUsd ?? listing.priceUsd ?? 0;
   if (!(amountUsd > 0)) {
     return { ok: false as const, error: "unavailable" };
   }
@@ -1837,12 +1865,50 @@ export async function purchaseListing(input: {
   const collection = listing.collectionId
     ? engine.state.collections.get(listing.collectionId) ?? null
     : null;
-  const window = dropWindowFor(listing, collection);
-  if (window.state === "upcoming") {
-    return { ok: false as const, error: "drop_not_started" };
+
+  const { resolveSaleMode } = await import("@/lib/marketplace/sale-mode");
+  const { englishSettlement } = await import("@/lib/marketplace/english-auction");
+  const saleMode = resolveSaleMode({
+    type: listing.type,
+    saleMode: listing.saleMode,
+  });
+  if (saleMode === "english") {
+    const settled = englishSettlement({
+      listing: {
+        id: listing.id,
+        creatorId: listing.creatorId,
+        type: listing.type,
+        saleMode: listing.saleMode,
+        delisted: listing.delisted,
+        priceUsd: listing.priceUsd,
+        startingBidUsd: listing.startingBidUsd,
+        reserveUsd: listing.reserveUsd,
+        currentHighBidUsd: listing.currentHighBidUsd,
+        highBidderId: listing.highBidderId,
+        auctionStartsAt: listing.auctionStartsAt,
+        auctionEndsAt: listing.auctionEndsAt,
+      },
+      buyerId: input.buyerId,
+    });
+    if (!settled.ok) {
+      if (settled.error === "auction_still_open") {
+        return { ok: false as const, error: "use_bid" };
+      }
+      return { ok: false as const, error: settled.error };
+    }
+    // Winner claims at winning bid (override list price).
+    input = { ...input, amountUsd: settled.amountUsd };
+    amountUsd = settled.amountUsd;
   }
-  if (window.state === "ended") {
-    return { ok: false as const, error: "drop_ended" };
+
+  const window = dropWindowFor(listing, collection);
+  if (saleMode !== "english") {
+    if (window.state === "upcoming") {
+      return { ok: false as const, error: "drop_not_started" };
+    }
+    if (window.state === "ended") {
+      return { ok: false as const, error: "drop_ended" };
+    }
   }
 
   const {
@@ -2759,4 +2825,99 @@ export async function getPersistedMetrics() {
     metrics,
     policy: evaluateDiscoveryPolicy(metrics),
   };
+}
+
+
+export async function updateListingSaleMode(input: {
+  listingId: string;
+  creatorId: string;
+  saleMode: "fixed" | "timed_window" | "english" | string;
+  startingBidUsd?: number | null;
+  reserveUsd?: number | null;
+  auctionStartsAt?: string | null;
+  auctionEndsAt?: string | null;
+  priceUsd?: number | null;
+}) {
+  const { parseSaleMode, listingTypeForSaleMode, resolveSaleMode } = await import(
+    "@/lib/marketplace/sale-mode"
+  );
+  const saleMode = parseSaleMode(input.saleMode);
+  const engine = await getDiscoveryEngine();
+  const listing = engine.state.listings.get(input.listingId);
+  if (!listing) return { ok: false as const, error: "not_found" };
+  if (listing.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "forbidden" };
+  }
+  if ((listing as { currentHighBidUsd?: number | null }).currentHighBidUsd) {
+    return { ok: false as const, error: "has_bids" };
+  }
+
+  const nextType =
+    saleMode === "fixed"
+      ? listing.type === "auction"
+        ? "single"
+        : listing.type
+      : listingTypeForSaleMode(saleMode, listing.type);
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  const patch = {
+    saleMode,
+    type: nextType,
+    startingBidUsd:
+      saleMode === "english"
+        ? (input.startingBidUsd ?? listing.priceUsd ?? null)
+        : null,
+    reserveUsd: saleMode === "english" ? (input.reserveUsd ?? null) : null,
+    auctionStartsAt:
+      saleMode === "fixed"
+        ? null
+        : input.auctionStartsAt
+          ? new Date(input.auctionStartsAt).getTime()
+          : listing.auctionStartsAt,
+    auctionEndsAt:
+      saleMode === "fixed"
+        ? null
+        : input.auctionEndsAt
+          ? new Date(input.auctionEndsAt).getTime()
+          : listing.auctionEndsAt,
+    priceUsd:
+      input.priceUsd !== undefined ? input.priceUsd : listing.priceUsd,
+  };
+
+  if (mode === "memory" || isMemoryMode()) {
+    const mem = getMemoryEngine();
+    const live = mem.state.listings.get(input.listingId);
+    if (!live) return { ok: false as const, error: "not_found" };
+    Object.assign(live, {
+      saleMode: patch.saleMode,
+      type: patch.type,
+      startingBidUsd: patch.startingBidUsd,
+      reserveUsd: patch.reserveUsd,
+      auctionStartsAt: patch.auctionStartsAt,
+      auctionEndsAt: patch.auctionEndsAt,
+      priceUsd: patch.priceUsd,
+    });
+    mem.state.listings.set(input.listingId, live);
+    return { ok: true as const, listing: live };
+  }
+
+  const updated = await prisma.listing.update({
+    where: { id: input.listingId },
+    data: {
+      saleMode: patch.saleMode,
+      type: patch.type,
+      startingBidUsd: patch.startingBidUsd,
+      reserveUsd: patch.reserveUsd,
+      auctionStartsAt: patch.auctionStartsAt
+        ? new Date(patch.auctionStartsAt)
+        : null,
+      auctionEndsAt: patch.auctionEndsAt ? new Date(patch.auctionEndsAt) : null,
+      priceUsd: patch.priceUsd,
+    },
+  });
+  const { toListing } = await import("@/lib/data/mappers");
+  return { ok: true as const, listing: toListing(updated) };
 }

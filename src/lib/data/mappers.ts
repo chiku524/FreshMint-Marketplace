@@ -84,6 +84,12 @@ export function toListing(listing: DbListing): Listing {
     oeEndsAt: listing.oeEndsAt?.getTime() ?? null,
     auctionStartsAt: listing.auctionStartsAt?.getTime() ?? null,
     auctionEndsAt: listing.auctionEndsAt?.getTime() ?? null,
+    saleMode: (listing as { saleMode?: string }).saleMode
+      ?? (listing.type === "auction" ? "timed_window" : "fixed"),
+    startingBidUsd: (listing as { startingBidUsd?: number | null }).startingBidUsd ?? null,
+    reserveUsd: (listing as { reserveUsd?: number | null }).reserveUsd ?? null,
+    currentHighBidUsd: (listing as { currentHighBidUsd?: number | null }).currentHighBidUsd ?? null,
+    highBidderId: (listing as { highBidderId?: string | null }).highBidderId ?? null,
     collectionId: listing.collectionId,
     isCollectionHero: listing.isCollectionHero,
     traits: parseTraits(JSON.parse(listing.traitsJson || "[]")),
@@ -116,6 +122,8 @@ export function toCollection(c: DbCollection): Collection {
     deployTxHash: c.deployTxHash ?? null,
     deployStatus: c.deployStatus ?? "none",
     escrowAddress: c.escrowAddress ?? null,
+    packageSellEnabled: Boolean((c as { packageSellEnabled?: boolean }).packageSellEnabled),
+    packagePriceUsd: (c as { packagePriceUsd?: number | null }).packagePriceUsd ?? null,
   };
 }
 
