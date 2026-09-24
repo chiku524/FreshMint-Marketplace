@@ -58,6 +58,7 @@ model User {
   packagePurchases PackagePurchase[]
   moderationActions ModerationAction[]
   bridgeTransfers BridgeTransfer[]
+  notifications Notification[]
 }
 
 model ModerationAction {
@@ -373,6 +374,28 @@ model Purchase {
   packagePurchase PackagePurchase? @relation(fields: [packagePurchaseId], references: [id], onDelete: SetNull)
 
   @@index([packagePurchaseId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  /// english_win | english_outbid | english_cascade | english_expired | creator_english_awaiting | creator_english_sold | creator_english_unsold | item_sold | package_sold
+  type        String
+  title       String
+  body        String    @default("")
+  /// JSON blob for extra fields (listingId, amountUsd, deadlineAt, ...)
+  payloadJson String    @default("{}")
+  href        String?
+  /// Idempotency key scoped per user (unique with userId).
+  dedupeKey   String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
 
 model MetricCounter {

@@ -1,6 +1,7 @@
 "use client";
 
 import { NAV_GROUP_ICON, NAV_ITEM_ICON, NavGlyph } from "@/components/NavGlyph";
+import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -45,6 +46,7 @@ const ACCOUNT_BASE: NavItem[] = [
   { href: "/sign-in", label: "Sign in" },
   { href: "/sign-up", label: "Create profile" },
   { href: "/me", label: "Profile" },
+  { href: "/notifications", label: "Notifications" },
   { action: "logout", label: "Sign out" },
 ];
 
@@ -251,8 +253,12 @@ export function SiteNav({
   const showOps = role === "moderator" || role === "editor";
   const accountItems = ACCOUNT_BASE.filter((item) =>
     signedIn
-      ? !isLinkItem(item) || item.href === "/me"
-      : isLinkItem(item) && item.href !== "/me",
+      ? !isLinkItem(item) ||
+        item.href === "/me" ||
+        item.href === "/notifications"
+      : isLinkItem(item) &&
+        item.href !== "/me" &&
+        item.href !== "/notifications",
   );
   const items: NavItem[] = showOps
     ? [
@@ -264,6 +270,7 @@ export function SiteNav({
 
   return (
     <nav className="site-nav site-nav--end" aria-label="Account">
+      {signedIn ? <NotificationBell /> : null}
       <NavDropdown
         group={{ id: "account", label: "Account", items }}
         closeSignal={closeSignal}

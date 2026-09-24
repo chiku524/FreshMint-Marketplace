@@ -11,6 +11,19 @@ export type MemoryNomination = {
   outcome: string | null;
 };
 
+export type MemoryNotification = {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  payloadJson: string;
+  href: string | null;
+  dedupeKey: string;
+  readAt: number | null;
+  createdAt: number;
+};
+
 export type MemoryPurchase = {
   id: string;
   listingId: string;
@@ -38,6 +51,7 @@ const globalMemory = globalThis as unknown as {
   __freshmintUseMemory?: boolean;
   __freshmintNominations?: MemoryNomination[];
   __freshmintPurchases?: MemoryPurchase[];
+  __freshmintNotifications?: MemoryNotification[];
 };
 
 export function enableMemoryMode(reason: string): void {
@@ -201,12 +215,93 @@ export function ensureMemoryCreator(input: {
   return created;
 }
 
+
+export function getMemoryNotifications(): MemoryNotification[] {
+  if (!globalMemory.__freshmintNotifications) {
+    globalMemory.__freshmintNotifications = [];
+  }
+  return globalMemory.__freshmintNotifications;
+}
+
+export function listMemoryNotifications(userId: string): MemoryNotification[] {
+  return getMemoryNotifications()
+    .filter((n) => n.userId === userId)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function getMemoryNotificationByDedupe(
+  userId: string,
+  dedupeKey: string,
+): MemoryNotification | null {
+  return (
+    getMemoryNotifications().find(
+      (n) => n.userId === userId && n.dedupeKey === dedupeKey,
+    ) ?? null
+  );
+}
+
+export function upsertMemoryNotification(input: {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  payloadJson: string;
+  href: string | null;
+  dedupeKey: string;
+  createdAt: number;
+}): MemoryNotification {
+  const existing = getMemoryNotificationByDedupe(input.userId, input.dedupeKey);
+  if (existing) return existing;
+  const row: MemoryNotification = {
+    id: `notif-mem-${input.createdAt}-${getMemoryNotifications().length}`,
+    userId: input.userId,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    payloadJson: input.payloadJson,
+    href: input.href,
+    dedupeKey: input.dedupeKey,
+    readAt: null,
+    createdAt: input.createdAt,
+  };
+  getMemoryNotifications().unshift(row);
+  return row;
+}
+
+export function markMemoryNotificationRead(
+  userId: string,
+  notificationId: string,
+  now: number,
+): boolean {
+  const row = getMemoryNotifications().find(
+    (n) => n.id === notificationId && n.userId === userId,
+  );
+  if (!row) return false;
+  if (row.readAt == null) row.readAt = now;
+  return true;
+}
+
+export function markAllMemoryNotificationsRead(
+  userId: string,
+  now: number,
+): number {
+  let updated = 0;
+  for (const n of getMemoryNotifications()) {
+    if (n.userId === userId && n.readAt == null) {
+      n.readAt = now;
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
 export function resetMemoryStoreForTests(): void {
   globalMemory.__freshmintMemoryState = undefined;
   globalMemory.__freshmintMemoryEngine = undefined;
   globalMemory.__freshmintUseMemory = true;
   globalMemory.__freshmintNominations = [];
   globalMemory.__freshmintPurchases = undefined;
+  globalMemory.__freshmintNotifications = [];
   const accounts = globalThis as unknown as { __freshmintAccounts?: Map<string, unknown> };
   accounts.__freshmintAccounts = undefined;
 }
