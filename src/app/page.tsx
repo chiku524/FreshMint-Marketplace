@@ -1,19 +1,52 @@
 import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
+import { EnglishAuctionHomeCard } from "@/components/EnglishAuctionHomeCard";
+import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
+import { HomeCollectionCard } from "@/components/HomeCollectionCard";
+import { HomeScrollRail } from "@/components/HomeScrollRail";
+import { HomeSectionHeader } from "@/components/HomeSectionHeader";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { BrandMark } from "@/components/MintLeaf";
-import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
 import { PuzzleRail } from "@/components/PuzzleRail";
-import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { TasteSeed } from "@/components/TasteSeed";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { readViewerSession, readViewerTaste } from "@/lib/discovery/cookies";
 import { hasTaste, inferTasteFromCatalog } from "@/lib/discovery/taste";
+import { getCachedHomeDiscovery } from "@/lib/marketplace/home-discovery";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
-import { listSoldAuctions } from "@/lib/marketplace/sold-auctions";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+
+function collectionsSubtitle(
+  mode: "trending" | "top_volume" | "new" | "mixed",
+): string {
+  switch (mode) {
+    case "trending":
+      return "Ranked by completed sale volume over the last 7 days.";
+    case "top_volume":
+      return "Sparse 7-day sales — showing top all-time volume collections.";
+    case "new":
+      return "Sparse sales activity — showing collections new this week.";
+    case "mixed":
+      return "7-day volume leaders, topped up with all-time volume and new collections.";
+  }
+}
+
+function hotSubtitle(
+  mode: "hot" | "most_viewed" | "newest" | "mixed",
+): string {
+  switch (mode) {
+    case "hot":
+      return "Scored from views, saves, bids, and purchases in the last 72 hours.";
+    case "most_viewed":
+      return "Quiet last 72 hours — showing most-viewed public works.";
+    case "newest":
+      return "Quiet activity — showing newest published works.";
+    case "mixed":
+      return "72-hour hot works, topped up with most-viewed and newest.";
+  }
+}
 
 export default async function HomePage() {
   const engine = await getDiscoveryEngine();
@@ -30,7 +63,7 @@ export default async function HomePage() {
     taste,
     recordImpressions: false,
   });
-  const soldAuctions = await listSoldAuctions(6);
+  const discovery = await getCachedHomeDiscovery();
   const personalized = Boolean(user);
 
   return (
@@ -81,6 +114,122 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {discovery.collections.items.length > 0 ? (
+        <section className="site-section">
+          <HomeSectionHeader
+            title={
+              discovery.collections.subtitleMode === "trending"
+                ? "Trending collections"
+                : discovery.collections.subtitleMode === "top_volume"
+                  ? "Top collections"
+                  : discovery.collections.subtitleMode === "new"
+                    ? "New collections"
+                    : "Collections to explore"
+            }
+            subtitle={collectionsSubtitle(discovery.collections.subtitleMode)}
+            viewAllHref={discovery.collections.viewAllHref}
+          />
+          <HomeScrollRail>
+            {discovery.collections.items.map((item) => (
+              <HomeCollectionCard key={item.id} item={item} />
+            ))}
+          </HomeScrollRail>
+        </section>
+      ) : null}
+
+      {discovery.hotWorks.items.length > 0 ? (
+        <section className="site-section">
+          <HomeSectionHeader
+            title={
+              discovery.hotWorks.subtitleMode === "hot"
+                ? "Hot works"
+                : discovery.hotWorks.subtitleMode === "most_viewed"
+                  ? "Most viewed"
+                  : discovery.hotWorks.subtitleMode === "newest"
+                    ? "Newest works"
+                    : "Works to explore"
+            }
+            subtitle={hotSubtitle(discovery.hotWorks.subtitleMode)}
+            viewAllHref={discovery.hotWorks.viewAllHref}
+          />
+          <PuzzleRail>
+            {discovery.hotWorks.items.map((listing) => (
+              <WorkCard
+                key={listing.id}
+                listing={listing}
+                bucket="open"
+                showActions
+                creatorName={
+                  engine.state.creators.get(listing.creatorId)?.displayName
+                }
+              />
+            ))}
+          </PuzzleRail>
+        </section>
+      ) : null}
+
+      {discovery.englishEndingSoon.length > 0 ? (
+        <section className="site-section">
+          <HomeSectionHeader
+            title="English auctions ending soon"
+            subtitle="Live open bidding — soonest ending first."
+            viewAllHref="/auctions"
+            viewAllLabel="All auctions"
+          />
+          <HomeScrollRail>
+            {discovery.englishEndingSoon.map((listing) => (
+              <EnglishAuctionHomeCard
+                key={listing.id}
+                listing={listing}
+                creatorName={
+                  engine.state.creators.get(listing.creatorId)?.displayName
+                }
+              />
+            ))}
+          </HomeScrollRail>
+        </section>
+      ) : null}
+
+      {discovery.timedDropsLive.length > 0 ? (
+        <section className="site-section">
+          <HomeSectionHeader
+            title="Live timed drops"
+            subtitle="Buy at list price while the window is open."
+            viewAllHref="/auctions"
+            viewAllLabel="All timed drops"
+          />
+          <HomeScrollRail>
+            {discovery.timedDropsLive.map((listing) => (
+              <div key={listing.id} className="fm-home-work-slot">
+                <WorkCard
+                  listing={listing}
+                  bucket="live"
+                  showActions
+                  creatorName={
+                    engine.state.creators.get(listing.creatorId)?.displayName
+                  }
+                />
+              </div>
+            ))}
+          </HomeScrollRail>
+        </section>
+      ) : null}
+
+      {discovery.newCollections.length > 0 ? (
+        <section className="site-section">
+          <HomeSectionHeader
+            title="New collections this week"
+            subtitle="Created in the last 7 days with at least one published work."
+            viewAllHref="/collections/new"
+          />
+          <HomeScrollRail>
+            {discovery.newCollections.map((item) => (
+              <HomeCollectionCard key={item.id} item={item} />
+            ))}
+          </HomeScrollRail>
+        </section>
+      ) : null}
+
       <section className="site-section">
         <div
           style={{
@@ -100,9 +249,7 @@ export default async function HomePage() {
           <span style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
             Rising slots/day: {home.budgets.risingTotal} · Emerging reserved:{" "}
             {home.budgets.risingEmergingReserved}
-            {!personalized
-              ? " · pick tastes below for Emerging"
-              : ""}
+            {!personalized ? " · pick tastes below for Emerging" : ""}
           </span>
         </div>
         {!personalized ? <TasteSeed selected={taste.styleTags} /> : null}
@@ -122,81 +269,6 @@ export default async function HomePage() {
             {home.feed.map((item) => (
               <RankedWorkCard
                 key={item.listing.id}
-                item={item}
-                creatorName={
-                  engine.state.creators.get(item.listing.creatorId)?.displayName
-                }
-              />
-            ))}
-          </PuzzleRail>
-        )}
-      </section>
-
-      {home.liveAuctions.length > 0 ? (
-        <section className="site-section">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              gap: "1rem",
-              marginBottom: "1.25rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
-              Live timed drops
-            </h2>
-            <Link href="/auctions" style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-              All timed drops →
-            </Link>
-          </div>
-          <PuzzleRail>
-            {home.liveAuctions.map((listing) => (
-              <WorkCard
-                key={listing.id}
-                listing={listing}
-                bucket="live"
-                showActions
-                creatorName={
-                  engine.state.creators.get(listing.creatorId)?.displayName
-                }
-              />
-            ))}
-          </PuzzleRail>
-        </section>
-      ) : null}
-
-      <section className="site-section">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            gap: "1rem",
-            marginBottom: "0.5rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
-            Cleared timed drops
-          </h2>
-          <Link href="/auctions" style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-            View archive →
-          </Link>
-        </div>
-        <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "46ch" }}>
-          Past artwork that sold successfully during a timed window — discovery that converted.
-        </p>
-        {soldAuctions.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
-            No cleared timed drops yet. Sales will appear here after checkout clears.
-          </p>
-        ) : (
-          <PuzzleRail>
-            {soldAuctions.map((item) => (
-              <SoldAuctionCard
-                key={`${item.listing.id}-${item.soldAt}`}
                 item={item}
                 creatorName={
                   engine.state.creators.get(item.listing.creatorId)?.displayName

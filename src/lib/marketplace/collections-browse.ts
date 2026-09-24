@@ -75,6 +75,64 @@ export async function aggregateCollectionVolumesUsd(): Promise<Map<string, numbe
   return volumes;
 }
 
+
+/** Completed volume since `sinceMs` (inclusive). Package legs included via Purchase rows. */
+export async function aggregateCollectionVolumesUsdSince(
+  sinceMs: number,
+): Promise<Map<string, number>> {
+  const volumes = new Map<string, number>();
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryPurchases, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const engine = getMemoryEngine();
+    const listingToCollection = new Map<string, string>();
+    for (const listing of engine.state.listings.values()) {
+      if (listing.collectionId) {
+        listingToCollection.set(listing.id, listing.collectionId);
+      }
+    }
+    for (const purchase of getMemoryPurchases()) {
+      if ((purchase.status ?? "completed") !== "completed") continue;
+      if ((purchase.soldAt ?? 0) < sinceMs) continue;
+      const collectionId = listingToCollection.get(purchase.listingId);
+      if (!collectionId) continue;
+      const prev = volumes.get(collectionId) ?? 0;
+      volumes.set(
+        collectionId,
+        Math.round((prev + Number(purchase.amountUsd || 0)) * 100) / 100,
+      );
+    }
+    return volumes;
+  }
+
+  const since = new Date(sinceMs);
+  const rows = await prisma.$queryRaw<
+    Array<{ collectionId: string; volumeUsd: number | bigint | string }>
+  >`
+    SELECT l."collectionId" AS "collectionId",
+           COALESCE(SUM(p."amountUsd"), 0) AS "volumeUsd"
+    FROM "Purchase" p
+    INNER JOIN "Listing" l ON l."id" = p."listingId"
+    WHERE p."status" = 'completed'
+      AND p."createdAt" >= ${since}
+      AND l."collectionId" IS NOT NULL
+    GROUP BY l."collectionId"
+  `;
+
+  for (const row of rows) {
+    const volume = Number(row.volumeUsd);
+    volumes.set(
+      row.collectionId,
+      Math.round((Number.isFinite(volume) ? volume : 0) * 100) / 100,
+    );
+  }
+  return volumes;
+}
+
 export type CollectionBrowseRow = {
   id: string;
   title: string;

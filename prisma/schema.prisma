@@ -345,6 +345,7 @@ model SignalEvent {
 
   @@index([type, createdAt])
   @@index([listingId])
+  @@index([createdAt, listingId])
 }
 
 model Purchase {
@@ -378,6 +379,7 @@ model Purchase {
   packagePurchase PackagePurchase? @relation(fields: [packagePurchaseId], references: [id], onDelete: SetNull)
 
   @@index([packagePurchaseId])
+  @@index([status, createdAt])
 }
 
 model Notification {
@@ -419,6 +421,7 @@ model Bid {
 
   @@index([listingId, createdAt])
   @@index([bidderId])
+  @@index([createdAt])
 }
 
 model PackagePurchase {
