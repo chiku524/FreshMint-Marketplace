@@ -470,6 +470,30 @@ export async function prepareCollectionPackagePurchase(input: {
       });
       purchaseIds.push(row.id);
     }
+    if (!input.simulate) {
+      try {
+        const { notifyCreatorPackageSold } = await import(
+          "@/lib/notifications/emit"
+        );
+        const { getDiscoveryEngine } = await import(
+          "@/lib/marketplace/service"
+        );
+        const engine = await getDiscoveryEngine();
+        const col = engine.state.collections.get(input.collectionId);
+        if (col) {
+          await notifyCreatorPackageSold({
+            creatorId: col.creatorId,
+            collectionId: input.collectionId,
+            collectionTitle: col.title,
+            packagePurchaseId,
+            amountUsd,
+            listingCount: listingIds.length,
+          });
+        }
+      } catch (err) {
+        console.warn("[freshmint] package notify failed", err);
+      }
+    }
     return {
       ok: true,
       packagePurchaseId,
@@ -523,6 +547,31 @@ export async function prepareCollectionPackagePurchase(input: {
     }
     return { pkg, purchaseIds };
   });
+
+  if (!input.simulate) {
+    try {
+      const { notifyCreatorPackageSold } = await import(
+        "@/lib/notifications/emit"
+      );
+      const { getDiscoveryEngine } = await import(
+        "@/lib/marketplace/service"
+      );
+      const engine = await getDiscoveryEngine();
+      const col = engine.state.collections.get(input.collectionId);
+      if (col) {
+        await notifyCreatorPackageSold({
+          creatorId: col.creatorId,
+          collectionId: input.collectionId,
+          collectionTitle: col.title,
+          packagePurchaseId: created.pkg.id,
+          amountUsd,
+          listingCount: listingIds.length,
+        });
+      }
+    } catch (err) {
+      console.warn("[freshmint] package notify failed", err);
+    }
+  }
 
   return {
     ok: true,

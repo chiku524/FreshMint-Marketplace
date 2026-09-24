@@ -2444,10 +2444,39 @@ export async function confirmCryptoPurchase(input: {
   };
 
   if (memory) {
+    const wasCompleteMem = purchase.status === "completed";
     updateMemoryPurchase(purchase.id, {
       ...completePatch,
       withdrawnAt,
     });
+    if (!wasCompleteMem) {
+      try {
+        const { notifyCreatorItemSold, notifyCreatorEnglishSold } =
+          await import("@/lib/notifications/emit");
+        const isEnglishAward =
+          typeof purchase.txHash === "string" &&
+          purchase.txHash.startsWith("english-award:");
+        if (isEnglishAward) {
+          await notifyCreatorEnglishSold({
+            creatorId: listing.creatorId,
+            listingId: listing.id,
+            listingTitle: listing.title,
+            purchaseId: purchase.id,
+            amountUsd: purchase.amountUsd,
+          });
+        } else {
+          await notifyCreatorItemSold({
+            creatorId: listing.creatorId,
+            listingId: listing.id,
+            listingTitle: listing.title,
+            purchaseId: purchase.id,
+            amountUsd: purchase.amountUsd,
+          });
+        }
+      } catch (err) {
+        console.warn("[freshmint] sale notify failed", err);
+      }
+    }
   } else {
     const wasComplete = purchase.status === "completed";
     await prisma.purchase.update({
@@ -2489,6 +2518,32 @@ export async function confirmCryptoPurchase(input: {
           }),
         },
       });
+      try {
+        const { notifyCreatorItemSold, notifyCreatorEnglishSold } =
+          await import("@/lib/notifications/emit");
+        const isEnglishAward =
+          typeof purchase.txHash === "string" &&
+          purchase.txHash.startsWith("english-award:");
+        if (isEnglishAward) {
+          await notifyCreatorEnglishSold({
+            creatorId: listing.creatorId,
+            listingId: listing.id,
+            listingTitle: listing.title,
+            purchaseId: purchase.id,
+            amountUsd: purchase.amountUsd,
+          });
+        } else {
+          await notifyCreatorItemSold({
+            creatorId: listing.creatorId,
+            listingId: listing.id,
+            listingTitle: listing.title,
+            purchaseId: purchase.id,
+            amountUsd: purchase.amountUsd,
+          });
+        }
+      } catch (err) {
+        console.warn("[freshmint] sale notify failed", err);
+      }
     }
   }
 

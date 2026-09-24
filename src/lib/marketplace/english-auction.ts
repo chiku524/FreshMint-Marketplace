@@ -279,6 +279,109 @@ async function markEnglishSoftOutcome(
   // unsold is derived from evaluateEnglishOutcome after end.
 }
 
+
+async function listingTitleFor(listingId: string): Promise<string | undefined> {
+  try {
+    const { ensureDatabaseReady } = await import("@/lib/db-ready");
+    const { isMemoryMode, getMemoryEngine } = await import(
+      "@/lib/data/memory-store"
+    );
+    const mode = await ensureDatabaseReady();
+    if (mode === "memory" || isMemoryMode()) {
+      return getMemoryEngine().state.listings.get(listingId)?.title;
+    }
+    const row = await prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { title: true },
+    });
+    return row?.title;
+  } catch {
+    return undefined;
+  }
+}
+
+async function emitEnglishSettleNotifications(input: {
+  listingId: string;
+  creatorId: string;
+  title?: string;
+  result: LazyEnglishSettleResult;
+  expiredPurchases?: Array<{
+    id: string;
+    buyerId: string;
+    amountUsd: number;
+  }>;
+  now: number;
+  auctionEndsAt: number | null;
+}) {
+  try {
+    const {
+      notifyEnglishWin,
+      notifyEnglishExpired,
+      notifyCreatorEnglishAwaiting,
+      notifyCreatorEnglishUnsold,
+    } = await import("@/lib/notifications/emit");
+    const title = input.title ?? (await listingTitleFor(input.listingId));
+
+    for (const stale of input.expiredPurchases ?? []) {
+      await notifyEnglishExpired({
+        winnerId: stale.buyerId,
+        listingId: input.listingId,
+        listingTitle: title,
+        purchaseId: stale.id,
+        amountUsd: stale.amountUsd,
+        now: input.now,
+      });
+    }
+
+    if (
+      input.result.settleLabel === "unsold" ||
+      input.result.settleLabel === "payment_expired_unsold"
+    ) {
+      const reason =
+        input.result.outcome.status === "unsold"
+          ? input.result.outcome.reason
+          : "payment_expired";
+      await notifyCreatorEnglishUnsold({
+        creatorId: input.creatorId,
+        listingId: input.listingId,
+        listingTitle: title,
+        reason,
+        auctionEndsAt: input.auctionEndsAt ?? input.now,
+        now: input.now,
+      });
+      return;
+    }
+
+    if (
+      input.result.created &&
+      input.result.purchaseId &&
+      input.result.outcome.status === "award"
+    ) {
+      await notifyEnglishWin({
+        winnerId: input.result.outcome.highBidderId,
+        listingId: input.listingId,
+        listingTitle: title,
+        purchaseId: input.result.purchaseId,
+        amountUsd: input.result.outcome.amountUsd,
+        awardedAt: input.now,
+        cascaded: input.result.cascaded,
+      });
+      await notifyCreatorEnglishAwaiting({
+        creatorId: input.creatorId,
+        listingId: input.listingId,
+        listingTitle: title,
+        purchaseId: input.result.purchaseId,
+        amountUsd: input.result.outcome.amountUsd,
+        winnerId: input.result.outcome.highBidderId,
+        cascaded: input.result.cascaded,
+        now: input.now,
+      });
+    }
+  } catch (err) {
+    console.warn("[freshmint] english settle notify failed", err);
+  }
+}
+
 /**
  * Cron-less lazy settle: when an English listing is viewed / bid-listed after
  * end, create a pending_payment purchase for the high bidder at the winning
@@ -325,7 +428,15 @@ export async function lazySettleEnglishAuction(
 
   if (outcome.status === "unsold") {
     await markEnglishSoftOutcome(listingId, "unsold");
-    return empty(outcome, "unsold");
+    const unsoldResult = empty(outcome, "unsold");
+    await emitEnglishSettleNotifications({
+      listingId,
+      creatorId: listing.creatorId,
+      result: unsoldResult,
+      now,
+      auctionEndsAt: listing.auctionEndsAt,
+    });
+    return unsoldResult;
   }
 
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
@@ -503,6 +614,11 @@ export async function lazySettleEnglishAuction(
       !purchaseReservesSupply(p, now),
   );
   let expiredWinnerId: string | null = null;
+  const expiredPurchaseSnap = expiredPending.map((p) => ({
+    id: p.id,
+    buyerId: p.buyerId,
+    amountUsd: p.amountUsd,
+  }));
   for (const stale of expiredPending) {
     await cancelEnglishAward(stale.id);
     expiredWinnerId = stale.buyerId;
@@ -533,11 +649,20 @@ export async function lazySettleEnglishAuction(
     });
     if (!next) {
       await markEnglishSoftOutcome(listingId, "unsold");
-      return empty(
+      const expiredUnsold = empty(
         { status: "unsold", reason: "no_winning_bid" },
         "payment_expired_unsold",
         { expiredWinnerId, cascaded: false },
       );
+      await emitEnglishSettleNotifications({
+        listingId,
+        creatorId: listing.creatorId,
+        result: expiredUnsold,
+        expiredPurchases: expiredPurchaseSnap,
+        now,
+        auctionEndsAt: listing.auctionEndsAt,
+      });
+      return expiredUnsold;
     }
     awardTarget = next;
     cascaded = true;
@@ -563,7 +688,7 @@ export async function lazySettleEnglishAuction(
         : now;
   const deadline = createdAt + ENGLISH_WINNER_PAYMENT_DEADLINE_MS;
 
-  return {
+  const createdResult: LazyEnglishSettleResult = {
     outcome: {
       status: "award",
       amountUsd: awardTarget.amountUsd,
@@ -577,6 +702,15 @@ export async function lazySettleEnglishAuction(
     cascaded,
     expiredWinnerId,
   };
+  await emitEnglishSettleNotifications({
+    listingId,
+    creatorId: listing.creatorId,
+    result: createdResult,
+    expiredPurchases: expiredPurchaseSnap,
+    now,
+    auctionEndsAt: listing.auctionEndsAt,
+  });
+  return createdResult;
 }
 
 
@@ -676,6 +810,32 @@ export async function placeBid(input: PlaceBidInput): Promise<PlaceBidResult> {
   if (!rules.ok) return rules;
 
   const amountUsd = Math.round(Number(input.amountUsd) * 100) / 100;
+  const previousHighBidderId = listing.highBidderId;
+
+  async function notifyOutbid(bidId: string) {
+    if (
+      !previousHighBidderId ||
+      previousHighBidderId === input.bidderId
+    ) {
+      return;
+    }
+    try {
+      const { notifyEnglishOutbid } = await import(
+        "@/lib/notifications/emit"
+      );
+      const title = await listingTitleFor(listing!.id);
+      await notifyEnglishOutbid({
+        previousHighBidderId,
+        listingId: listing!.id,
+        listingTitle: title,
+        bidId,
+        newAmountUsd: amountUsd,
+        now,
+      });
+    } catch (err) {
+      console.warn("[freshmint] outbid notify failed", err);
+    }
+  }
 
   if (mode === "memory" || isMemoryMode()) {
     const bid: BidRow = {
@@ -696,6 +856,7 @@ export async function placeBid(input: PlaceBidInput): Promise<PlaceBidResult> {
       live.saleMode = "english";
       engine.state.listings.set(listing.id, live as never);
     }
+    await notifyOutbid(bid.id);
     return {
       ok: true,
       bid,
@@ -747,6 +908,7 @@ export async function placeBid(input: PlaceBidInput): Promise<PlaceBidResult> {
       return bid;
     });
 
+    await notifyOutbid(created.id);
     return {
       ok: true,
       bid: {
