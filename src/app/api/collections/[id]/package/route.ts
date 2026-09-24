@@ -2,6 +2,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import {
   getCollectionPackageEligibility,
   prepareCollectionPackagePurchase,
+  quoteCollectionPackagePay,
   updateCollectionPackageSell,
 } from "@/lib/marketplace/package-sell";
 import { NextRequest, NextResponse } from "next/server";
@@ -57,8 +58,11 @@ const buySchema = z.object({
     "solana",
     "boing",
   ]),
-  buyerPaymentAddress: z.string().min(1),
-  buyerReceiveAddress: z.string().min(1),
+  buyerPaymentAddress: z.string().min(1).optional(),
+  buyerReceiveAddress: z.string().min(1).optional(),
+  /** Live Relay quote only — does not create purchases. */
+  quoteOnly: z.boolean().optional(),
+  /** Explicit fallback checkout without a wallet (dev / preview). */
   simulate: z.boolean().optional(),
   paymentTxHash: z.string().optional(),
 });
@@ -76,6 +80,26 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
+
+  if (parsed.data.quoteOnly) {
+    const quoted = await quoteCollectionPackagePay({
+      collectionId: id,
+      payNetwork: parsed.data.payNetwork,
+      buyerPaymentAddress: parsed.data.buyerPaymentAddress,
+    });
+    if (!quoted.ok) {
+      return NextResponse.json(quoted, { status: 400 });
+    }
+    return NextResponse.json(quoted);
+  }
+
+  if (!parsed.data.buyerPaymentAddress || !parsed.data.buyerReceiveAddress) {
+    return NextResponse.json(
+      { error: "buyer_addresses_required" },
+      { status: 400 },
+    );
+  }
+
   const result = await prepareCollectionPackagePurchase({
     collectionId: id,
     buyerId: user.id,

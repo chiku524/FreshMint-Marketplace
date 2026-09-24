@@ -1,5 +1,11 @@
 "use client";
 
+import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
+import type { Chain } from "@/lib/discovery/types";
+import {
+  browserWalletAvailable,
+  requestBuyerAddress,
+} from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -23,6 +29,12 @@ const PAY_LABELS: Record<string, string> = {
   boing: "Boing (BOING)",
 };
 
+function vmForNetwork(network: string): Chain {
+  if (network === "solana") return "solana";
+  if (network === "boing") return "boing";
+  return "evm";
+}
+
 export function CollectionPackagePanel({
   collectionId,
   isOwner,
@@ -36,6 +48,17 @@ export function CollectionPackagePanel({
   const [payNetwork, setPayNetwork] = useState("ethereum");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [paymentAddress, setPaymentAddress] = useState<string | null>(null);
+  const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
+  const [bridgeFeeUsd, setBridgeFeeUsd] = useState<string | null>(null);
+  const [bridgeEstimatedOutput, setBridgeEstimatedOutput] = useState<
+    string | null
+  >(null);
+  const [bridgeQuoteRequestId, setBridgeQuoteRequestId] = useState<
+    string | null
+  >(null);
+  const [bridgeQuoteLoading, setBridgeQuoteLoading] = useState(false);
+  const [showSimulate, setShowSimulate] = useState(false);
 
   function load() {
     void fetch(`/api/collections/${collectionId}/package`, {
@@ -60,6 +83,81 @@ export function CollectionPackagePanel({
     load();
   }, [collectionId]);
 
+  const listingNetwork = data?.network ?? null;
+  const crossChain = Boolean(listingNetwork && payNetwork !== listingNetwork);
+
+  // Live Relay quote when pay network differs — no polling; refetch on deps.
+  useEffect(() => {
+    if (!data?.packageSellEnabled || isOwner || !crossChain) {
+      return;
+    }
+    let cancelled = false;
+    const canLive = Boolean(paymentAddress);
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setBridgeQuoteLoading(canLive);
+      if (!canLive) {
+        setBridgeFeeUsd(null);
+        setBridgeEstimatedOutput(null);
+        setBridgeQuoteRequestId(null);
+        setBridgeQuoteLoading(false);
+        return;
+      }
+      void fetch(`/api/collections/${collectionId}/package`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payNetwork,
+          quoteOnly: true,
+          buyerPaymentAddress: paymentAddress,
+        }),
+      })
+        .then(async (res) => {
+          const body = await res.json();
+          if (cancelled) return;
+          if (!res.ok) {
+            setBridgeFeeUsd(null);
+            setBridgeEstimatedOutput(null);
+            setBridgeQuoteRequestId(null);
+            return;
+          }
+          const bridge = body.bridge as
+            | {
+                feeUsd?: string | null;
+                estimatedOutput?: string | null;
+                requestId?: string | null;
+              }
+            | null
+            | undefined;
+          setBridgeFeeUsd(bridge?.feeUsd ?? null);
+          setBridgeEstimatedOutput(bridge?.estimatedOutput ?? null);
+          setBridgeQuoteRequestId(bridge?.requestId ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBridgeFeeUsd(null);
+            setBridgeEstimatedOutput(null);
+            setBridgeQuoteRequestId(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setBridgeQuoteLoading(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    collectionId,
+    payNetwork,
+    paymentAddress,
+    crossChain,
+    data?.packageSellEnabled,
+    isOwner,
+  ]);
+
   if (!data) return null;
   const count = data.listings?.length ?? 0;
   if (!isOwner && (!data.packageSellEnabled || count < 2)) return null;
@@ -70,7 +168,32 @@ export function CollectionPackagePanel({
       : data.network
         ? [data.network]
         : ["ethereum"];
-  const crossChain = Boolean(data.network && payNetwork !== data.network);
+
+  async function connectWallets() {
+    setMsg(null);
+    try {
+      const payVm = vmForNetwork(payNetwork);
+      const recvVm = vmForNetwork(listingNetwork ?? payNetwork);
+      if (!browserWalletAvailable(payVm)) {
+        throw new Error(`Connect a ${payVm} wallet for payment`);
+      }
+      const pay = await requestBuyerAddress(payVm);
+      if (!pay) throw new Error("Payment wallet connection cancelled");
+      setPaymentAddress(pay);
+      if (recvVm === payVm) {
+        setReceiveAddress(pay);
+      } else {
+        if (!browserWalletAvailable(recvVm)) {
+          throw new Error(`Connect a ${recvVm} wallet to receive NFTs`);
+        }
+        const recv = await requestBuyerAddress(recvVm);
+        if (!recv) throw new Error("Receive wallet connection cancelled");
+        setReceiveAddress(recv);
+      }
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "wallet_connect_failed");
+    }
+  }
 
   async function toggle(enabled: boolean) {
     setBusy(true);
@@ -97,19 +220,26 @@ export function CollectionPackagePanel({
     }
   }
 
-  async function buy() {
+  async function buy(opts: { simulate: boolean }) {
     setBusy(true);
     setMsg(null);
     try {
+      const payAddr =
+        opts.simulate ? paymentAddress || "0xbuyer-sim" : paymentAddress;
+      const recvAddr =
+        opts.simulate ? receiveAddress || paymentAddress || "0xbuyer-sim" : receiveAddress;
+      if (!payAddr || !recvAddr) {
+        throw new Error("Connect payment (and receive) wallet first");
+      }
       const res = await fetch(`/api/collections/${collectionId}/package`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           payNetwork,
-          buyerPaymentAddress: "0xbuyer",
-          buyerReceiveAddress: "0xbuyer",
-          simulate: true,
+          buyerPaymentAddress: payAddr,
+          buyerReceiveAddress: recvAddr,
+          ...(opts.simulate ? { simulate: true } : {}),
         }),
       });
       const body = await res.json();
@@ -117,8 +247,11 @@ export function CollectionPackagePanel({
       const bridgeNote = body.bridged
         ? " One Relay bridge for the package total, then same-chain NFT transfers."
         : " Same-network checkout.";
+      const simNote = opts.simulate
+        ? " (simulated — no on-chain payment; for preview only.)"
+        : "";
       setMsg(
-        `Package prepared (${body.purchaseIds?.length ?? 0} works, $${body.amountUsd}).${bridgeNote}`,
+        `Package prepared (${body.purchaseIds?.length ?? 0} works, $${body.amountUsd}).${bridgeNote}${simNote}`,
       );
       load();
       router.refresh();
@@ -128,6 +261,8 @@ export function CollectionPackagePanel({
       setBusy(false);
     }
   }
+
+  const packagePriceLabel = price || data.defaultPriceUsd;
 
   return (
     <section
@@ -170,33 +305,84 @@ export function CollectionPackagePanel({
         </div>
       ) : null}
       {!isOwner && data.packageSellEnabled && count >= 2 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-          <label style={{ fontSize: "0.85rem" }}>
-            Pay from
-            <select
-              value={payNetwork}
-              onChange={(e) => setPayNetwork(e.target.value)}
-              style={{ display: "block", marginTop: 4, minWidth: "10rem" }}
+        <div style={{ display: "grid", gap: "0.55rem" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+            <label style={{ fontSize: "0.85rem" }}>
+              Pay from
+              <select
+                value={payNetwork}
+                onChange={(e) => setPayNetwork(e.target.value)}
+                style={{ display: "block", marginTop: 4, minWidth: "10rem" }}
+              >
+                {payNetworks.map((n) => (
+                  <option key={n} value={n}>
+                    {PAY_LABELS[n] ?? n}
+                    {data.network && n === data.network ? " (listing)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="badge"
+              style={{ cursor: "pointer", background: "transparent" }}
+              onClick={() => void connectWallets()}
             >
-              {payNetworks.map((n) => (
-                <option key={n} value={n}>
-                  {PAY_LABELS[n] ?? n}
-                  {data.network && n === data.network ? " (listing)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="badge featured"
-            disabled={busy}
-            style={{ cursor: "pointer", background: "transparent" }}
-            onClick={() => void buy()}
-          >
-            {crossChain
-              ? `Bridge & buy package ($${price || data.defaultPriceUsd})`
-              : `Buy remaining works ($${price || data.defaultPriceUsd})`}
-          </button>
+              {paymentAddress ? "Wallet connected" : "Connect wallet"}
+            </button>
+            <button
+              type="button"
+              className="badge featured"
+              disabled={busy || (!paymentAddress && !showSimulate)}
+              style={{ cursor: "pointer", background: "transparent" }}
+              onClick={() => void buy({ simulate: false })}
+            >
+              {crossChain
+                ? `Bridge & buy package ($${packagePriceLabel})`
+                : `Buy remaining works ($${packagePriceLabel})`}
+            </button>
+          </div>
+          {crossChain ? (
+            <BridgeQuoteSummary
+              feeUsd={paymentAddress ? bridgeFeeUsd : null}
+              estimatedOutput={paymentAddress ? bridgeEstimatedOutput : null}
+              requestId={paymentAddress ? bridgeQuoteRequestId : null}
+              loading={Boolean(paymentAddress) && bridgeQuoteLoading}
+              needsWallet={!paymentAddress}
+              onConnectWallet={() => void connectWallets()}
+            />
+          ) : null}
+          <div style={{ fontSize: "0.8rem", color: "var(--ink-muted)" }}>
+            <button
+              type="button"
+              className="badge"
+              style={{
+                cursor: "pointer",
+                background: "transparent",
+                opacity: 0.85,
+              }}
+              onClick={() => setShowSimulate((v) => !v)}
+            >
+              {showSimulate ? "Hide simulate fallback" : "Show simulate fallback"}
+            </button>
+            {showSimulate ? (
+              <div style={{ marginTop: "0.45rem" }}>
+                <p style={{ margin: "0 0 0.4rem" }}>
+                  Simulate prepares package rows without a real wallet payment —
+                  preview / local testing only.
+                </p>
+                <button
+                  type="button"
+                  className="badge"
+                  disabled={busy}
+                  style={{ cursor: "pointer", background: "transparent" }}
+                  onClick={() => void buy({ simulate: true })}
+                >
+                  Simulate package buy
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
       {msg ? (

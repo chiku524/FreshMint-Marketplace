@@ -120,6 +120,129 @@ export function validatePackagePayNetwork(input: {
   };
 }
 
+export async function quoteCollectionPackagePay(input: {
+  collectionId: string;
+  payNetwork: string;
+  buyerPaymentAddress?: string | null;
+}): Promise<
+  | {
+      ok: true;
+      amountUsd: number;
+      bridged: boolean;
+      payNetwork: string;
+      listingNetwork: string;
+      quote?: {
+        settle: { formatted: string; symbol: string; amount: number };
+        pay: { formatted: string; symbol: string; amount: number };
+      };
+      bridge: {
+        feeUsd?: string | null;
+        estimatedOutput?: string | null;
+        requestId?: string | null;
+      } | null;
+      bridgeQuoteError?: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  const eligibility = await getCollectionPackageEligibility(input.collectionId);
+  if (!eligibility.packageSellEnabled) {
+    return { ok: false, error: "package_sell_disabled" };
+  }
+  if (!eligibility.ok || eligibility.listings.length < 2 || !eligibility.network) {
+    return { ok: false, error: eligibility.reason ?? "ineligible" };
+  }
+  const payCheck = validatePackagePayNetwork({
+    listingNetwork: eligibility.network,
+    payNetwork: input.payNetwork,
+  });
+  if (!payCheck.ok) return { ok: false, error: payCheck.error };
+
+  const amountUsd =
+    eligibility.packagePriceUsd != null && eligibility.packagePriceUsd > 0
+      ? eligibility.packagePriceUsd
+      : eligibility.defaultPriceUsd;
+
+  const listingNetwork = eligibility.network as NetworkId;
+  const { publicPayQuote } = await import("@/lib/marketplace/crypto-purchase");
+  const { quotePayInFromUsdAt } = await import("@/lib/onchain/fx");
+  const { vmFromNetwork } = await import("@/lib/chains/registry");
+
+  const fx = quotePayInFromUsdAt({
+    amountUsd,
+    listingChain: vmFromNetwork(listingNetwork),
+    payNetwork: input.payNetwork as NetworkId,
+  });
+  const quote = publicPayQuote({
+    settle: fx.settle,
+    pay: fx.pay,
+    bridged: payCheck.bridged,
+  });
+
+  if (!payCheck.bridged) {
+    return {
+      ok: true,
+      amountUsd,
+      bridged: false,
+      payNetwork: input.payNetwork,
+      listingNetwork,
+      quote,
+      bridge: null,
+      bridgeQuoteError: null,
+    };
+  }
+
+  if (!input.buyerPaymentAddress) {
+    return {
+      ok: true,
+      amountUsd,
+      bridged: true,
+      payNetwork: input.payNetwork,
+      listingNetwork,
+      quote,
+      bridge: null,
+      bridgeQuoteError: "wallet_required_for_live_quote",
+    };
+  }
+
+  try {
+    const live = await buildCrossChainPayQuote({
+      listingNetwork,
+      payNetwork: input.payNetwork as NetworkId,
+      amountUsd,
+      buyerPaymentAddress: input.buyerPaymentAddress,
+      settlementAddress: settlementAddressFor(listingNetwork),
+    });
+    return {
+      ok: true,
+      amountUsd,
+      bridged: true,
+      payNetwork: input.payNetwork,
+      listingNetwork,
+      quote,
+      bridge: live.bridge
+        ? {
+            feeUsd: live.bridge.feeUsd ?? null,
+            estimatedOutput: live.bridge.estimatedOutput ?? null,
+            requestId: live.bridge.requestId ?? null,
+          }
+        : null,
+      bridgeQuoteError: live.bridge?.feeUsd ? null : "fee_unavailable",
+    };
+  } catch (e) {
+    return {
+      ok: true,
+      amountUsd,
+      bridged: true,
+      payNetwork: input.payNetwork,
+      listingNetwork,
+      quote,
+      bridge: null,
+      bridgeQuoteError: e instanceof Error ? e.message : "bridge_quote_failed",
+    };
+  }
+}
+
+
 export async function getCollectionPackageEligibility(collectionId: string) {
   const { getDiscoveryEngine } = await import("@/lib/marketplace/service");
   const { listClosedPrimarySaleIds } = await import("@/lib/marketplace/sales");
@@ -228,9 +351,8 @@ export async function updateCollectionPackageSell(input: {
 }
 
 /**
- * Same-network package buy MVP: one PackagePurchase + N Purchase rows.
- * Pay total once; sequential escrow transfers via existing purchase lifecycle.
- * Cross-chain package buys are out of scope.
+ * Package buy: one PackagePurchase + N Purchase rows.
+ * Pay total once (optionally one Relay bridge); sequential escrow transfers.
  */
 export async function prepareCollectionPackagePurchase(input: {
   collectionId: string;
