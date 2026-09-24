@@ -32,3 +32,14 @@ Legacy `type === "auction"` with missing `saleMode` resolves to **`timed_window`
 - Eligibility: ≥2 listings, minted, unsold, not delisted, same collection, **same listing network** (receive chain is one network).
 - Flow: one `PackagePurchase` + N `Purchase` rows; pay package total once; sequential escrow transfers (resume via existing purchase lifecycle).
 - **Cross-chain pay:** buyer may choose a Relay `payNetwork` different from the listing network. One bridge leg covers the package total, then same-chain NFT transfers. CollectionPackagePanel fetches a live Relay quote (best-effort `feeUsd` via BridgeQuoteSummary; no polling). `simulate` is an explicit fallback only. Per-item multi-leg bridges are out of scope. Boing remains same-chain only (`assertCryptoPayAllowed`).
+
+
+## Cron settle (Vercel)
+
+`GET|POST /api/cron/settle-auctions` runs `lazySettleEnglishAuction` in batches for ended English listings and expired `english-award` pending payments. Auth: `Authorization: Bearer ${CRON_SECRET}` (same header Vercel Cron sends when `CRON_SECRET` is set).
+
+Schedule (Hobby-safe, once/day): `0 14 * * *` in `vercel.json`.
+
+Lazy settle on listing/bids view remains in place — cron is a safety net.
+
+Set `CRON_SECRET` in Vercel env (Production + Preview as needed). Locally, put it in `.env` to call the route manually.
