@@ -50,7 +50,7 @@ describe("purchaseReservesSupply", () => {
 
 describe("stage helpers", () => {
   it("labels stages for collectors", () => {
-    expect(stageLabel("soft_launch")).toBe("Open Lane");
+    expect(stageLabel("soft_launch")).toBe("Soft-launched");
     expect(stageLabel("rising_eligible")).toBe("Rising");
   });
 

@@ -28,7 +28,7 @@ function priceLabel(listing: Listing, bucket?: string) {
     return `sold $${listing.priceUsd}`;
   }
   if (listing.priceUsd != null) return `$${listing.priceUsd}`;
-  return "auction";
+  return "timed drop";
 }
 
 function useDelayedMenu() {
@@ -266,6 +266,7 @@ export function WorkCard({
         </h3>
         <p className="work-tile__meta">
           {priceLabel(listing, bucket)}
+          {listing.type === "auction" ? " · Timed window · buy at list price" : ""}
           {collection ? (
             <>
               {" · "}

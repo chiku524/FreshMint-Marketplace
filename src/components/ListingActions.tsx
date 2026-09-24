@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
-import { resolveBuyAuthCta } from "@/lib/marketplace/buy-auth-cta";
+import { resolveBuyPrimaryCta } from "@/lib/marketplace/buy-auth-cta";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 
 const PAY_LABELS: Record<string, string> = {
@@ -723,36 +723,54 @@ export function ListingActions({
           <Link href={`/listings/${listingId}`} className="badge featured">
             Buy{priceUsd != null ? ` $${priceUsd}` : ""}
           </Link>
-        ) : resolveBuyAuthCta(sessionUserId) === "checking" ? (
-          <span
-            className="badge"
-            aria-busy="true"
-            style={{
-              opacity: 0.65,
-              cursor: "default",
-              background: "transparent",
-              color: "var(--ink-muted)",
-            }}
-          >
-            Checking sign-in…
-          </span>
-        ) : resolveBuyAuthCta(sessionUserId) === "sign_in" ? (
-          <Link href={signInHref} className="badge featured">
-            Sign in to buy {settleQuote?.formatted ?? `$${priceUsd}`}
-          </Link>
-        ) : (
-        <button
-          type="button"
-          className="badge featured"
-          style={{ cursor: "pointer", background: "transparent" }}
-          onClick={() => void openCheckout()}
-        >
-          Buy {settleQuote?.formatted ?? `$${priceUsd}`}
-          {priceUsd != null ? (
-            <span style={{ opacity: 0.75 }}> · ${priceUsd}</span>
-          ) : null}
-        </button>
-        )
+        ) : (() => {
+          const primary = resolveBuyPrimaryCta({
+            sessionUserId,
+            confirmOpen: false,
+            paymentAddress: null,
+            crossChain: false,
+            buying: false,
+          });
+          if (primary.kind === "checking") {
+            return (
+              <span
+                className="badge"
+                aria-busy="true"
+                style={{
+                  opacity: 0.65,
+                  cursor: "default",
+                  background: "transparent",
+                  color: "var(--ink-muted)",
+                }}
+              >
+                Checking sign-in…
+              </span>
+            );
+          }
+          if (primary.kind === "sign_in") {
+            return (
+              <Link href={signInHref} className="badge featured">
+                Continue
+              </Link>
+            );
+          }
+          return (
+            <button
+              type="button"
+              className="badge featured"
+              style={{ cursor: "pointer", background: "transparent" }}
+              onClick={() => void openCheckout()}
+            >
+              Continue
+              {settleQuote?.formatted || priceUsd != null ? (
+                <span style={{ opacity: 0.75 }}>
+                  {" "}
+                  · {settleQuote?.formatted ?? `$${priceUsd}`}
+                </span>
+              ) : null}
+            </button>
+          );
+        })()
       ) : null}
       {canBuy && confirmBuy && layout !== "menu" ? (
         <div
@@ -920,22 +938,45 @@ export function ListingActions({
           ) : null}
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-            <button
-              type="button"
-              className="badge featured"
-              disabled={buying}
-              style={{
-                cursor: buying ? "wait" : "pointer",
-                background: "transparent",
-              }}
-              onClick={() => void completePurchase()}
-            >
-              {buying
-                ? stepLabel(buyStep === "idle" ? "connecting" : buyStep, crossChain)
-                : crossChain
-                  ? "Bridge & buy"
-                  : "Confirm buy"}
-            </button>
+            {(() => {
+              const primary = resolveBuyPrimaryCta({
+                sessionUserId,
+                confirmOpen: true,
+                paymentAddress,
+                crossChain,
+                buying,
+                busyLabel: stepLabel(
+                  buyStep === "idle" && buying ? "connecting" : buyStep,
+                  crossChain,
+                ),
+              });
+              return (
+                <button
+                  type="button"
+                  className="badge featured"
+                  disabled={buying || primary.kind === "checking"}
+                  style={{
+                    cursor: buying ? "wait" : "pointer",
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    if (primary.kind === "sign_in") {
+                      window.location.assign(signInHref);
+                      return;
+                    }
+                    if (primary.kind === "connect_wallet") {
+                      void connectWallets().then((wallets) => {
+                        if (wallets) setBuyStep("idle");
+                      });
+                      return;
+                    }
+                    void completePurchase();
+                  }}
+                >
+                  {primary.label}
+                </button>
+              );
+            })()}
             <button
               type="button"
               className="badge"
@@ -1022,8 +1063,8 @@ export function ListingActions({
       ) : null}
       {msg === "sign_in" ? (
         <span style={{ fontSize: "0.8rem", maxWidth: "22rem" }}>
-          <Link href={signInHref}>Sign in</Link> to FreshMint first, then
-          connect a wallet to pay — wallet linking stays under{" "}
+          <Link href={signInHref}>Continue</Link> to sign in, then pay from your
+          wallet. Link wallets anytime under{" "}
           <Link href="/me/settings">/me/settings</Link>.
         </span>
       ) : msg === "already_sold" ? (

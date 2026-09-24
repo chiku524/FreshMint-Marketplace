@@ -110,7 +110,14 @@ export default async function ListingDetailPage({
             {emerging ? <span className="badge emerging">Emerging</span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
-            <span className="badge">{listing.type.replace("_", " ")}</span>
+            <span className="badge">
+              {listing.type === "auction"
+                ? "Timed window · buy at list price"
+                : listing.type.replace("_", " ")}
+            </span>
+            {listing.type === "auction" ? (
+              <span className="badge">No open bidding</span>
+            ) : null}
             <span className="badge">{stageLabel(listing.stage)}</span>
             {cap != null ? (
               <span className="badge">
@@ -135,7 +142,7 @@ export default async function ListingDetailPage({
             <Link href={`/creators/${listing.creatorId}`}>
               {creator?.displayName ?? listing.creatorId}
             </Link>
-            {listing.priceUsd != null ? ` · $${listing.priceUsd}` : " · auction"}
+            {listing.priceUsd != null ? ` · $${listing.priceUsd}` : " · timed drop"}
             {" · "}
             {listing.medium}
             {collection ? (
@@ -221,7 +228,7 @@ export default async function ListingDetailPage({
                 lineHeight: 1.5,
               }}
             >
-              Timed auction window
+              Timed drop window
               {drop.state === "upcoming"
                 ? " (not started)"
                 : drop.state === "live"
@@ -229,8 +236,8 @@ export default async function ListingDetailPage({
                   : drop.state === "ended"
                     ? " (ended)"
                     : ""}
-              . Buy at the fixed USD-quoted price in crypto while the window is
-              open — FreshMint does not run an open English bidding board.
+              . Buy at the fixed USD-quoted list price in crypto while the window
+              is open — no open bidding.
             </p>
           ) : null}
 

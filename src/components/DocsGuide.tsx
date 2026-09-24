@@ -313,7 +313,7 @@ export function DocsGuide() {
                   ["Emerging Rising", mix.emerging_rising, "var(--emergent)"],
                   ["Following", mix.following, "var(--accent-soft)"],
                   ["Featured", mix.featured, "var(--accent)"],
-                  ["Auctions", mix.auctions_live, "var(--ink-muted)"],
+                  ["Timed drops", mix.auctions_live, "var(--ink-muted)"],
                 ] as const
               ).map(([label, share, color]) => (
                 <div key={label}>

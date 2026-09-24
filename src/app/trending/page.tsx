@@ -8,7 +8,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Trending NFTs — FreshMint Marketplace",
+  title: "Most viewed — FreshMint Marketplace",
   description:
     "Public works ordered by recorded page views, saves, and unique viewers.",
 };
@@ -25,7 +25,7 @@ export default async function TrendingPage() {
   return (
     <div className="page-wrap">
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Trending NFTs
+        Most viewed
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1.75rem" }}>
         Public works ordered by recorded page views, then saves, then unique

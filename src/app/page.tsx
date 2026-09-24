@@ -71,7 +71,7 @@ export default async function HomePage() {
             {Math.round(mix.emerging_rising * 100)}% Emerging Rising ·{" "}
             {Math.round(mix.following * 100)}% Following ·{" "}
             {Math.round(mix.featured * 100)}% Featured ·{" "}
-            {Math.round(mix.auctions_live * 100)}% Live auctions.
+            {Math.round(mix.auctions_live * 100)}% Live timed drops.
           </p>
           <HowItWorksNote kind="home" />
           <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
@@ -160,10 +160,10 @@ export default async function HomePage() {
             }}
           >
             <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
-              Live auction strip
+              Live timed drops
             </h2>
             <Link href="/auctions" style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-              All auctions →
+              All timed drops →
             </Link>
           </div>
           <PuzzleRail>
@@ -194,18 +194,18 @@ export default async function HomePage() {
           }}
         >
           <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
-            Cleared auctions
+            Cleared timed drops
           </h2>
           <Link href="/auctions" style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
             View archive →
           </Link>
         </div>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "46ch" }}>
-          Past artwork that sold successfully — discovery that converted.
+          Past artwork that sold successfully during a timed window — discovery that converted.
         </p>
         {soldAuctions.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No cleared auctions yet. Wins will appear here after hammer.
+            No cleared timed drops yet. Sales will appear here after checkout clears.
           </p>
         ) : (
           <PuzzleRail>

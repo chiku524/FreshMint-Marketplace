@@ -9,9 +9,9 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Auctions — FreshMint Marketplace",
+  title: "Timed drops — FreshMint Marketplace",
   description:
-    "Timed auction windows with fixed USD-quoted crypto checkout, plus cleared past sales.",
+    "Timed drop windows with fixed USD-quoted crypto checkout, plus cleared past sales.",
 };
 
 function DiscoverLinks() {
@@ -34,13 +34,13 @@ function DiscoverLinks() {
         Featured
       </Link>
       <Link href="/trending" className="badge">
-        Trending
+        Most viewed
       </Link>
       <Link href="/calendar" className="badge">
         Calendar
       </Link>
       <Link href="/create?intent=auction" className="badge">
-        Schedule an auction
+        Schedule a timed drop
       </Link>
     </p>
   );
@@ -55,13 +55,13 @@ export default async function AuctionsPage() {
   return (
     <div className="page-wrap">
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Auctions
+        Timed drops
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "2rem" }}>
-        Scheduled windows with a fixed USD-quoted price paid in crypto — not an
-        open English bidding board. Live endings can surface on the homepage
-        strip; cleared sales land here as proof of discovery converting into
-        primary sales.
+        Scheduled auction windows with a fixed USD-quoted price paid in crypto —
+        not an open English bidding board. Live endings can surface on the
+        homepage strip; cleared sales land here as proof of discovery converting
+        into primary sales.
       </p>
 
       {empty ? (
@@ -75,12 +75,12 @@ export default async function AuctionsPage() {
           }}
         >
           <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
-            No auctions live or cleared yet
+            No timed drops live or cleared yet
           </h2>
           <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
             This lane stays empty until a creator schedules a timed window and
-            collectors finish a primary sale. We do not invent live auctions.
-            Start from Create with the auction intent, or browse discovery /
+            collectors finish a primary sale. We do not invent live windows.
+            Start from Create with the timed-drop intent, or browse discovery /
             calendar while you wait for the first window.
           </p>
           <DiscoverLinks />
@@ -124,7 +124,7 @@ export default async function AuctionsPage() {
 
       <section>
         <h2 className="display" style={{ margin: "0 0 0.5rem", fontSize: "1.45rem" }}>
-          Cleared auctions ({sold.length})
+          Cleared timed drops ({sold.length})
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
           Past artwork that sold successfully during an auction window —
@@ -132,7 +132,7 @@ export default async function AuctionsPage() {
         </p>
         {sold.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No cleared auctions yet. When a collector completes checkout during a
+            No cleared timed drops yet. When a collector completes checkout during a
             window, it appears here.
           </p>
         ) : (

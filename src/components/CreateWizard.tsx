@@ -150,7 +150,7 @@ export function CreateWizard() {
     const raw = searchParams.get("intent");
     if (raw === "drop" || raw === "single" || raw === "auction") {
       setIntent(raw);
-      // Skip the intent picker when deep-linked from Auctions / Calendar.
+      // Skip the intent picker when deep-linked from Timed drops / Calendar.
       setStepIndex((idx) => (idx === 0 ? 1 : idx));
     }
   }, [searchParams]);
@@ -533,7 +533,7 @@ export function CreateWizard() {
               (intent === "drop"
                 ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
                 : intent === "auction"
-                  ? "Scheduled auction"
+                  ? "Timed drop"
                   : ""),
             type,
             network,
@@ -661,7 +661,7 @@ export function CreateWizard() {
         intent === "drop"
           ? `${pieces.length} ${dropKind === "open" ? "open-edition" : "limited"} piece${pieces.length === 1 ? "" : "s"}`
           : intent === "auction"
-            ? "auction listing"
+            ? "timed drop"
             : "1/1 listing";
       setOk(null);
       setPublished({
@@ -756,8 +756,8 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">What are you creating?</h2>
             <p className="create-wizard__lead">
-              One path at a time — a timed drop, a single 1/1, or a scheduled
-              auction window.
+              One path at a time — a collection drop, a single 1/1, or a timed
+              drop (auction window).
             </p>
             <div className="create-wizard__choices" role="group" aria-label="Creation type">
               {(
@@ -774,8 +774,8 @@ export function CreateWizard() {
                   },
                   {
                     id: "auction" as const,
-                    title: "Scheduled auction",
-                    body: "Fixed USD-quoted price, paid in crypto, with a start and end window.",
+                    title: "Timed drop",
+                    body: "Fixed USD-quoted price, paid in crypto, with a start and end window. No open bidding.",
                   },
                 ] as const
               ).map((choice) => (
@@ -860,7 +860,7 @@ export function CreateWizard() {
         {step.id === "schedule" ? (
           <>
             <h2 className="display create-wizard__title">
-              {intent === "auction" ? "Auction window" : "Drop schedule"}
+              {intent === "auction" ? "Timed drop window" : "Drop schedule"}
             </h2>
             <p className="create-wizard__lead">
               Collectors pay crypto at this USD-quoted price while the window is live.
@@ -1197,7 +1197,7 @@ export function CreateWizard() {
                   {intent === "drop"
                     ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
                     : intent === "auction"
-                      ? "Scheduled auction"
+                      ? "Timed drop"
                       : "1/1 listing"}
                 </dd>
               </div>

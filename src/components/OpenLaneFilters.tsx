@@ -74,7 +74,7 @@ export function OpenLaneFilters({
           Open edition
         </Link>
         <Link className="badge" href={link({ type: "auction" })}>
-          Auction
+          Timed drop
         </Link>
         <Link className="badge" href={link({ type: "collection" })}>
           Collection

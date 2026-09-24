@@ -11,16 +11,17 @@ type DiscoveryLink = {
   icon: string;
 };
 
+/** Primary product IA — SiteNav stays free of these lane duplicates. */
 const BROWSE: DiscoveryLink[] = [
   { href: "/collections", label: "Collections", icon: "collections" },
-  { href: "/trending", label: "Trending NFTs", icon: "trending" },
 ];
 
 const DISCOVER: DiscoveryLink[] = [
   { href: "/open", label: "Open Lane", icon: "open" },
   { href: "/rising", label: "Rising", icon: "rising" },
   { href: "/featured", label: "Featured", icon: "featured" },
-  { href: "/auctions", label: "Auctions", icon: "auctions" },
+  { href: "/trending", label: "Most viewed", icon: "trending" },
+  { href: "/auctions", label: "Timed drops", icon: "auctions" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/shelves", label: "Shelves", icon: "shelves" },
 ];

@@ -19,25 +19,11 @@ function isLinkItem(item: NavItem): item is NavLinkItem {
   return "href" in item;
 }
 
-const GROUPS: NavGroup[] = [
-  {
-    id: "discover",
-    label: "Discover",
-    items: [
-      { href: "/rising", label: "Rising" },
-      { href: "/open", label: "Open Lane" },
-      { href: "/featured", label: "Featured" },
-      { href: "/auctions", label: "Auctions" },
-      { href: "/calendar", label: "Calendar" },
-      { href: "/collections", label: "Collections" },
-      { href: "/trending", label: "Trending NFTs" },
-      { href: "/shelves", label: "Shelves" },
-      { href: "/docs", label: "How it works" },
-    ],
-  },
+/** Slim primary chrome — discovery lanes live on DiscoverySidebar. */
+const PRIMARY_GROUPS: NavGroup[] = [
   {
     id: "studio",
-    label: "Studio",
+    label: "Create",
     items: [
       { href: "/create", label: "Create" },
       { href: "/studio", label: "Studio" },
@@ -49,24 +35,22 @@ const GROUPS: NavGroup[] = [
     items: [{ href: "/bridge", label: "Bridge" }],
   },
   {
-    id: "ops",
-    label: "Ops",
-    items: [
-      { href: "/moderate", label: "Moderate" },
-      { href: "/metrics", label: "Metrics" },
-      { href: "/docs", label: "Docs" },
-    ],
+    id: "docs",
+    label: "Docs",
+    items: [{ href: "/docs", label: "How it works" }],
   },
-  {
-    id: "account",
-    label: "Account",
-    items: [
-      { href: "/sign-in", label: "Sign in" },
-      { href: "/sign-up", label: "Create profile" },
-      { href: "/me", label: "Profile" },
-      { action: "logout", label: "Sign out" },
-    ],
-  },
+];
+
+const ACCOUNT_BASE: NavItem[] = [
+  { href: "/sign-in", label: "Sign in" },
+  { href: "/sign-up", label: "Create profile" },
+  { href: "/me", label: "Profile" },
+  { action: "logout", label: "Sign out" },
+];
+
+const OPS_ITEMS: NavLinkItem[] = [
+  { href: "/moderate", label: "Moderate" },
+  { href: "/metrics", label: "Metrics" },
 ];
 
 function NavDropdown({
@@ -205,6 +189,7 @@ export function SiteNav({
   const pathname = usePathname() || "/";
   const [closeSignal, setCloseSignal] = useState(0);
   const [signedIn, setSignedIn] = useState(signedInInitial);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     setCloseSignal((n) => n + 1);
@@ -215,11 +200,24 @@ export function SiteNav({
     function refreshAuth() {
       void fetch("/api/auth/me", { credentials: "include" })
         .then((res) => res.json())
-        .then((data: { user?: { id?: string } | null }) => {
-          if (!cancelled) setSignedIn(Boolean(data.user?.id));
-        })
+        .then(
+          (data: {
+            user?: { id?: string; role?: string } | null;
+          }) => {
+            if (cancelled) return;
+            setSignedIn(Boolean(data.user?.id));
+            setRole(
+              data.user && typeof data.user.role === "string"
+                ? data.user.role
+                : null,
+            );
+          },
+        )
         .catch(() => {
-          if (!cancelled) setSignedIn(false);
+          if (!cancelled) {
+            setSignedIn(false);
+            setRole(null);
+          }
         });
     }
     refreshAuth();
@@ -236,33 +234,41 @@ export function SiteNav({
     });
   }
 
-  const groups = GROUPS.filter((group) =>
-    area === "account" ? group.id === "account" : group.id !== "account",
-  );
-
-  return (
-    <nav
-      className={`site-nav${area === "account" ? " site-nav--end" : ""}`}
-      aria-label={area === "account" ? "Account" : "Primary"}
-    >
-      {groups.map((group) => {
-        const items =
-          group.id === "account"
-            ? group.items.filter((item) =>
-                signedIn
-                  ? !isLinkItem(item) || item.href === "/me"
-                  : isLinkItem(item) && item.href !== "/me",
-              )
-            : group.items;
-        return (
+  if (area === "primary") {
+    return (
+      <nav className="site-nav" aria-label="Primary">
+        {PRIMARY_GROUPS.map((group) => (
           <NavDropdown
             key={group.id}
-            group={{ ...group, items }}
+            group={group}
             closeSignal={closeSignal}
-            onLogout={group.id === "account" ? logout : undefined}
           />
-        );
-      })}
+        ))}
+      </nav>
+    );
+  }
+
+  const showOps = role === "moderator" || role === "editor";
+  const accountItems = ACCOUNT_BASE.filter((item) =>
+    signedIn
+      ? !isLinkItem(item) || item.href === "/me"
+      : isLinkItem(item) && item.href !== "/me",
+  );
+  const items: NavItem[] = showOps
+    ? [
+        ...accountItems.filter((i) => isLinkItem(i)),
+        ...OPS_ITEMS,
+        ...accountItems.filter((i) => !isLinkItem(i)),
+      ]
+    : accountItems;
+
+  return (
+    <nav className="site-nav site-nav--end" aria-label="Account">
+      <NavDropdown
+        group={{ id: "account", label: "Account", items }}
+        closeSignal={closeSignal}
+        onLogout={logout}
+      />
     </nav>
   );
 }

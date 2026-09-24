@@ -24,9 +24,9 @@ export default async function CalendarPage() {
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1.25rem" }}>
         Congestion caps: {cal.caps.maxOeStartsPerHour} OE starts/hour ·{" "}
-        {cal.caps.maxAuctionStartsPerHour} auction starts/hour ·{" "}
+        {cal.caps.maxAuctionStartsPerHour} timed-drop starts/hour ·{" "}
         {cal.caps.maxConcurrentOeOnRising} concurrent OE on Rising ·{" "}
-        {cal.caps.liveAuctionStripSlots} live auction strip slots.
+        {cal.caps.liveAuctionStripSlots} live timed-drop strip slots.
       </p>
       <div className="metric-grid" style={{ marginBottom: "2rem" }}>
         <div
@@ -51,7 +51,7 @@ export default async function CalendarPage() {
           }}
         >
           <div style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-            Live auctions
+            Live timed drops
           </div>
           <div className="display" style={{ fontSize: "1.8rem" }}>
             {cal.liveAuctionStripCount}/{cal.caps.liveAuctionStripSlots}
@@ -88,11 +88,11 @@ export default async function CalendarPage() {
       )}
 
       <h2 className="display" style={{ fontSize: "1.5rem" }}>
-        Auctions
+        Timed drops
       </h2>
       {cal.auctions.filter((e) => e.status !== "ended").length === 0 ? (
         <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
-          No live or upcoming auctions. Schedule one from <Link href="/create?intent=auction">Create</Link>.
+          No live or upcoming timed drops. Schedule one from <Link href="/create?intent=auction">Create</Link>.
         </p>
       ) : (
       <PuzzleRail style={{ marginTop: "1rem" }}>

@@ -165,6 +165,7 @@ export const NAV_GROUP_ICON: Record<string, string> = {
   discover: "discover",
   studio: "studio",
   funds: "funds",
+  docs: "docs",
   account: "account",
   ops: "ops",
 };

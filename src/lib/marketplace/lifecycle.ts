@@ -6,7 +6,7 @@ export const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1000;
 
 const STAGE_LABELS: Record<LaunchStage, string> = {
   draft: "Draft",
-  soft_launch: "Open Lane",
+  soft_launch: "Soft-launched",
   rising_eligible: "Rising",
   featured_eligible: "Featured eligible",
   featured: "Featured",
