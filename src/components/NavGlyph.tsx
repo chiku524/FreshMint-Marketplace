@@ -177,6 +177,7 @@ export const NAV_ITEM_ICON: Record<string, string> = {
   "/auctions": "auctions",
   "/calendar": "calendar",
   "/collections": "collections",
+  "/collections/new": "collections",
   "/trending": "trending",
   "/shelves": "shelves",
   "/docs": "docs",

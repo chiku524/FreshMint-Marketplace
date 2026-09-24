@@ -421,6 +421,7 @@ export async function createCollectionForUser(input: {
       deployTxHash: null,
       deployStatus: "pending_wallet",
       escrowAddress: null,
+      createdAt: Date.now(),
     };
     const mem = getMemoryEngine();
     mem.state.collections.set(collection.id, collection);

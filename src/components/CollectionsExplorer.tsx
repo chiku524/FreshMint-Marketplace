@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
@@ -8,6 +8,9 @@ import {
   parseCollectionsView,
   type CollectionsViewId,
 } from "@/lib/collections-view";
+import {
+  COLLECTION_INDEX_MIN_VOLUME_USD,
+} from "@/lib/marketplace/collections-browse-config";
 import type { Listing } from "@/lib/discovery/types";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -21,6 +24,8 @@ export type CollectionBrowseItem = {
   totalItems: number;
   heroListingId: string | null;
   listings: Listing[];
+  volumeUsd?: number;
+  createdAt?: number | null;
 };
 
 function persistView(next: CollectionsViewId) {
@@ -56,6 +61,11 @@ function coverStyle(item: CollectionBrowseItem) {
       linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
     `,
   };
+}
+
+function formatVolume(volumeUsd: number | undefined) {
+  if (volumeUsd == null) return null;
+  return `$${Math.round(volumeUsd).toLocaleString()} volume`;
 }
 
 function ViewIcon({ name }: { name: CollectionsViewId }) {
@@ -104,11 +114,14 @@ export function CollectionsExplorer({
   items,
   soldIds,
   initialView = "gallery",
+  lane = "top",
   children,
 }: {
   items: CollectionBrowseItem[];
   soldIds: string[];
   initialView?: CollectionsViewId;
+  /** Which browse lane is active — drives tabs + empty copy. */
+  lane?: "top" | "new";
   children?: ReactNode;
 }) {
   const [view, setView] = useState<CollectionsViewId>(initialView);
@@ -132,15 +145,43 @@ export function CollectionsExplorer({
     persistView(next);
   };
 
+  const title = lane === "new" ? "New collections" : "Collections";
+  const blurb =
+    lane === "new"
+      ? "Collections created in the last 7 days with at least one published work — newest first."
+      : `Creator-owned sets with at least $${COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} all-time completed primary volume.`;
+
   return (
     <>
       <div className="collections-head">
         <div>
           <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-            Collections
+            {title}
           </h1>
           <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", margin: 0 }}>
-            Creator-owned sets. <Link href="/create">Start a collection</Link>.
+            {blurb}{" "}
+            <Link href="/create">Start a collection</Link>.
+          </p>
+          <p
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.45rem",
+              margin: "0.85rem 0 0",
+            }}
+          >
+            <Link
+              href="/collections"
+              className={`badge${lane === "top" ? " featured" : ""}`}
+            >
+              Top
+            </Link>
+            <Link
+              href="/collections/new"
+              className={`badge${lane === "new" ? " featured" : ""}`}
+            >
+              New this week
+            </Link>
           </p>
         </div>
         <div className="collections-views" role="toolbar" aria-label="Collection view">
@@ -160,7 +201,34 @@ export function CollectionsExplorer({
       </div>
       {children}
       {items.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>No collections yet.</p>
+        lane === "top" ? (
+          <section
+            style={{
+              marginTop: "1.25rem",
+              border: "1px solid var(--line)",
+              padding: "1.1rem 1.15rem",
+              background: "var(--panel)",
+              maxWidth: "40rem",
+            }}
+          >
+            <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
+              No collections at the volume bar yet
+            </h2>
+            <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
+              The Top list only shows collections with at least $
+              {COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} in completed
+              primary sales (including package sales). Browse{" "}
+              <Link href="/collections/new">New this week</Link> for fresh sets,
+              or open a collection from a creator profile / direct link — those
+              still work below the bar.
+            </p>
+          </section>
+        ) : (
+          <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
+            No new published collections in the last 7 days.{" "}
+            <Link href="/collections">Back to Top</Link>.
+          </p>
+        )
       ) : null}
 
       {view === "gallery"
@@ -172,6 +240,9 @@ export function CollectionsExplorer({
               <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)" }}>
                 {collection.creatorName} · {collection.chain} · {collection.totalItems}{" "}
                 items
+                {formatVolume(collection.volumeUsd)
+                  ? ` · ${formatVolume(collection.volumeUsd)}`
+                  : ""}
               </p>
               {collection.listings.length ? (
                 <PuzzleRail>
@@ -206,6 +277,9 @@ export function CollectionsExplorer({
                 <p>
                   {collection.creatorName} · {collection.chain} ·{" "}
                   {collection.totalItems} items
+                  {formatVolume(collection.volumeUsd)
+                    ? ` · ${formatVolume(collection.volumeUsd)}`
+                    : ""}
                 </p>
               </div>
             </Link>
@@ -226,6 +300,9 @@ export function CollectionsExplorer({
                 <strong className="display">{collection.title}</strong>
                 <em>
                   {collection.creatorName} · {collection.chain}
+                  {formatVolume(collection.volumeUsd)
+                    ? ` · ${formatVolume(collection.volumeUsd)}`
+                    : ""}
                 </em>
               </span>
               <span className="collections-row__count">

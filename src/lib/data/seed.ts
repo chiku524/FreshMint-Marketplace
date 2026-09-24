@@ -557,6 +557,7 @@ export function buildSeedState(): MarketplaceState {
     deployStatus: "confirmed",
     contractAddress: "sol-col-static-garden",
     escrowAddress: null,
+    createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
   });
 
   shelves.set("shelf-ink", {

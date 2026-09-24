@@ -139,6 +139,8 @@ export interface Collection {
   escrowAddress?: string | null;
   packageSellEnabled?: boolean;
   packagePriceUsd?: number | null;
+  /** ms epoch — used by /collections/new */
+  createdAt?: number | null;
 }
 
 export interface Shelf {

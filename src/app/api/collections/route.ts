@@ -2,6 +2,10 @@ import { getSessionUser } from "@/lib/auth/session";
 import { isNetworkId, resolveNetwork, vmFromNetwork } from "@/lib/chains/registry";
 import type { NetworkId } from "@/lib/discovery/types";
 import {
+  aggregateCollectionVolumesUsd,
+  filterPublicCollectionApiList,
+} from "@/lib/marketplace/collections-browse";
+import {
   createCollectionForUser,
   getDiscoveryEngine,
   listCollectionsForUser,
@@ -24,8 +28,12 @@ export async function GET(req: NextRequest) {
   }
 
   const engine = await getDiscoveryEngine();
+  const volumes = await aggregateCollectionVolumesUsd();
   return NextResponse.json({
-    collections: [...engine.state.collections.values()],
+    collections: filterPublicCollectionApiList(
+      [...engine.state.collections.values()],
+      volumes,
+    ),
   });
 }
 

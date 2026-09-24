@@ -14,6 +14,7 @@ type DiscoveryLink = {
 /** Primary product IA — SiteNav stays free of these lane duplicates. */
 const BROWSE: DiscoveryLink[] = [
   { href: "/collections", label: "Collections", icon: "collections" },
+  { href: "/collections/new", label: "New collections", icon: "collections" },
   { href: "/creators", label: "Creators", icon: "account" },
 ];
 
@@ -28,6 +29,12 @@ const DISCOVER: DiscoveryLink[] = [
 ];
 
 function isActive(pathname: string, href: string) {
+  if (href === "/collections") {
+    if (pathname === "/collections") return true;
+    if (!pathname.startsWith("/collections/")) return false;
+    // Detail pages stay under Collections; /collections/new is its own lane.
+    return !pathname.startsWith("/collections/new");
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

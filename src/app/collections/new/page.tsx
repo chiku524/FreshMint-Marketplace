@@ -1,25 +1,24 @@
 ﻿import { CollectionsExplorer } from "@/components/CollectionsExplorer";
-import { HowItWorksNote } from "@/components/HowItWorksNote";
 import {
   COLLECTIONS_VIEW_COOKIE,
   parseCollectionsView,
 } from "@/lib/collections-view";
-import { listTopCollectionsForIndex } from "@/lib/marketplace/collections-browse";
+import { listNewCollectionsThisWeek } from "@/lib/marketplace/collections-browse";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Collections — FreshMint Marketplace",
+  title: "New collections — FreshMint Marketplace",
   description:
-    "Browse creator collections with at least $1,000 all-time completed primary volume.",
+    "Collections created in the last 7 days with at least one published work.",
 };
 
-export default async function CollectionsPage() {
+export default async function NewCollectionsPage() {
   const viewCookie = (await cookies()).get(COLLECTIONS_VIEW_COOKIE)?.value;
   const [items, soldIds] = await Promise.all([
-    listTopCollectionsForIndex(),
+    listNewCollectionsThisWeek(),
     listClosedPrimarySaleIds(),
   ]);
 
@@ -29,10 +28,8 @@ export default async function CollectionsPage() {
         items={items}
         soldIds={[...soldIds]}
         initialView={parseCollectionsView(viewCookie)}
-        lane="top"
-      >
-        <HowItWorksNote kind="create" />
-      </CollectionsExplorer>
+        lane="new"
+      />
     </div>
   );
 }

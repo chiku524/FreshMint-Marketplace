@@ -187,6 +187,7 @@ model Listing {
   @@index([mediaHash])
   @@index([saleMode])
   @@index([highBidderId])
+  @@index([collectionId])
 }
 
 model BridgeTransfer {
@@ -235,10 +236,13 @@ model Collection {
   /// Sell remaining unsold minted works as one package
   packageSellEnabled Boolean @default(false)
   packagePriceUsd    Float?
+  createdAt       DateTime @default(now())
 
   creator  User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   listings Listing[]
   packagePurchases PackagePurchase[]
+
+  @@index([createdAt])
 }
 
 model Shelf {

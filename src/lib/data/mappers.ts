@@ -124,6 +124,7 @@ export function toCollection(c: DbCollection): Collection {
     escrowAddress: c.escrowAddress ?? null,
     packageSellEnabled: Boolean((c as { packageSellEnabled?: boolean }).packageSellEnabled),
     packagePriceUsd: (c as { packagePriceUsd?: number | null }).packagePriceUsd ?? null,
+    createdAt: c.createdAt instanceof Date ? c.createdAt.getTime() : null,
   };
 }
 
