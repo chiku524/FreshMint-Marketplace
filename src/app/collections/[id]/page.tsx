@@ -1,5 +1,8 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
+import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { WorkCard } from "@/components/WorkCard";
+import { getSessionUser } from "@/lib/auth/session";
+import { resolveNetwork } from "@/lib/chains/registry";
 import { formatBytes, COLLECTION_MEDIA_CAP_BYTES } from "@/lib/marketplace/drops";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -21,6 +24,15 @@ export default async function CollectionDetailPage({
   const { collection, listings, hasTraction } = surface;
   const creator = engine.state.creators.get(collection.creatorId);
   const soldIds = await listClosedPrimarySaleIds();
+  const user = await getSessionUser();
+  const network = resolveNetwork(collection.network, collection.chain);
+  const isOwner = user?.id === collection.creatorId;
+  const canUpdateFeeRecipients =
+    isOwner &&
+    collection.chain === "evm" &&
+    collection.deployStatus === "confirmed" &&
+    Boolean(collection.contractAddress) &&
+    !String(collection.contractAddress).startsWith("pending:");
   const pieces = [...engine.state.listings.values()]
     .filter((l) => l.collectionId === id && !l.delisted)
     .sort((a, b) => b.createdAt - a.createdAt);
@@ -72,6 +84,15 @@ export default async function CollectionDetailPage({
           </>
         ) : null}
       </p>
+
+
+      {canUpdateFeeRecipients && collection.contractAddress ? (
+        <UpdateFeeRecipientsButton
+          collectionId={collection.id}
+          network={network}
+          contractAddress={collection.contractAddress}
+        />
+      ) : null}
 
       {listings.length ? (
         <>

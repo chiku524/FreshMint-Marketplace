@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildEvmPurchaseIntent } from "@/lib/onchain/evm";
+import {
+  buildEvmPurchaseIntent,
+  buildEvmSetFeeRecipientsIntent,
+} from "@/lib/onchain/evm";
 
 const BUYER = "0xabc0000000000000000000000000000000000001";
 const MARKET = "0x1111111111111111111111111111111111111111";
@@ -57,3 +60,47 @@ describe("evm purchase intent", () => {
     expect(buy.walletTx?.value).toMatch(/^0x/);
   });
 });
+
+describe("evm setFeeRecipients intent", () => {
+  const prevTreasury = process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS;
+  const prevOperator = process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS;
+
+  afterEach(() => {
+    if (prevTreasury === undefined) {
+      delete process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS;
+    } else {
+      process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS = prevTreasury;
+    }
+    if (prevOperator === undefined) {
+      delete process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS;
+    } else {
+      process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS = prevOperator;
+    }
+  });
+
+  it("builds a setFeeRecipients wallet tx for the collection owner", () => {
+    process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS = MARKET;
+    process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS = BUYER;
+    const intent = buildEvmSetFeeRecipientsIntent({
+      network: "ethereum",
+      contractAddress: TOKEN,
+      ownerAddress: BUYER,
+    });
+    expect(intent.status).toBe("pending_wallet");
+    expect(intent.walletTx?.to).toBe(TOKEN);
+    expect(intent.walletTx?.from).toBe(BUYER);
+    expect(intent.walletTx?.data.startsWith("0x")).toBe(true);
+    expect(intent.walletTx?.value).toBe("0x0");
+  });
+
+  it("simulates when owner address is not a valid EVM address", () => {
+    const intent = buildEvmSetFeeRecipientsIntent({
+      network: "ethereum",
+      contractAddress: TOKEN,
+      ownerAddress: "not-an-address",
+    });
+    expect(intent.status).toBe("simulated");
+    expect(intent.walletTx).toBeUndefined();
+  });
+});
+

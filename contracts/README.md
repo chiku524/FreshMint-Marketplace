@@ -4,7 +4,7 @@
 
 Minimal ERC-721 used for primary mints on Ethereum, Base, Arbitrum, and Optimism (testnets first).
 
-Primary marketplace sales take a **0.5%** treasury fee off-chain. New `FreshMintERC721` deploys match that on-chain: `buy()` takes **0.5%** treasury / **0%** operator (seller **99.5%**). Fee recipients are set in the constructor and can be updated later via `setFeeRecipients` (contract owner only). Older collections keep their baked-in BPS until redeployed; point their recipients at the platform Safe/operator with:
+Primary marketplace sales take a **0.5%** treasury fee off-chain. New `FreshMintERC721` deploys match that on-chain: `buy()` takes **0.5%** treasury / **0%** operator (seller **99.5%**). Fee recipients are set in the constructor and can be updated later via `setFeeRecipients` (contract owner only; addresses only — BPS stay constant). Older collections keep their baked-in BPS until redeployed. Creators can retarget recipients from the collection page (**Update fee recipients**) or with:
 
 ```bash
 COLLECTION_CONTRACT=0x... COLLECTION_OWNER_PRIVATE_KEY=0x... npm run wallets:set-fee-recipients

@@ -83,7 +83,10 @@ Creators can pay a fixed **$15 USD** promotional fee (native-quoted) to activate
 
 Operator EOAs (constructor leftovers / ops): EVM `0xc1AE84cEc6839683D562aC9011ADF21c31A3f869`, Solana `QzQR6DPw8VD5uU47uiAJYA95jt61ExFNHXhC3EF6MDY`.
 
-New EVM collections pick treasury + operator from env at deploy time and use the 0.5% on-chain `buy()` split after `npm run contracts:bytecode`. Older live collections keep their prior BPS until redeployed; the collection **owner** (creator deployer) can retarget recipients with:
+New EVM collections pick treasury + operator from env at deploy time and use the 0.5% on-chain `buy()` split after `npm run contracts:bytecode`. Older live collections keep their prior BPS until redeployed (`setFeeRecipients` changes **addresses only**, not BPS). The collection **owner** can retarget recipients in the app or via CLI:
+
+- UI: **Update fee recipients** on `/collections/[id]` (owner + EVM + deployed contract) → `POST /api/collections/[id]/set-fee-recipients` → wallet `setFeeRecipients(treasury, operator)` using current `platformFeeRecipients()` env addresses
+- CLI:
 
 ```bash
 COLLECTION_CONTRACT=0x... COLLECTION_OWNER_PRIVATE_KEY=0x... npm run wallets:set-fee-recipients
