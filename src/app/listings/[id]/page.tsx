@@ -87,6 +87,17 @@ export default async function ListingDetailPage({
       listing.currentHighBidUsd >= listing.reserveUsd);
 
   const cap = primarySupplyCap(listing);
+  const englishAwardAmount =
+    saleMode === "english" && englishSettle.outcome.status === "award"
+      ? englishSettle.outcome.amountUsd
+      : saleMode === "english" && auctionEnded && reserveMet && listing.currentHighBidUsd
+        ? listing.currentHighBidUsd
+        : null;
+  const englishAwardBidderId =
+    saleMode === "english" && englishSettle.outcome.status === "award"
+      ? englishSettle.outcome.highBidderId
+      : listing.highBidderId;
+
   const explorerToken =
     listing.contractAddress && listing.tokenId && net.explorerToken
       ? net.explorerToken(listing.contractAddress, listing.tokenId)
@@ -241,7 +252,7 @@ export default async function ListingDetailPage({
             />
           </div>
           <HowItWorksNote kind="buy" />
-          {listing.type === "auction" ? (
+          {listing.type === "auction" && saleMode === "timed_window" ? (
             <p
               style={{
                 margin: "0.85rem 0 0",
@@ -279,11 +290,12 @@ export default async function ListingDetailPage({
               minBidUsd={minBid}
               live={auctionLive}
               ended={Boolean(auctionEnded)}
-              isHighBidder={user?.id === listing.highBidderId}
-              winningBidUsd={listing.currentHighBidUsd}
+              isHighBidder={user?.id === englishAwardBidderId}
+              winningBidUsd={englishAwardAmount ?? listing.currentHighBidUsd}
               reserveMet={Boolean(reserveMet)}
+              isCreator={user?.id === listing.creatorId}
               claimPurchaseId={
-                user?.id === listing.highBidderId
+                user?.id === englishAwardBidderId
                   ? pendingPurchase?.id ?? englishSettle.purchaseId
                   : null
               }
@@ -294,23 +306,19 @@ export default async function ListingDetailPage({
             listingId={listing.id}
             creatorId={listing.creatorId}
             priceUsd={
-              saleMode === "english" &&
-              auctionEnded &&
-              reserveMet &&
-              listing.currentHighBidUsd
-                ? listing.currentHighBidUsd
-                : listing.priceUsd
+              englishAwardAmount != null ? englishAwardAmount : listing.priceUsd
             }
             stage={listing.stage}
             sold={
               (soldIds.has(listing.id) && !pendingPurchase) ||
               (saleMode === "english" &&
-                Boolean(auctionEnded) &&
-                !reserveMet) ||
+                (englishSettle.settleLabel === "unsold" ||
+                  englishSettle.settleLabel === "payment_expired_unsold" ||
+                  (Boolean(auctionEnded) && !reserveMet))) ||
               (saleMode === "english" &&
                 Boolean(auctionEnded) &&
-                reserveMet &&
-                user?.id !== listing.highBidderId &&
+                englishAwardAmount != null &&
+                user?.id !== englishAwardBidderId &&
                 !pendingPurchase)
             }
             listingType={listing.type}

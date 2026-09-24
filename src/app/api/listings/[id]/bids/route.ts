@@ -21,6 +21,9 @@ export async function GET(
       purchaseId: settle.purchaseId,
       purchaseStatus: settle.purchaseStatus,
       created: settle.created,
+      paymentDeadlineAt: settle.paymentDeadlineAt,
+      cascaded: settle.cascaded,
+      expiredWinnerId: settle.expiredWinnerId,
     },
   });
 }

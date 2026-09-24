@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Bid = {
   id: string;
@@ -11,7 +11,14 @@ type Bid = {
 };
 
 type SettleInfo = {
-  label: "open" | "claim_pending" | "awarded" | "unsold";
+  label:
+    | "open"
+    | "claim_pending"
+    | "awarded"
+    | "unsold"
+    | "awaiting_payment"
+    | "cascaded"
+    | "payment_expired_unsold";
   outcome?: {
     status: string;
     reason?: string;
@@ -20,7 +27,25 @@ type SettleInfo = {
   };
   purchaseId?: string | null;
   purchaseStatus?: string | null;
+  paymentDeadlineAt?: number | null;
+  cascaded?: boolean;
+  expiredWinnerId?: string | null;
 };
+
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "expired";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h >= 48) {
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h`;
+  }
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 export function BidPanel({
   listingId,
@@ -31,6 +56,7 @@ export function BidPanel({
   winningBidUsd,
   reserveMet,
   claimPurchaseId,
+  isCreator = false,
 }: {
   listingId: string;
   minBidUsd: number;
@@ -41,6 +67,7 @@ export function BidPanel({
   reserveMet?: boolean;
   /** Server-side lazy-settle purchase id when viewer is the winner. */
   claimPurchaseId?: string | null;
+  isCreator?: boolean;
 }) {
   const router = useRouter();
   const [bids, setBids] = useState<Bid[]>([]);
@@ -48,16 +75,15 @@ export function BidPanel({
   const [amount, setAmount] = useState(String(minBidUsd));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   function load() {
     void fetch(`/api/listings/${listingId}/bids`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { bids: [] }))
-      .then(
-        (d: { bids?: Bid[]; settle?: SettleInfo }) => {
-          setBids(d.bids ?? []);
-          if (d.settle) setSettle(d.settle);
-        },
-      )
+      .then((d: { bids?: Bid[]; settle?: SettleInfo }) => {
+        setBids(d.bids ?? []);
+        if (d.settle) setSettle(d.settle);
+      })
       .catch(() => setBids([]));
   }
 
@@ -66,6 +92,11 @@ export function BidPanel({
     const t = window.setInterval(load, 12_000);
     return () => window.clearInterval(t);
   }, [listingId]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNowTick(Date.now()), 1_000);
+    return () => window.clearInterval(t);
+  }, []);
 
   async function onBid() {
     setBusy(true);
@@ -94,14 +125,24 @@ export function BidPanel({
   const unsold =
     ended &&
     (label === "unsold" ||
+      label === "payment_expired_unsold" ||
       (!reserveMet && (winningBidUsd == null || !reserveMet)));
   const awardedOrClaim =
     ended &&
     reserveMet &&
     (label === "claim_pending" ||
+      label === "awaiting_payment" ||
+      label === "cascaded" ||
       label === "awarded" ||
       Boolean(reserveMet && winningBidUsd));
   const purchaseId = claimPurchaseId ?? settle?.purchaseId ?? null;
+  const deadlineAt = settle?.paymentDeadlineAt ?? null;
+  const remainingMs =
+    deadlineAt != null ? Math.max(0, deadlineAt - nowTick) : null;
+  const deadlineLabel = useMemo(() => {
+    if (remainingMs == null) return null;
+    return formatCountdown(remainingMs);
+  }, [remainingMs]);
 
   return (
     <div
@@ -150,8 +191,39 @@ export function BidPanel({
         <div style={{ margin: "0 0 0.65rem" }}>
           {unsold ? (
             <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-              Auction ended · reserve not met. Creator can relist or switch sale mode.
+              {label === "payment_expired_unsold"
+                ? "English auction ended · winner payment window expired with no eligible runner-up. "
+                : "English auction ended · reserve not met. "}
+              {isCreator
+                ? "Use the sale mode editor below to relist or switch modes."
+                : "Creator can relist or switch sale mode."}
             </p>
+          ) : isCreator &&
+            (label === "awaiting_payment" ||
+              label === "claim_pending" ||
+              label === "cascaded") ? (
+            <>
+              <p
+                style={{
+                  margin: "0 0 0.35rem",
+                  color: "var(--ink)",
+                  fontSize: "0.95rem",
+                  fontWeight: 600,
+                }}
+              >
+                {label === "cascaded"
+                  ? "Passed to runner-up — awaiting payment"
+                  : "Awaiting winner payment"}
+                {winningBidUsd != null ? ` ($${winningBidUsd})` : ""}.
+              </p>
+              <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.85rem" }}>
+                {deadlineLabel && deadlineLabel !== "expired"
+                  ? `Winner has ${deadlineLabel} left to complete checkout.`
+                  : deadlineLabel === "expired"
+                    ? "Payment deadline just expired — refresh for cascade or unsold."
+                    : "Winner must complete crypto checkout within 48 hours."}
+              </p>
+            </>
           ) : isHighBidder && awardedOrClaim ? (
             <>
               <p
@@ -162,10 +234,22 @@ export function BidPanel({
                   fontWeight: 600,
                 }}
               >
-                You won — complete payment
+                {settle?.cascaded
+                  ? "You’re next — complete payment"
+                  : "You won — complete payment"}
                 {winningBidUsd != null ? ` ($${winningBidUsd})` : ""}.
               </p>
               <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.85rem" }}>
+                {deadlineLabel && deadlineLabel !== "expired" ? (
+                  <>
+                    Pay within <strong>{deadlineLabel}</strong> or the award
+                    passes to the next bidder who met reserve.
+                  </>
+                ) : deadlineLabel === "expired" ? (
+                  <>Payment deadline expired — refreshing may pass the award.</>
+                ) : (
+                  <>You have 48 hours to complete payment.</>
+                )}{" "}
                 {purchaseId
                   ? "A checkout at the winning bid is ready — use Resume / Continue buy below (wallet required for crypto)."
                   : "Use Buy / Continue below at the winning bid (wallet required for crypto)."}
@@ -173,12 +257,15 @@ export function BidPanel({
             </>
           ) : awardedOrClaim ? (
             <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-              Auction ended · sold to high bidder
+              English auction ended ·{" "}
+              {label === "cascaded"
+                ? "passed to runner-up"
+                : "sold to high bidder"}
               {winningBidUsd != null ? ` at $${winningBidUsd}` : ""}.
             </p>
           ) : (
             <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-              Auction ended. Winning bid ${winningBidUsd ?? "—"}.
+              English auction ended. Winning bid ${winningBidUsd ?? "—"}.
             </p>
           )}
         </div>

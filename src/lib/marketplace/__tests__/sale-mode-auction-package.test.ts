@@ -10,8 +10,11 @@ import {
   englishSettlement,
   evaluateBidRules,
   evaluateEnglishOutcome,
+  pickNextEnglishAwardee,
+  englishPaymentDeadlineFromAwardAt,
   type AuctionListingSnap,
 } from "@/lib/marketplace/english-auction";
+import { ENGLISH_WINNER_PAYMENT_DEADLINE_MS } from "@/lib/marketplace/lifecycle";
 import {
   filterPackageEligibleListings,
   validatePackagePayNetwork,
@@ -316,5 +319,40 @@ describe("package pay network validation", () => {
     });
     expect(mixed.ok).toBe(false);
     expect(mixed.reason).toBe("cross_network_not_supported");
+  });
+});
+
+describe("english payment deadline cascade", () => {
+  it("exposes a 48h winner payment deadline from award time", () => {
+    const awardedAt = 1_700_000_000_000;
+    expect(englishPaymentDeadlineFromAwardAt(awardedAt)).toBe(
+      awardedAt + ENGLISH_WINNER_PAYMENT_DEADLINE_MS,
+    );
+    expect(ENGLISH_WINNER_PAYMENT_DEADLINE_MS).toBe(48 * 60 * 60 * 1000);
+  });
+
+  it("picks the next reserve-meeting bidder and skips excluded winners", () => {
+    const next = pickNextEnglishAwardee({
+      bids: [
+        { bidderId: "a", amountUsd: 40 },
+        { bidderId: "b", amountUsd: 35 },
+        { bidderId: "c", amountUsd: 20 },
+        { bidderId: "b", amountUsd: 36 },
+      ],
+      reserveUsd: 25,
+      excludeBidderIds: ["a"],
+    });
+    expect(next).toEqual({ highBidderId: "b", amountUsd: 36 });
+
+    expect(
+      pickNextEnglishAwardee({
+        bids: [
+          { bidderId: "a", amountUsd: 40 },
+          { bidderId: "c", amountUsd: 20 },
+        ],
+        reserveUsd: 25,
+        excludeBidderIds: ["a"],
+      }),
+    ).toBeNull();
   });
 });

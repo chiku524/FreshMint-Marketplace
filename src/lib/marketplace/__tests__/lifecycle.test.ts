@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENGLISH_AWARD_TX_PREFIX,
+  ENGLISH_WINNER_PAYMENT_DEADLINE_MS,
   PENDING_PAYMENT_TTL_MS,
   canUserStageListing,
   creatorLifecycleHint,
+  englishAwardPaymentDeadlineAt,
+  englishAwardPaymentOpen,
   purchaseReservesSupply,
   stageLabel,
 } from "@/lib/marketplace/lifecycle";
@@ -39,6 +43,29 @@ describe("purchaseReservesSupply", () => {
         now,
       ),
     ).toBe(false);
+  });
+
+
+  it("holds English award pending_payment for 48h via txHash prefix", () => {
+    const award = {
+      status: "pending_payment",
+      soldAt: now - PENDING_PAYMENT_TTL_MS - 1,
+      txHash: `${ENGLISH_AWARD_TX_PREFIX}listing:1`,
+    };
+    expect(purchaseReservesSupply(award, now)).toBe(true);
+    expect(
+      purchaseReservesSupply(
+        {
+          ...award,
+          soldAt: now - ENGLISH_WINNER_PAYMENT_DEADLINE_MS - 1,
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(englishAwardPaymentDeadlineAt(award)).toBe(
+      now - PENDING_PAYMENT_TTL_MS - 1 + ENGLISH_WINNER_PAYMENT_DEADLINE_MS,
+    );
+    expect(englishAwardPaymentOpen(award, now)).toBe(true);
   });
 
   it("releases failed purchases", () => {

@@ -4,6 +4,46 @@ import type { RisingDiagnosis } from "@/lib/discovery";
 /** Abandoned checkouts release 1/1 inventory after this window. */
 export const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1000;
 
+/** English auction winners get longer to complete crypto checkout (no on-chain auction). */
+export const ENGLISH_WINNER_PAYMENT_DEADLINE_MS = 48 * 60 * 60 * 1000;
+
+/** Purchase.txHash prefix used by lazySettleEnglishAuction awards. */
+export const ENGLISH_AWARD_TX_PREFIX = "english-award:";
+
+export function isEnglishAwardPurchase(purchase: {
+  txHash?: string | null;
+}): boolean {
+  return Boolean(purchase.txHash?.startsWith(ENGLISH_AWARD_TX_PREFIX));
+}
+
+export function englishAwardPaymentDeadlineAt(
+  purchase: {
+    soldAt?: number | null;
+    createdAt?: Date | number | null;
+    txHash?: string | null;
+  },
+): number | null {
+  if (!isEnglishAwardPurchase(purchase)) return null;
+  const created = purchaseCreatedAtMs(purchase);
+  if (!created) return null;
+  return created + ENGLISH_WINNER_PAYMENT_DEADLINE_MS;
+}
+
+export function englishAwardPaymentOpen(
+  purchase: {
+    status?: string | null;
+    soldAt?: number | null;
+    createdAt?: Date | number | null;
+    txHash?: string | null;
+  },
+  now = Date.now(),
+): boolean {
+  if ((purchase.status ?? "") !== "pending_payment") return false;
+  const deadline = englishAwardPaymentDeadlineAt(purchase);
+  if (deadline == null) return false;
+  return now < deadline;
+}
+
 const STAGE_LABELS: Record<LaunchStage, string> = {
   draft: "Draft",
   soft_launch: "Soft-launched",
@@ -32,13 +72,17 @@ export function purchaseReservesSupply(
     status?: string | null;
     soldAt?: number | null;
     createdAt?: Date | number | null;
+    txHash?: string | null;
   },
   now = Date.now(),
 ): boolean {
   const status = purchase.status ?? "completed";
   if (status === "failed") return false;
   if (status === "pending_payment") {
-    return now - purchaseCreatedAtMs(purchase) < PENDING_PAYMENT_TTL_MS;
+    const ttl = isEnglishAwardPurchase(purchase)
+      ? ENGLISH_WINNER_PAYMENT_DEADLINE_MS
+      : PENDING_PAYMENT_TTL_MS;
+    return now - purchaseCreatedAtMs(purchase) < ttl;
   }
   return status === "completed" || status === "pending_transfer";
 }
