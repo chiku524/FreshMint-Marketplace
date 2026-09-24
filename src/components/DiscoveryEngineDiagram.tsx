@@ -96,7 +96,7 @@ function buildSteps(): Step[] {
       band: "scarce",
       x: 200,
       y: 410,
-      body: `${pct(cfg.feedMix.emerging_rising)} Emerging Rising · ${pct(cfg.feedMix.following)} Following · ${pct(cfg.feedMix.featured)} Featured · ${pct(cfg.feedMix.auctions_live)} live auctions. Max ${cfg.maxArtistPerScreen} artist per screen. Winners decay after fair-share impressions so they cannot monopolize Rising.`,
+      body: `${pct(cfg.feedMix.emerging_rising)} Emerging Rising · ${pct(cfg.feedMix.following)} Following · ${pct(cfg.feedMix.featured)} Featured · ${pct(cfg.feedMix.auctions_live)} live timed drops. Max ${cfg.maxArtistPerScreen} artist per screen. Winners decay after fair-share impressions so they cannot monopolize Rising.`,
     },
     {
       id: "featured",

@@ -275,7 +275,7 @@ export function DocsGuide() {
                 {
                   name: "Homepage",
                   href: "/",
-                  job: "Composed mix of Emerging Rising, Following, Featured, and live auctions.",
+                  job: "Composed mix of Emerging Rising, Following, Featured, and live timed drops.",
                 },
               ].map((s) => (
                 <div key={s.name}>
@@ -454,7 +454,7 @@ export function DocsGuide() {
               new work can earn a second look. Impression fair-share (
               {cfg.impressionFairSharePerDay.toLocaleString()}/day) applies decay so
               winners cannot monopolize Rising forever. Singles get a short Rising-age
-              burst; open editions and auctions keep their own clocks.
+              burst; open editions and timed drops keep their own clocks.
             </p>
             </div>
 
@@ -470,7 +470,7 @@ export function DocsGuide() {
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
                   Open Lane {cfg.openLaneListingsPerCreatorPerDay}/creator/day · Rising{" "}
                   {cfg.risingEntriesPerCreatorPerWeek}/week · OE starts ≤{" "}
-                  {cfg.calendar.maxOeStartsPerHour}/hour · auctions ≤{" "}
+                  {cfg.calendar.maxOeStartsPerHour}/hour · timed drops ≤{" "}
                   {cfg.calendar.maxAuctionStartsPerHour}/hour · ≤{" "}
                   {cfg.maxConcurrentOeOnRising} concurrent OE on Rising
                 </p>

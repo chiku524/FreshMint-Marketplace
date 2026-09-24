@@ -94,9 +94,9 @@ export default async function AuctionsPage() {
         {live.length === 0 ? (
           <>
             <p style={{ color: "var(--ink-muted)", margin: 0, maxWidth: "48ch" }}>
-              No auction windows are open right now. When one is live, you buy at
-              the listed USD quote in crypto before the end time — there is no
-              separate bid CTA.
+              No timed drop windows are open right now. When a timed window is live,
+              you buy at the listed USD quote in crypto before the end time — there
+              is no separate bid CTA (English auctions use open bidding on the listing).
             </p>
             {!empty ? <DiscoverLinks /> : null}
           </>
@@ -127,7 +127,7 @@ export default async function AuctionsPage() {
           Cleared timed drops ({sold.length})
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
-          Past artwork that sold successfully during an auction window —
+          Past artwork that sold successfully during a timed drop window —
           Emerging and established alike.
         </p>
         {sold.length === 0 ? (

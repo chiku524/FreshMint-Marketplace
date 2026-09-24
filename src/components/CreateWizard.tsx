@@ -774,7 +774,7 @@ export function CreateWizard() {
             <h2 className="display create-wizard__title">What are you creating?</h2>
             <p className="create-wizard__lead">
               One path at a time — a collection drop, a single 1/1, or a timed
-              drop (auction window).
+              drop (timed window).
             </p>
             <div className="create-wizard__choices" role="group" aria-label="Creation type">
               {(
@@ -791,7 +791,7 @@ export function CreateWizard() {
                   },
                   {
                     id: "auction" as const,
-                    title: "Timed / auction drop",
+                    title: "Timed drop",
                     body: "Choose timed window (buy at list price) or English auction (open bidding) on the schedule step.",
                   },
                 ] as const
