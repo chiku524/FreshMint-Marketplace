@@ -1,4 +1,4 @@
-﻿import { getSessionUser } from "@/lib/auth/session";
+import { getSessionUser } from "@/lib/auth/session";
 import { countUnreadNotifications } from "@/lib/notifications";
 import { NextRequest, NextResponse } from "next/server";
 

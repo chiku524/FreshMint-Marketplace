@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   COLLECTION_INDEX_MIN_VOLUME_USD,
   COLLECTION_NEW_WINDOW_MS,

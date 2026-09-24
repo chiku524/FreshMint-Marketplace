@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";

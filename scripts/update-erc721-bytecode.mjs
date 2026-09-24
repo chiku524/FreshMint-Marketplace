@@ -1,4 +1,4 @@
-﻿import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 
 const art = JSON.parse(
   readFileSync("contracts/out/FreshMintERC721.sol/FreshMintERC721.json", "utf8")

@@ -1,4 +1,4 @@
-﻿import { CollectionsExplorer } from "@/components/CollectionsExplorer";
+import { CollectionsExplorer } from "@/components/CollectionsExplorer";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import {
   COLLECTIONS_VIEW_COOKIE,

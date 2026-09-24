@@ -1,4 +1,4 @@
-﻿import {
+import {
   assertCronAuthorized,
   settleEndedEnglishAuctions,
 } from "@/lib/marketplace/settle-cron";

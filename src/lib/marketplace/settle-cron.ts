@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Batch English lazy-settle for cron + on-demand use.
  */
 import { prisma } from "@/lib/db";

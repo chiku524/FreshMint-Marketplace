@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Update FreshMintERC721 fee recipients to the current platform treasury/operator.
  * Must be signed by the collection contract owner (usually the creator deployer).
  *

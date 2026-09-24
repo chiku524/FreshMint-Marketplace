@@ -1,4 +1,4 @@
-﻿import { NotificationInbox } from "@/components/NotificationInbox";
+import { NotificationInbox } from "@/components/NotificationInbox";
 import { getSessionUser } from "@/lib/auth/session";
 import Link from "next/link";
 import { redirect } from "next/navigation";

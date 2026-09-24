@@ -1,4 +1,4 @@
-﻿import { CollectionsExplorer } from "@/components/CollectionsExplorer";
+import { CollectionsExplorer } from "@/components/CollectionsExplorer";
 import {
   COLLECTIONS_VIEW_COOKIE,
   parseCollectionsView,

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Send small testnet top-ups into the platform treasuries so Safe/Squads have gas.
  * Sepolia: owner #1 → Safe
  * Devnet: create key → Squads vault

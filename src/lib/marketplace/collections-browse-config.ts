@@ -1,4 +1,4 @@
-﻿/** Client-safe constants + pure helpers for collections browse gates. */
+/** Client-safe constants + pure helpers for collections browse gates. */
 
 /** Main /collections index requires this all-time completed volume (USD). */
 export const COLLECTION_INDEX_MIN_VOLUME_USD = 1000;

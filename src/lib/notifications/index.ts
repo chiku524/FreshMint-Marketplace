@@ -1,4 +1,4 @@
-﻿/**
+/**
  * In-app notifications (no email). Idempotent via (userId, dedupeKey).
  */
 import { prisma } from "@/lib/db";
