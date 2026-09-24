@@ -7,7 +7,6 @@ import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { TasteSeed } from "@/components/TasteSeed";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
-import { DISCOVERY_CONFIG } from "@/lib/discovery";
 import { readViewerSession, readViewerTaste } from "@/lib/discovery/cookies";
 import { hasTaste, inferTasteFromCatalog } from "@/lib/discovery/taste";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -32,7 +31,6 @@ export default async function HomePage() {
     recordImpressions: false,
   });
   const soldAuctions = await listSoldAuctions(6);
-  const mix = DISCOVERY_CONFIG.feedMix;
   const personalized = Boolean(user);
 
   return (
@@ -58,21 +56,8 @@ export default async function HomePage() {
               maxWidth: "28ch",
             }}
           >
-            Fair discovery for newer artists — without flooding the room.
+            Discover new art before it floods the feed.
           </h1>
-          <p
-            style={{
-              margin: "0 0 1.25rem",
-              color: "var(--ink-muted)",
-              maxWidth: "42ch",
-              fontSize: "1.05rem",
-            }}
-          >
-            {Math.round(mix.emerging_rising * 100)}% Emerging Rising ·{" "}
-            {Math.round(mix.following * 100)}% Following ·{" "}
-            {Math.round(mix.featured * 100)}% Featured ·{" "}
-            {Math.round(mix.auctions_live * 100)}% Live timed drops.
-          </p>
           <HowItWorksNote kind="home" />
           <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <Link
@@ -80,7 +65,7 @@ export default async function HomePage() {
               className="badge featured"
               style={{ padding: "0.55rem 0.9rem" }}
             >
-              Browse Open Lane
+              Browse works
             </Link>
             <Link
               href="/create"

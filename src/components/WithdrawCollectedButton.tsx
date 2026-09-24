@@ -67,7 +67,7 @@ export function WithdrawCollectedButton({
                 : data.error || "withdraw_failed",
         );
       }
-      let note = "Withdraw prepared";
+      let note = "Legacy claim prepared";
       if (data.walletTx) {
         const hash = await maybeSendWalletTx({
           walletTx: data.walletTx,
@@ -86,12 +86,12 @@ export function WithdrawCollectedButton({
               txHash: hash,
             }),
           });
-          note = `Withdrawn · ${hash.slice(0, 12)}…`;
+          note = `Claimed · ${hash.slice(0, 12)}…`;
         } else {
           note = "Confirm the transfer in your wallet when ready";
         }
       } else if (data.txHash) {
-        note = `Withdrawn · ${String(data.txHash).slice(0, 12)}…`;
+        note = `Claimed · ${String(data.txHash).slice(0, 12)}…`;
       }
       setMsg(note);
       router.refresh();
@@ -110,9 +110,9 @@ export function WithdrawCollectedButton({
         disabled={busy}
         style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
         onClick={() => void onWithdraw()}
-        title="For legacy USD purchases that still need an on-chain transfer"
+        title="Legacy USD hold only — not a mint. Crypto buys already own on-chain."
       >
-        {busy ? "Withdrawing…" : "Withdraw (legacy)"}
+        {busy ? "Claiming…" : "Claim legacy hold"}
       </button>
       {msg ? (
         <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>

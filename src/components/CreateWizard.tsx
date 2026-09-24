@@ -89,7 +89,7 @@ function stepDefs(intent: Intent | null) {
     { id: "schedule", label: "Schedule" },
     { id: "artwork", label: "Artwork" },
     { id: "details", label: "Details" },
-    { id: "review", label: "Review" },
+    { id: "review", label: "Mint & publish" },
   ] as const;
   if (intent === "single") {
     return base.filter((s) => s.id !== "schedule");
@@ -1184,11 +1184,35 @@ export function CreateWizard() {
 
         {step.id === "review" ? (
           <>
-            <h2 className="display create-wizard__title">Review & publish</h2>
+            <h2 className="display create-wizard__title">Mint & publish</h2>
             <p className="create-wizard__lead">
-              Mint into your collection contract first (you pay gas), then
-              soft-launch to Open Lane. Collectors pay crypto and receive the NFT
-              at purchase.
+              Minting at publish is required to sell. Unminted drafts stay off
+              the market and show as “Not minted yet” to collectors.
+            </p>
+            <ol className="create-wizard__mint-checklist" aria-label="Mint checklist">
+              <li>
+                <strong>Deploy collection</strong> — confirmed on your mint network
+                (done if you already deployed).
+              </li>
+              <li>
+                <strong>Mint pieces</strong> — you pay gas; tokens land in the
+                collection contract.
+              </li>
+              <li>
+                <strong>Soft-launch</strong> — only after mint confirms, so Open
+                Lane buys can transfer the NFT.
+              </li>
+            </ol>
+            <p
+              style={{
+                margin: "0 0 1rem",
+                color: "var(--ink-muted)",
+                fontSize: "0.9rem",
+                maxWidth: "46ch",
+              }}
+            >
+              Progress shows below while mint batches run — finish this step
+              before sharing the listing.
             </p>
             <dl className="create-wizard__summary">
               <div>
@@ -1301,7 +1325,11 @@ export function CreateWizard() {
               style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void publish()}
             >
-              {busy ? "Publishing…" : "Publish"}
+              {busy
+                ? mintProgress
+                  ? `Minting ${mintProgress.current}/${mintProgress.total}…`
+                  : "Minting & publishing…"
+                : "Mint & publish (required to sell)"}
             </button>
           )}
         </div>

@@ -10,8 +10,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  placementBadgeText,
+  placementLabel,
+} from "@/lib/marketplace/placement-label";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
+import { SaveButton } from "./SaveButton";
 
 const MENU_HOVER_MS = 500;
 const MENU_LEAVE_MS = 180;
@@ -148,8 +153,10 @@ export function WorkCard({
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
-  const featured =
-    listing.stage === "featured" || bucket === "featured";
+  const place = placementLabel(listing, bucket);
+  const placeText = placementBadgeText(place);
+  // Large tile for editorial Featured OR paid Promoted placement.
+  const featured = place === "featured" || place === "promoted";
   const menu = useDelayedMenu();
   const menuId = useId();
   const [spinning, setSpinning] = useState(false);
@@ -173,12 +180,13 @@ export function WorkCard({
       )}
       canStageRising={canStageRising}
       layout="menu"
+      showSave={false}
     />
   ) : null;
 
   const menuBody = (
     <>
-      {creatorName || collection ? (
+      {creatorName || collection || placeText || emerging ? (
         <p className="work-tile__menu-meta">
           {creatorName ? (
             <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
@@ -189,7 +197,8 @@ export function WorkCard({
               <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
             </>
           ) : null}
-          {emerging ? " · Emerging" : featured ? " · Featured" : ""}
+          {emerging ? " · Emerging" : ""}
+          {placeText ? ` · ${placeText}` : ""}
           {score != null ? ` · ${score.toFixed(1)}` : ""}
         </p>
       ) : null}
@@ -201,6 +210,7 @@ export function WorkCard({
   const tileClass = [
     "work-tile",
     featured ? "work-tile--featured" : "work-tile--compact",
+    place === "promoted" ? "work-tile--promoted" : "",
     menu.open ? "is-menu-open" : "",
     menu.hovering ? "is-hovering" : "",
     !featured && spinning ? "is-spinning" : "",
@@ -267,6 +277,17 @@ export function WorkCard({
         <p className="work-tile__meta">
           {priceLabel(listing, bucket)}
           {listing.type === "auction" ? " · Timed window · buy at list price" : ""}
+          {placeText ? (
+            <>
+              {" · "}
+              <span
+                className={`badge${place === "promoted" ? " promoted" : place === "featured" ? " featured" : ""}`}
+                style={{ verticalAlign: "middle" }}
+              >
+                {placeText}
+              </span>
+            </>
+          ) : null}
           {collection ? (
             <>
               {" · "}
@@ -274,6 +295,11 @@ export function WorkCard({
             </>
           ) : null}
         </p>
+        {showActions ? (
+          <div className="work-tile__caption-actions">
+            <SaveButton listingId={listing.id} compact />
+          </div>
+        ) : null}
       </div>
       <button
         type="button"

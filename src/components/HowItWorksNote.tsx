@@ -13,11 +13,11 @@ const NOTES: Record<
 > = {
   home: {
     href: "/docs#discovery",
-    text: `Fair discovery: ${Math.round(DISCOVERY_CONFIG.feedMix.emerging_rising * 100)}% Emerging Rising on the homepage, quota enforced in code.`,
+    text: `Fair mix on the composed feed: ${Math.round(DISCOVERY_CONFIG.feedMix.emerging_rising * 100)}% Emerging Rising · ${Math.round(DISCOVERY_CONFIG.feedMix.following * 100)}% Following · ${Math.round(DISCOVERY_CONFIG.feedMix.featured * 100)}% Featured · ${Math.round(DISCOVERY_CONFIG.feedMix.auctions_live * 100)}% Live timed drops.`,
   },
   create: {
     href: "/docs#discovery",
-    text: "Publish mints into your collection. Your first work auto-enters Rising — no Featured pin required.",
+    text: "Mint & publish is required to sell. Your first minted work auto-enters Rising — no Featured pin required.",
   },
   buy: {
     href: "/docs#fees",
@@ -25,7 +25,7 @@ const NOTES: Record<
   },
   collect: {
     href: "/docs#ownership",
-    text: "Mint at publish; buys transfer that NFT to your wallet. Withdraw is legacy USD holds only.",
+    text: "Mint at publish; buys transfer that NFT to your wallet. Claim legacy hold is for old USD holds only — crypto buys already own on-chain.",
   },
   funds: {
     href: "/docs#settlement",

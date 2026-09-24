@@ -1,11 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type ListingOpt = { id: string; title: string; stage: string };
 
-export function StudioPanel() {
+export function StudioPanel({
+  canEditFeatured = false,
+  signedIn = false,
+}: {
+  canEditFeatured?: boolean;
+  signedIn?: boolean;
+}) {
   const router = useRouter();
   const [listings, setListings] = useState<ListingOpt[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
@@ -45,8 +52,13 @@ export function StudioPanel() {
   async function createShelf(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
+    if (!signedIn) {
+      setMsg("sign_in");
+      return;
+    }
     const res = await fetch("/api/shelves", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: shelfName, listingIds: selected }),
     });
@@ -63,105 +75,138 @@ export function StudioPanel() {
 
   return (
     <div style={{ display: "grid", gap: "2rem" }}>
-      <section>
-        <h2 className="display" style={{ fontSize: "1.4rem" }}>
-          Editorial Featured
-        </h2>
-        <p style={{ color: "var(--ink-muted)" }}>
-          Editors/moderators promote Rising works into the fixed Featured inventory.
-        </p>
-        <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.75rem" }}>
-          {listings
-            .filter((l) => l.stage !== "draft")
-            .slice(0, 20)
-            .map((l) => (
-              <div
-                key={l.id}
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  borderBottom: "1px solid var(--line)",
-                  padding: "0.45rem 0",
-                }}
-              >
-                <span style={{ flex: 1 }}>
-                  {l.title}{" "}
-                  <span style={{ color: "var(--ink-muted)" }}>({l.stage})</span>
-                </span>
-                <button
-                  type="button"
-                  className="badge featured"
-                  style={{ cursor: "pointer", background: "transparent" }}
-                  onClick={() => void feature(l.id, "feature")}
+      {canEditFeatured ? (
+        <section>
+          <h2 className="display" style={{ fontSize: "1.4rem" }}>
+            Editorial Featured
+          </h2>
+          <p style={{ color: "var(--ink-muted)" }}>
+            Editors and moderators promote Rising works into the fixed Featured
+            inventory. Paid boosts are separate and labeled Promoted.
+          </p>
+          <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.75rem" }}>
+            {listings
+              .filter((l) => l.stage !== "draft")
+              .slice(0, 20)
+              .map((l) => (
+                <div
+                  key={l.id}
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    borderBottom: "1px solid var(--line)",
+                    padding: "0.45rem 0",
+                  }}
                 >
-                  Feature
-                </button>
-                <button
-                  type="button"
-                  className="badge"
-                  style={{ cursor: "pointer", background: "transparent" }}
-                  onClick={() => void feature(l.id, "unfeature")}
-                >
-                  Unfeature
-                </button>
-              </div>
-            ))}
-        </div>
-      </section>
+                  <span style={{ flex: 1 }}>
+                    {l.title}{" "}
+                    <span style={{ color: "var(--ink-muted)" }}>({l.stage})</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="badge featured"
+                    style={{ cursor: "pointer", background: "transparent" }}
+                    onClick={() => void feature(l.id, "feature")}
+                  >
+                    Feature
+                  </button>
+                  <button
+                    type="button"
+                    className="badge"
+                    style={{ cursor: "pointer", background: "transparent" }}
+                    onClick={() => void feature(l.id, "unfeature")}
+                  >
+                    Unfeature
+                  </button>
+                </div>
+              ))}
+          </div>
+        </section>
+      ) : null}
 
-      <section>
+      <section id="shelves">
         <h2 className="display" style={{ fontSize: "1.4rem" }}>
           Create collector shelf
         </h2>
-        <form onSubmit={createShelf} style={{ display: "grid", gap: "0.75rem", maxWidth: "32rem" }}>
-          <input
-            value={shelfName}
-            onChange={(e) => setShelfName(e.target.value)}
-            placeholder="Shelf name"
-            required
-            style={{
-              background: "var(--panel)",
-              border: "1px solid var(--line)",
-              color: "var(--ink)",
-              padding: "0.55rem 0.7rem",
-            }}
-          />
-          <div style={{ display: "grid", gap: "0.35rem", maxHeight: "12rem", overflow: "auto" }}>
-            {listings.slice(0, 30).map((l) => (
-              <label key={l.id} style={{ display: "flex", gap: "0.5rem", fontSize: "0.92rem" }}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(l.id)}
-                  onChange={(e) => {
-                    setSelected((prev) =>
-                      e.target.checked
-                        ? [...prev, l.id]
-                        : prev.filter((id) => id !== l.id),
-                    );
-                  }}
-                />
-                {l.title}
-              </label>
-            ))}
-          </div>
-          <button
-            type="submit"
-            className="badge emerging"
-            style={{
-              cursor: "pointer",
-              background: "transparent",
-              justifySelf: "start",
-              padding: "0.5rem 0.8rem",
-            }}
+        <p style={{ color: "var(--ink-muted)", marginTop: 0 }}>
+          Name a shelf and add works you care about — others can follow it from{" "}
+          <Link href="/shelves">Shelves</Link>. Saving from a card can start you
+          here when you have none yet.
+        </p>
+        {!signedIn ? (
+          <p style={{ color: "var(--ink-muted)" }}>
+            <Link href="/sign-in?next=/studio">Sign in</Link> to publish a shelf.
+          </p>
+        ) : (
+          <form
+            onSubmit={createShelf}
+            style={{ display: "grid", gap: "0.75rem", maxWidth: "32rem" }}
           >
-            Publish shelf
-          </button>
-        </form>
+            <input
+              value={shelfName}
+              onChange={(e) => setShelfName(e.target.value)}
+              placeholder="Shelf name"
+              required
+              style={{
+                background: "var(--panel)",
+                border: "1px solid var(--line)",
+                color: "var(--ink)",
+                padding: "0.55rem 0.7rem",
+              }}
+            />
+            <div
+              style={{
+                display: "grid",
+                gap: "0.35rem",
+                maxHeight: "12rem",
+                overflow: "auto",
+              }}
+            >
+              {listings.slice(0, 30).map((l) => (
+                <label
+                  key={l.id}
+                  style={{ display: "flex", gap: "0.5rem", fontSize: "0.92rem" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(l.id)}
+                    onChange={(e) => {
+                      setSelected((prev) =>
+                        e.target.checked
+                          ? [...prev, l.id]
+                          : prev.filter((id) => id !== l.id),
+                      );
+                    }}
+                  />
+                  {l.title}
+                </label>
+              ))}
+            </div>
+            <button
+              type="submit"
+              className="badge emerging"
+              style={{
+                cursor: "pointer",
+                background: "transparent",
+                justifySelf: "start",
+                padding: "0.5rem 0.8rem",
+              }}
+            >
+              Publish shelf
+            </button>
+          </form>
+        )}
       </section>
 
-      {msg ? <p style={{ color: "var(--emergent)" }}>{msg}</p> : null}
+      {msg === "sign_in" ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          <Link href="/sign-in?next=/studio">Sign in</Link> to curate.
+        </p>
+      ) : msg ? (
+        <p style={{ color: "var(--emergent)" }}>{msg}</p>
+      ) : null}
     </div>
   );
 }

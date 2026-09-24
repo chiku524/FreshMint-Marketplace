@@ -86,6 +86,7 @@ export function ListingActions({
   canStageRising = false,
   pendingPurchase = null,
   layout = "inline",
+  showSave = true,
 }: {
   listingId: string;
   creatorId?: string;
@@ -104,6 +105,8 @@ export function ListingActions({
   pendingPurchase?: { purchaseId: string; status: string } | null;
   /** Menu layout keeps checkout on the listing page so compact tiles stay readable. */
   layout?: "inline" | "menu";
+  /** When false, Save lives on the WorkCard caption instead. */
+  showSave?: boolean;
 }) {
   const router = useRouter();
   const listingNetwork = (network ??
@@ -676,21 +679,23 @@ export function ListingActions({
           Follow
         </button>
       ) : null}
-      <button
-        type="button"
-        className="badge"
-        style={{ cursor: "pointer", background: "transparent" }}
-        onClick={() =>
-          void post("/api/signals", { listingId, type: "save" }).then((d) => {
-            if (d && !("error" in d)) {
-              setMsg("Saved");
-              router.refresh();
-            }
-          })
-        }
-      >
-        Save
-      </button>
+      {showSave ? (
+        <button
+          type="button"
+          className="badge"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() =>
+            void post("/api/signals", { listingId, type: "save" }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg("Saved");
+                router.refresh();
+              }
+            })
+          }
+        >
+          Save
+        </button>
+      ) : null}
       <button
         type="button"
         className="badge"

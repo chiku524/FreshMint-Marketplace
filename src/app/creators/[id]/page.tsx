@@ -37,6 +37,8 @@ export default async function CreatorProfilePage({
   return (
     <div className="page-wrap">
       <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+        <Link href="/creators">Creators</Link>
+        {" · "}
         <Link href="/open">Open Lane</Link>
         {" · "}
         <Link href="/rising">Rising</Link>

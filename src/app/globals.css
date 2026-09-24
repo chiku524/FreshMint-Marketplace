@@ -1358,6 +1358,52 @@ html.fm-intro-pending .fm-intro-cover {
   border-color: rgba(201, 149, 58, 0.4);
 }
 
+.badge.promoted {
+  color: var(--ink-muted);
+  border-color: rgba(160, 160, 170, 0.55);
+  text-transform: uppercase;
+}
+
+.work-tile__caption-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.work-tile__shelf-hint {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.work-tile__shelf-hint a {
+  color: var(--accent-soft);
+}
+
+.work-tile--promoted {
+  box-shadow: inset 0 0 0 1px rgba(160, 160, 170, 0.25);
+}
+
+.create-wizard__mint-checklist {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 48ch;
+}
+
+.create-wizard__mint-checklist strong {
+  color: var(--ink);
+  font-weight: 560;
+}
+
 .account-tabs {
   display: flex;
   flex-wrap: wrap;

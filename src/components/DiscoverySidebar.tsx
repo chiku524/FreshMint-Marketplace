@@ -14,6 +14,7 @@ type DiscoveryLink = {
 /** Primary product IA — SiteNav stays free of these lane duplicates. */
 const BROWSE: DiscoveryLink[] = [
   { href: "/collections", label: "Collections", icon: "collections" },
+  { href: "/creators", label: "Creators", icon: "account" },
 ];
 
 const DISCOVER: DiscoveryLink[] = [
