@@ -1067,6 +1067,7 @@ html.fm-intro-pending .fm-intro-cover {
   flex: 1 1 auto;
   min-height: 0;
   position: relative;
+  z-index: 0;
 }
 
 .work-tile__body {
@@ -1264,9 +1265,7 @@ html.fm-intro-pending .fm-intro-cover {
   overflow: visible;
 }
 
-.work-tile.is-menu-open .work-tile__media-link {
-  pointer-events: none;
-}
+/* Menu/More sit above the media link (higher z-index); keep artwork clickable. */
 
 .work-tile.is-menu-open .work-tile__caption {
   opacity: 0;
