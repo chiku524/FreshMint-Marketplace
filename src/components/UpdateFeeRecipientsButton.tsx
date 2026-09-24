@@ -60,6 +60,18 @@ export function UpdateFeeRecipientsButton({
       );
       const prep = await prepRes.json();
       if (!prepRes.ok) {
+        if (prep.error === "not_onchain_owner") {
+          const connected =
+            typeof prep.connected === "string" ? shortAddr(prep.connected) : shortAddr(fromAddress);
+          const onchain =
+            typeof prep.onchainOwner === "string"
+              ? shortAddr(prep.onchainOwner)
+              : "unknown";
+          setMsg(
+            `Connected wallet ${connected} is not the on-chain collection owner (${onchain})`,
+          );
+          return;
+        }
         setMsg(
           prep.error === "forbidden"
             ? "Only the collection owner can update fee recipients"
@@ -73,7 +85,9 @@ export function UpdateFeeRecipientsButton({
                     ? "Fee recipient updates are EVM-only"
                     : prep.error === "invalid_contract"
                       ? "Collection contract address is invalid"
-                      : prep.error || "prepare_failed",
+                      : prep.error === "owner_read_failed"
+                        ? "Could not read on-chain collection owner"
+                        : prep.error || "prepare_failed",
         );
         return;
       }

@@ -36,8 +36,17 @@ export async function POST(
         ? 403
         : result.error === "collection_not_found"
           ? 404
-          : 400;
-    return NextResponse.json({ error: result.error }, { status });
+          : result.error === "not_onchain_owner"
+            ? 403
+            : 400;
+    return NextResponse.json(
+      {
+        error: result.error,
+        ...(result.connected ? { connected: result.connected } : {}),
+        ...(result.onchainOwner ? { onchainOwner: result.onchainOwner } : {}),
+      },
+      { status },
+    );
   }
   return NextResponse.json(result);
 }

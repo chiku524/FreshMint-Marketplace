@@ -82,6 +82,11 @@ export default async function OpenLanePage({
               creatorName={
                 engine.state.creators.get(item.listing.creatorId)?.displayName
               }
+              collection={
+                item.listing.collectionId
+                  ? engine.state.collections.get(item.listing.collectionId) ?? null
+                  : null
+              }
             />
           ))}
         </PuzzleRail>

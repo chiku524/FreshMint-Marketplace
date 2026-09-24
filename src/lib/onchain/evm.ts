@@ -442,6 +442,33 @@ export function buildEvmCollectionDeployIntent(input: {
 }
 
 
+
+/** Read the Ownable-style collection `owner()` (deployer) via public RPC. */
+export async function readEvmCollectionOwner(input: {
+  network: NetworkId;
+  contractAddress: string;
+}): Promise<
+  { ok: true; owner: `0x${string}` } | { ok: false; error: string }
+> {
+  if (!isAddress(input.contractAddress)) {
+    return { ok: false, error: "invalid_contract" };
+  }
+  try {
+    const client = publicClient(input.network);
+    const owner = await client.readContract({
+      address: input.contractAddress as Hex,
+      abi: freshMintErc721Abi,
+      functionName: "owner",
+    });
+    return { ok: true, owner };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "owner_read_failed",
+    };
+  }
+}
+
 /** Collection-owner wallet tx to point fee recipients at current platform treasury/operator. */
 export function buildEvmSetFeeRecipientsIntent(input: {
   network: NetworkId;

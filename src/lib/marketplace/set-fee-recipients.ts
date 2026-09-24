@@ -7,7 +7,10 @@ import {
 } from "@/lib/chains/registry";
 import { platformFeeRecipients } from "@/lib/fees/platform";
 import type { Collection } from "@/lib/discovery/types";
-import { buildEvmSetFeeRecipientsIntent } from "@/lib/onchain/evm";
+import {
+  buildEvmSetFeeRecipientsIntent,
+  readEvmCollectionOwner,
+} from "@/lib/onchain/evm";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 async function loadOwnedCollection(input: {
@@ -57,7 +60,12 @@ export async function prepareCollectionSetFeeRecipients(input: {
       >;
       status: "pending_wallet";
     }
-  | { ok: false; error: string }
+  | {
+      ok: false;
+      error: string;
+      connected?: string;
+      onchainOwner?: string;
+    }
 > {
   const loaded = await loadOwnedCollection(input);
   if (!loaded.ok) return loaded;
@@ -84,6 +92,22 @@ export async function prepareCollectionSetFeeRecipients(input: {
 
   const fromAddress = input.fromAddress?.trim();
   if (!fromAddress) return { ok: false, error: "wallet_required" };
+
+  const onchainOwner = await readEvmCollectionOwner({
+    network: net.network,
+    contractAddress: collection.contractAddress,
+  });
+  if (!onchainOwner.ok) {
+    return { ok: false, error: "owner_read_failed" };
+  }
+  if (onchainOwner.owner.toLowerCase() !== fromAddress.toLowerCase()) {
+    return {
+      ok: false,
+      error: "not_onchain_owner",
+      connected: fromAddress,
+      onchainOwner: onchainOwner.owner,
+    };
+  }
 
   let intent: ReturnType<typeof buildEvmSetFeeRecipientsIntent>;
   try {

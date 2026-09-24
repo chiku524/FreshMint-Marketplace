@@ -13,6 +13,7 @@ describe("prepareCollectionSetFeeRecipients", () => {
   afterEach(() => {
     vi.resetModules();
     vi.doUnmock("@/lib/marketplace/service");
+    vi.doUnmock("@/lib/onchain/evm");
     if (prevTreasury === undefined) {
       delete process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS;
     } else {
@@ -25,7 +26,12 @@ describe("prepareCollectionSetFeeRecipients", () => {
     }
   });
 
-  async function withCollection(collection: Record<string, unknown>) {
+  async function withCollection(
+    collection: Record<string, unknown>,
+    ownerResult:
+      | { ok: true; owner: string }
+      | { ok: false; error: string } = { ok: true, owner: OWNER },
+  ) {
     vi.doMock("@/lib/marketplace/service", () => ({
       getDiscoveryEngine: async () => ({
         state: {
@@ -33,6 +39,13 @@ describe("prepareCollectionSetFeeRecipients", () => {
         },
       }),
     }));
+    vi.doMock("@/lib/onchain/evm", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("@/lib/onchain/evm")>();
+      return {
+        ...actual,
+        readEvmCollectionOwner: vi.fn(async () => ownerResult),
+      };
+    });
     process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS = TREASURY;
     process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS = OPERATOR;
     const { prepareCollectionSetFeeRecipients } = await import(
@@ -89,6 +102,59 @@ describe("prepareCollectionSetFeeRecipients", () => {
       fromAddress: OTHER,
     });
     expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("rejects when connected wallet is not the on-chain owner", async () => {
+    const prepare = await withCollection(
+      {
+        id: "col-1",
+        title: "Test",
+        creatorId: "user-1",
+        chain: "evm",
+        network: "ethereum",
+        heroListingId: null,
+        sampleListingIds: [],
+        totalItems: 1,
+        contractAddress: CONTRACT,
+        deployStatus: "confirmed",
+      },
+      { ok: true, owner: OWNER },
+    );
+    const result = await prepare({
+      actorId: "user-1",
+      collectionId: "col-1",
+      fromAddress: OTHER,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "not_onchain_owner",
+      connected: OTHER,
+      onchainOwner: OWNER,
+    });
+  });
+
+  it("rejects when on-chain owner() cannot be read", async () => {
+    const prepare = await withCollection(
+      {
+        id: "col-1",
+        title: "Test",
+        creatorId: "user-1",
+        chain: "evm",
+        network: "ethereum",
+        heroListingId: null,
+        sampleListingIds: [],
+        totalItems: 1,
+        contractAddress: CONTRACT,
+        deployStatus: "confirmed",
+      },
+      { ok: false, error: "rpc_down" },
+    );
+    const result = await prepare({
+      actorId: "user-1",
+      collectionId: "col-1",
+      fromAddress: OWNER,
+    });
+    expect(result).toEqual({ ok: false, error: "owner_read_failed" });
   });
 
   it("rejects Solana collections", async () => {

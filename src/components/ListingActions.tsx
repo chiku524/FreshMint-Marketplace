@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import { resolveBuyAuthCta } from "@/lib/marketplace/buy-auth-cta";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 
 const PAY_LABELS: Record<string, string> = {
@@ -51,6 +52,7 @@ function shortAddr(addr: string) {
   if (addr.length < 12) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
+
 
 function stepLabel(step: BuyStep, crossChain: boolean): string {
   switch (step) {
@@ -721,7 +723,20 @@ export function ListingActions({
           <Link href={`/listings/${listingId}`} className="badge featured">
             Buy{priceUsd != null ? ` $${priceUsd}` : ""}
           </Link>
-        ) : sessionUserId === null ? (
+        ) : resolveBuyAuthCta(sessionUserId) === "checking" ? (
+          <span
+            className="badge"
+            aria-busy="true"
+            style={{
+              opacity: 0.65,
+              cursor: "default",
+              background: "transparent",
+              color: "var(--ink-muted)",
+            }}
+          >
+            Checking sign-in…
+          </span>
+        ) : resolveBuyAuthCta(sessionUserId) === "sign_in" ? (
           <Link href={signInHref} className="badge featured">
             Sign in to buy {settleQuote?.formatted ?? `$${priceUsd}`}
           </Link>
