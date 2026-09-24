@@ -103,6 +103,279 @@ export function englishSettlement(input: {
   return { ok: true, amountUsd: high };
 }
 
+export type EnglishOutcome =
+  | { status: "not_english" }
+  | { status: "upcoming" }
+  | { status: "live" }
+  | { status: "unsold"; reason: "no_winning_bid" | "reserve_not_met" }
+  | {
+      status: "award";
+      amountUsd: number;
+      highBidderId: string;
+    };
+
+/** Pure end-state for English auctions (unit-tested). */
+export function evaluateEnglishOutcome(
+  listing: AuctionListingSnap,
+  now = Date.now(),
+): EnglishOutcome {
+  const mode = resolveSaleMode(listing);
+  if (mode !== "english") return { status: "not_english" };
+  const start = listing.auctionStartsAt;
+  const end = listing.auctionEndsAt;
+  if (start == null || end == null) {
+    return { status: "unsold", reason: "no_winning_bid" };
+  }
+  if (now < start) return { status: "upcoming" };
+  if (now <= end) return { status: "live" };
+
+  const high = Number(listing.currentHighBidUsd ?? 0) || 0;
+  if (high <= 0 || !listing.highBidderId) {
+    return { status: "unsold", reason: "no_winning_bid" };
+  }
+  const reserve = Number(listing.reserveUsd ?? 0) || 0;
+  if (reserve > 0 && high + 1e-9 < reserve) {
+    return { status: "unsold", reason: "reserve_not_met" };
+  }
+  return {
+    status: "award",
+    amountUsd: high,
+    highBidderId: listing.highBidderId,
+  };
+}
+
+export type LazyEnglishSettleResult = {
+  outcome: EnglishOutcome;
+  purchaseId: string | null;
+  purchaseStatus: string | null;
+  created: boolean;
+  /** open | claim_pending | awarded | unsold */
+  settleLabel: "open" | "claim_pending" | "awarded" | "unsold";
+};
+
+async function loadAuctionListingSnap(
+  listingId: string,
+): Promise<
+  | (AuctionListingSnap & { network?: string; chain?: string })
+  | null
+> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    const engine = getMemoryEngine();
+    const l = engine.state.listings.get(listingId);
+    if (!l) return null;
+    return {
+      id: l.id,
+      creatorId: l.creatorId,
+      type: l.type,
+      saleMode: (l as { saleMode?: string | null }).saleMode,
+      delisted: l.delisted,
+      priceUsd: l.priceUsd,
+      startingBidUsd: (l as { startingBidUsd?: number | null }).startingBidUsd,
+      reserveUsd: (l as { reserveUsd?: number | null }).reserveUsd,
+      currentHighBidUsd: (l as { currentHighBidUsd?: number | null })
+        .currentHighBidUsd,
+      highBidderId: (l as { highBidderId?: string | null }).highBidderId,
+      auctionStartsAt: l.auctionStartsAt,
+      auctionEndsAt: l.auctionEndsAt,
+      network: l.network,
+      chain: l.chain,
+    };
+  }
+  const row = await prisma.listing.findUnique({ where: { id: listingId } });
+  if (!row) return null;
+  return {
+    id: row.id,
+    creatorId: row.creatorId,
+    type: row.type,
+    saleMode: row.saleMode,
+    delisted: row.delisted,
+    priceUsd: row.priceUsd,
+    startingBidUsd: row.startingBidUsd,
+    reserveUsd: row.reserveUsd,
+    currentHighBidUsd: row.currentHighBidUsd,
+    highBidderId: row.highBidderId,
+    auctionStartsAt: row.auctionStartsAt?.getTime() ?? null,
+    auctionEndsAt: row.auctionEndsAt?.getTime() ?? null,
+    network: row.network,
+    chain: row.chain,
+  };
+}
+
+async function markEnglishSoftOutcome(
+  listingId: string,
+  englishOutcome: "awarded" | "unsold",
+) {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    const engine = getMemoryEngine();
+    const live = engine.state.listings.get(listingId) as
+      | (Record<string, unknown> & { id: string })
+      | undefined;
+    if (live) {
+      live.englishOutcome = englishOutcome;
+      engine.state.listings.set(listingId, live as never);
+    }
+  }
+  // No schema column required: award is the pending/completed purchase;
+  // unsold is derived from evaluateEnglishOutcome after end.
+}
+
+/**
+ * Cron-less lazy settle: when an English listing is viewed / bid-listed after
+ * end, create a pending_payment purchase for the high bidder at the winning
+ * bid (wallet still required to pay), or mark unsold when reserve fails.
+ */
+export async function lazySettleEnglishAuction(
+  listingId: string,
+  now = Date.now(),
+): Promise<LazyEnglishSettleResult> {
+  const listing = await loadAuctionListingSnap(listingId);
+  if (!listing) {
+    return {
+      outcome: { status: "not_english" },
+      purchaseId: null,
+      purchaseStatus: null,
+      created: false,
+      settleLabel: "open",
+    };
+  }
+
+  const outcome = evaluateEnglishOutcome(listing, now);
+  if (
+    outcome.status === "not_english" ||
+    outcome.status === "upcoming" ||
+    outcome.status === "live"
+  ) {
+    return {
+      outcome,
+      purchaseId: null,
+      purchaseStatus: null,
+      created: false,
+      settleLabel: "open",
+    };
+  }
+
+  if (outcome.status === "unsold") {
+    await markEnglishSoftOutcome(listingId, "unsold");
+    return {
+      outcome,
+      purchaseId: null,
+      purchaseStatus: null,
+      created: false,
+      settleLabel: "unsold",
+    };
+  }
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const {
+    isMemoryMode,
+    getMemoryPurchases,
+    recordMemoryPurchase,
+  } = await import("@/lib/data/memory-store");
+  const { purchaseReservesSupply } = await import(
+    "@/lib/marketplace/lifecycle"
+  );
+  const { splitSaleProceeds } = await import("@/lib/fees/platform");
+  const mode = await ensureDatabaseReady();
+  const fees = splitSaleProceeds(outcome.amountUsd);
+
+  if (mode === "memory" || isMemoryMode()) {
+    const existing = getMemoryPurchases().find(
+      (p) =>
+        p.listingId === listingId &&
+        p.buyerId === outcome.highBidderId &&
+        purchaseReservesSupply(p),
+    );
+    if (existing) {
+      await markEnglishSoftOutcome(listingId, "awarded");
+      return {
+        outcome,
+        purchaseId: existing.id,
+        purchaseStatus: existing.status ?? null,
+        created: false,
+        settleLabel:
+          existing.status === "completed" ? "awarded" : "claim_pending",
+      };
+    }
+    const row = recordMemoryPurchase({
+      listingId,
+      buyerId: outcome.highBidderId,
+      amountUsd: outcome.amountUsd,
+      feeTotalUsd: fees.feeTotalUsd,
+      feeTreasuryUsd: fees.feeTreasuryUsd,
+      feeOperatorUsd: fees.feeOperatorUsd,
+      sellerNetUsd: fees.sellerNetUsd,
+      soldAt: now,
+      status: "pending_payment",
+      payNetwork: listing.network ?? null,
+      paymentTxHash: null,
+      txHash: `english-award:${listingId}:${now}`,
+      chain: listing.chain ?? "evm",
+    });
+    await markEnglishSoftOutcome(listingId, "awarded");
+    return {
+      outcome,
+      purchaseId: row.id,
+      purchaseStatus: "pending_payment",
+      created: true,
+      settleLabel: "claim_pending",
+    };
+  }
+
+  const existing = await prisma.purchase.findFirst({
+    where: {
+      listingId,
+      buyerId: outcome.highBidderId,
+      status: { in: ["pending_payment", "pending_transfer", "completed"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (existing && purchaseReservesSupply(existing)) {
+    await markEnglishSoftOutcome(listingId, "awarded");
+    return {
+      outcome,
+      purchaseId: existing.id,
+      purchaseStatus: existing.status,
+      created: false,
+      settleLabel:
+        existing.status === "completed" ? "awarded" : "claim_pending",
+    };
+  }
+
+  const created = await prisma.purchase.create({
+    data: {
+      listingId,
+      buyerId: outcome.highBidderId,
+      amountUsd: outcome.amountUsd,
+      feeTotalUsd: fees.feeTotalUsd,
+      feeTreasuryUsd: fees.feeTreasuryUsd,
+      feeOperatorUsd: fees.feeOperatorUsd,
+      sellerNetUsd: fees.sellerNetUsd,
+      status: "pending_payment",
+      payNetwork: listing.network ?? null,
+      txHash: `english-award:${listingId}:${now}`,
+      chain: listing.chain ?? "evm",
+    },
+  });
+  await markEnglishSoftOutcome(listingId, "awarded");
+  return {
+    outcome,
+    purchaseId: created.id,
+    purchaseStatus: created.status,
+    created: true,
+    settleLabel: "claim_pending",
+  };
+}
+
 const memoryBids: BidRow[] = [];
 
 export function __resetMemoryBidsForTests() {

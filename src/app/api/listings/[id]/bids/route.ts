@@ -1,5 +1,5 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { listBidsForListing, placeBid } from "@/lib/marketplace/english-auction";
+import { lazySettleEnglishAuction, listBidsForListing, placeBid } from "@/lib/marketplace/english-auction";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -10,8 +10,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const settle = await lazySettleEnglishAuction(id);
   const bids = await listBidsForListing(id, 50);
-  return NextResponse.json({ ok: true, bids });
+  return NextResponse.json({
+    ok: true,
+    bids,
+    settle: {
+      label: settle.settleLabel,
+      outcome: settle.outcome,
+      purchaseId: settle.purchaseId,
+      purchaseStatus: settle.purchaseStatus,
+      created: settle.created,
+    },
+  });
 }
 
 const bodySchema = z.object({

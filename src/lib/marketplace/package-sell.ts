@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/db";
 import type { Listing } from "@/lib/discovery/types";
-import { listingIsMinted } from "@/lib/marketplace/crypto-purchase";
+import {
+  assertCryptoPayAllowed,
+  listingIsMinted,
+  payNetworksForListing,
+  settlementAddressFor,
+  buildCrossChainPayQuote,
+} from "@/lib/marketplace/crypto-purchase";
+import type { NetworkId } from "@/lib/chains/registry";
+import { isNetworkId } from "@/lib/chains/registry";
 
 export type PackageEligibleListing = {
   id: string;
@@ -89,6 +97,29 @@ export function filterPackageEligibleListings(input: {
   return { ok: true, listings, defaultPriceUsd, network };
 }
 
+
+/** Pay-from network rules for package: listing items share one network; pay may bridge once. */
+export function validatePackagePayNetwork(input: {
+  listingNetwork: string | null;
+  payNetwork: string;
+}): { ok: true; bridged: boolean } | { ok: false; error: string } {
+  if (!input.listingNetwork || !isNetworkId(input.listingNetwork)) {
+    return { ok: false, error: "listing_network_required" };
+  }
+  if (!isNetworkId(input.payNetwork)) {
+    return { ok: false, error: "invalid_network" };
+  }
+  const allowed = assertCryptoPayAllowed({
+    listingNetwork: input.listingNetwork,
+    payNetwork: input.payNetwork,
+  });
+  if (!allowed.ok) return allowed;
+  return {
+    ok: true,
+    bridged: input.payNetwork !== input.listingNetwork,
+  };
+}
+
 export async function getCollectionPackageEligibility(collectionId: string) {
   const { getDiscoveryEngine } = await import("@/lib/marketplace/service");
   const { listClosedPrimarySaleIds } = await import("@/lib/marketplace/sales");
@@ -103,6 +134,7 @@ export async function getCollectionPackageEligibility(collectionId: string) {
       network: null as string | null,
       packageSellEnabled: false,
       packagePriceUsd: null as number | null,
+      payNetworks: [] as NetworkId[],
     };
   }
 
@@ -119,7 +151,11 @@ export async function getCollectionPackageEligibility(collectionId: string) {
   const packagePriceUsd =
     (collection as { packagePriceUsd?: number | null }).packagePriceUsd ?? null;
 
-  return { ...base, packageSellEnabled, packagePriceUsd };
+  const payNetworks =
+    base.network && isNetworkId(base.network)
+      ? payNetworksForListing(base.network)
+      : [];
+  return { ...base, packageSellEnabled, packagePriceUsd, payNetworks };
 }
 
 export async function updateCollectionPackageSell(input: {
@@ -213,7 +249,16 @@ export async function prepareCollectionPackagePurchase(input: {
       network: string;
       status: string;
       purchaseIds: string[];
-      settlement: "pay_once_then_sequential_transfers";
+      settlement:
+        | "pay_once_then_sequential_transfers"
+        | "bridge_once_then_sequential_transfers";
+      bridged: boolean;
+      payNetwork: string;
+      bridge?: {
+        requestId?: string | null;
+        feeUsd?: string | null;
+        estimatedOutput?: string | null;
+      } | null;
     }
   | { ok: false; error: string }
 > {
@@ -224,9 +269,14 @@ export async function prepareCollectionPackagePurchase(input: {
   if (!eligibility.ok || eligibility.listings.length < 2) {
     return { ok: false, error: eligibility.reason ?? "ineligible" };
   }
-  if (input.payNetwork !== eligibility.network) {
-    return { ok: false, error: "same_network_only" };
+  const payCheck = validatePackagePayNetwork({
+    listingNetwork: eligibility.network,
+    payNetwork: input.payNetwork,
+  });
+  if (!payCheck.ok) {
+    return { ok: false, error: payCheck.error };
   }
+  const bridged = payCheck.bridged;
 
   const amountUsd =
     eligibility.packagePriceUsd != null && eligibility.packagePriceUsd > 0
@@ -234,6 +284,40 @@ export async function prepareCollectionPackagePurchase(input: {
       : eligibility.defaultPriceUsd;
 
   const listingIds = eligibility.listings.map((l) => l.id);
+
+  let bridgeMeta: {
+    requestId?: string | null;
+    feeUsd?: string | null;
+    estimatedOutput?: string | null;
+  } | null = null;
+  if (bridged) {
+    try {
+      const listingNetwork = eligibility.network as NetworkId;
+      const quote = await buildCrossChainPayQuote({
+        listingNetwork,
+        payNetwork: input.payNetwork as NetworkId,
+        amountUsd,
+        buyerPaymentAddress: input.buyerPaymentAddress,
+        settlementAddress: settlementAddressFor(listingNetwork),
+      });
+      bridgeMeta = {
+        requestId: quote.bridge?.requestId ?? null,
+        feeUsd: quote.bridge?.feeUsd ?? null,
+        estimatedOutput: quote.bridge?.estimatedOutput ?? null,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          e instanceof Error && e.message.includes("boing")
+            ? "boing_same_chain_only"
+            : e instanceof Error
+              ? e.message
+              : "bridge_quote_failed",
+      };
+    }
+  }
+
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode, recordMemoryPurchase } = await import(
     "@/lib/data/memory-store"
@@ -272,7 +356,12 @@ export async function prepareCollectionPackagePurchase(input: {
       network: eligibility.network!,
       status: input.simulate ? "completed" : "pending_payment",
       purchaseIds,
-      settlement: "pay_once_then_sequential_transfers",
+      settlement: bridged
+        ? "bridge_once_then_sequential_transfers"
+        : "pay_once_then_sequential_transfers",
+      bridged,
+      payNetwork: input.payNetwork,
+      bridge: bridgeMeta,
     };
   }
 
@@ -321,6 +410,11 @@ export async function prepareCollectionPackagePurchase(input: {
     network: eligibility.network!,
     status: created.pkg.status,
     purchaseIds: created.purchaseIds,
-    settlement: "pay_once_then_sequential_transfers",
+    settlement: bridged
+      ? "bridge_once_then_sequential_transfers"
+      : "pay_once_then_sequential_transfers",
+    bridged,
+    payNetwork: input.payNetwork,
+    bridge: bridgeMeta,
   };
 }

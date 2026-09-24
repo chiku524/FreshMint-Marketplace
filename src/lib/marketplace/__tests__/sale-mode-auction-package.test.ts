@@ -9,9 +9,13 @@ import {
 import {
   englishSettlement,
   evaluateBidRules,
+  evaluateEnglishOutcome,
   type AuctionListingSnap,
 } from "@/lib/marketplace/english-auction";
-import { filterPackageEligibleListings } from "@/lib/marketplace/package-sell";
+import {
+  filterPackageEligibleListings,
+  validatePackagePayNetwork,
+} from "@/lib/marketplace/package-sell";
 
 describe("saleMode mapping", () => {
   it("maps english/timed_window to auction type for discovery", () => {
@@ -195,5 +199,122 @@ describe("package eligibility", () => {
       soldIds: new Set(),
     });
     expect(one.ok).toBe(false);
+  });
+});
+
+describe("english lazy settle rules", () => {
+  const base: AuctionListingSnap = {
+    id: "l1",
+    creatorId: "creator",
+    type: "auction",
+    saleMode: "english",
+    delisted: false,
+    priceUsd: 10,
+    startingBidUsd: 10,
+    reserveUsd: 25,
+    currentHighBidUsd: null,
+    highBidderId: null,
+    auctionStartsAt: 1_000,
+    auctionEndsAt: 10_000,
+  };
+
+  it("marks unsold when reserve not met or no bids after end", () => {
+    expect(
+      evaluateEnglishOutcome(
+        { ...base, currentHighBidUsd: 20, highBidderId: "w" },
+        11_000,
+      ),
+    ).toEqual({ status: "unsold", reason: "reserve_not_met" });
+    expect(evaluateEnglishOutcome(base, 11_000)).toEqual({
+      status: "unsold",
+      reason: "no_winning_bid",
+    });
+  });
+
+  it("awards high bidder when reserve met after end", () => {
+    expect(
+      evaluateEnglishOutcome(
+        {
+          ...base,
+          currentHighBidUsd: 30,
+          highBidderId: "winner",
+          auctionEndsAt: 5_000,
+        },
+        6_000,
+      ),
+    ).toEqual({
+      status: "award",
+      amountUsd: 30,
+      highBidderId: "winner",
+    });
+    expect(evaluateEnglishOutcome(base, 2_000).status).toBe("live");
+    expect(evaluateEnglishOutcome(base, 500).status).toBe("upcoming");
+  });
+});
+
+describe("package pay network validation", () => {
+  it("allows same-network and Relay cross-chain pay, blocks boing mismatch", () => {
+    expect(
+      validatePackagePayNetwork({
+        listingNetwork: "base",
+        payNetwork: "base",
+      }),
+    ).toEqual({ ok: true, bridged: false });
+
+    expect(
+      validatePackagePayNetwork({
+        listingNetwork: "base",
+        payNetwork: "ethereum",
+      }),
+    ).toEqual({ ok: true, bridged: true });
+
+    const boing = validatePackagePayNetwork({
+      listingNetwork: "base",
+      payNetwork: "boing",
+    });
+    expect(boing.ok).toBe(false);
+    if (!boing.ok) expect(boing.error).toBe("boing_same_chain_only");
+
+    expect(
+      validatePackagePayNetwork({
+        listingNetwork: null,
+        payNetwork: "base",
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("rejects mixed listing networks via eligibility filter", () => {
+    const mixed = filterPackageEligibleListings({
+      listings: [
+        {
+          id: "a",
+          title: "A",
+          priceUsd: 10,
+          network: "base",
+          chain: "evm" as const,
+          collectionId: "c1",
+          delisted: false,
+          contractAddress: "0x1",
+          tokenId: "1",
+          mintTxHash: "0xm1",
+        },
+        {
+          id: "b",
+          title: "B",
+          priceUsd: 15,
+          network: "ethereum",
+          chain: "evm" as const,
+          collectionId: "c1",
+          delisted: false,
+          contractAddress: "0x1",
+          tokenId: "2",
+          mintTxHash: "0xm2",
+        },
+      ] as any,
+      collectionId: "c1",
+      soldIds: new Set(),
+    });
+    expect(mixed.ok).toBe(false);
+    expect(mixed.reason).toBe("cross_network_not_supported");
   });
 });

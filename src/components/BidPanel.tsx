@@ -10,6 +10,18 @@ type Bid = {
   createdAt: number;
 };
 
+type SettleInfo = {
+  label: "open" | "claim_pending" | "awarded" | "unsold";
+  outcome?: {
+    status: string;
+    reason?: string;
+    amountUsd?: number;
+    highBidderId?: string;
+  };
+  purchaseId?: string | null;
+  purchaseStatus?: string | null;
+};
+
 export function BidPanel({
   listingId,
   minBidUsd,
@@ -18,6 +30,7 @@ export function BidPanel({
   isHighBidder,
   winningBidUsd,
   reserveMet,
+  claimPurchaseId,
 }: {
   listingId: string;
   minBidUsd: number;
@@ -26,9 +39,12 @@ export function BidPanel({
   isHighBidder?: boolean;
   winningBidUsd?: number | null;
   reserveMet?: boolean;
+  /** Server-side lazy-settle purchase id when viewer is the winner. */
+  claimPurchaseId?: string | null;
 }) {
   const router = useRouter();
   const [bids, setBids] = useState<Bid[]>([]);
+  const [settle, setSettle] = useState<SettleInfo | null>(null);
   const [amount, setAmount] = useState(String(minBidUsd));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +52,12 @@ export function BidPanel({
   function load() {
     void fetch(`/api/listings/${listingId}/bids`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { bids: [] }))
-      .then((d: { bids?: Bid[] }) => setBids(d.bids ?? []))
+      .then(
+        (d: { bids?: Bid[]; settle?: SettleInfo }) => {
+          setBids(d.bids ?? []);
+          if (d.settle) setSettle(d.settle);
+        },
+      )
       .catch(() => setBids([]));
   }
 
@@ -68,6 +89,19 @@ export function BidPanel({
       setBusy(false);
     }
   }
+
+  const label = settle?.label;
+  const unsold =
+    ended &&
+    (label === "unsold" ||
+      (!reserveMet && (winningBidUsd == null || !reserveMet)));
+  const awardedOrClaim =
+    ended &&
+    reserveMet &&
+    (label === "claim_pending" ||
+      label === "awarded" ||
+      Boolean(reserveMet && winningBidUsd));
+  const purchaseId = claimPurchaseId ?? settle?.purchaseId ?? null;
 
   return (
     <div
@@ -113,13 +147,41 @@ export function BidPanel({
           </div>
         </>
       ) : ended ? (
-        <p style={{ margin: "0 0 0.65rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-          {reserveMet
-            ? isHighBidder
-              ? `You won at $${winningBidUsd}. Use Buy below to claim at the winning price.`
-              : `Auction ended. Winning bid $${winningBidUsd ?? "—"}.`
-            : "Auction ended — reserve not met."}
-        </p>
+        <div style={{ margin: "0 0 0.65rem" }}>
+          {unsold ? (
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+              Auction ended · reserve not met. Creator can relist or switch sale mode.
+            </p>
+          ) : isHighBidder && awardedOrClaim ? (
+            <>
+              <p
+                style={{
+                  margin: "0 0 0.5rem",
+                  color: "var(--ink)",
+                  fontSize: "0.95rem",
+                  fontWeight: 600,
+                }}
+              >
+                You won — complete payment
+                {winningBidUsd != null ? ` ($${winningBidUsd})` : ""}.
+              </p>
+              <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.85rem" }}>
+                {purchaseId
+                  ? "A checkout at the winning bid is ready — use Resume / Continue buy below (wallet required for crypto)."
+                  : "Use Buy / Continue below at the winning bid (wallet required for crypto)."}
+              </p>
+            </>
+          ) : awardedOrClaim ? (
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+              Auction ended · sold to high bidder
+              {winningBidUsd != null ? ` at $${winningBidUsd}` : ""}.
+            </p>
+          ) : (
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+              Auction ended. Winning bid ${winningBidUsd ?? "—"}.
+            </p>
+          )}
+        </div>
       ) : (
         <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
           Bidding has not started yet.

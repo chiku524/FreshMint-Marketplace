@@ -13,6 +13,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import { canUserStageListing, stageLabel } from "@/lib/marketplace/lifecycle";
 import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
+import { lazySettleEnglishAuction } from "@/lib/marketplace/english-auction";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -40,6 +41,10 @@ export default async function ListingDetailPage({
   if (listing.stage === "draft" && user?.id !== listing.creatorId) {
     notFound();
   }
+  // Cron-less English settle on view: award high bidder with pending purchase
+  // (or mark unsold when reserve fails) before sold/pending lookups.
+  const englishSettle = await lazySettleEnglishAuction(listing.id);
+
   const soldIds = await listClosedPrimarySaleIds();
   const pendingPurchase = user
     ? await findBuyerOpenPurchase(listing.id, user.id)
@@ -277,15 +282,37 @@ export default async function ListingDetailPage({
               isHighBidder={user?.id === listing.highBidderId}
               winningBidUsd={listing.currentHighBidUsd}
               reserveMet={Boolean(reserveMet)}
+              claimPurchaseId={
+                user?.id === listing.highBidderId
+                  ? pendingPurchase?.id ?? englishSettle.purchaseId
+                  : null
+              }
             />
           ) : null}
 
           <ListingActions
             listingId={listing.id}
             creatorId={listing.creatorId}
-            priceUsd={listing.priceUsd}
+            priceUsd={
+              saleMode === "english" &&
+              auctionEnded &&
+              reserveMet &&
+              listing.currentHighBidUsd
+                ? listing.currentHighBidUsd
+                : listing.priceUsd
+            }
             stage={listing.stage}
-            sold={soldIds.has(listing.id) && !pendingPurchase}
+            sold={
+              (soldIds.has(listing.id) && !pendingPurchase) ||
+              (saleMode === "english" &&
+                Boolean(auctionEnded) &&
+                !reserveMet) ||
+              (saleMode === "english" &&
+                Boolean(auctionEnded) &&
+                reserveMet &&
+                user?.id !== listing.highBidderId &&
+                !pendingPurchase)
+            }
             listingType={listing.type}
             chain={listing.chain}
             network={listing.network}
