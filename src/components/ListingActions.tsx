@@ -18,6 +18,7 @@ import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseBut
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { resolveBuyPrimaryCta } from "@/lib/marketplace/buy-auth-cta";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
+import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
 
 const PAY_LABELS: Record<string, string> = {
   ethereum: "Ethereum (ETH)",
@@ -147,6 +148,7 @@ export function ListingActions({
   const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(
     undefined,
   );
+  const [curatorScore, setCuratorScore] = useState<number | null>(null);
   const signInHref = `/sign-in?next=${encodeURIComponent(`/listings/${listingId}`)}`;
 
   const settleQuote = useMemo(() => {
@@ -187,12 +189,23 @@ export function ListingActions({
       .then(async (res) => {
         const data = await res.json();
         if (cancelled) return;
-        setSessionUserId(
-          data.user && typeof data.user.id === "string" ? data.user.id : null,
-        );
+        if (data.user && typeof data.user.id === "string") {
+          setSessionUserId(data.user.id);
+          setCuratorScore(
+            typeof data.user.curatorScore === "number"
+              ? data.user.curatorScore
+              : 0,
+          );
+        } else {
+          setSessionUserId(null);
+          setCuratorScore(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setSessionUserId(null);
+        if (!cancelled) {
+          setSessionUserId(null);
+          setCuratorScore(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -696,21 +709,43 @@ export function ListingActions({
           Save
         </button>
       ) : null}
-      <button
-        type="button"
-        className="badge"
-        style={{ cursor: "pointer", background: "transparent" }}
-        onClick={() =>
-          void post("/api/nominate", { listingId }).then((d) => {
-            if (d && !("error" in d)) {
-              setMsg("Nominated (−10 curator pts)");
-              router.refresh();
-            }
-          })
-        }
-      >
-        Nominate
-      </button>
+      {sessionUserId &&
+      stage !== "draft" &&
+      (curatorScore ?? 0) >= DISCOVERY_CONFIG.nominationStakePoints ? (
+        <button
+          type="button"
+          className="badge"
+          style={{ cursor: "pointer", background: "transparent" }}
+          title={`Costs ${DISCOVERY_CONFIG.nominationStakePoints} curator points`}
+          onClick={() =>
+            void post("/api/nominate", { listingId }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg(
+                  `Nominated (−${DISCOVERY_CONFIG.nominationStakePoints} curator pts)`,
+                );
+                setCuratorScore((s) =>
+                  s == null
+                    ? s
+                    : Math.max(0, s - DISCOVERY_CONFIG.nominationStakePoints),
+                );
+                router.refresh();
+              } else if (d && "error" in d) {
+                setMsg(String((d as { error?: string }).error ?? "nominate_failed"));
+              }
+            })
+          }
+        >
+          Nominate
+        </button>
+      ) : sessionUserId && stage !== "draft" ? (
+        <span
+          className="badge"
+          title={`Need ${DISCOVERY_CONFIG.nominationStakePoints}+ curator points to nominate`}
+          style={{ opacity: 0.55 }}
+        >
+          Nominate (need {DISCOVERY_CONFIG.nominationStakePoints} pts)
+        </span>
+      ) : null}
       {uniqueSold ? <span className="badge featured">Sold</span> : null}
       {dropState === "upcoming" ? (
         <span className="badge emerging">Drop scheduled</span>
