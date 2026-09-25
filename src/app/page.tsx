@@ -2,6 +2,7 @@ import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder"
 import { EnglishAuctionHomeCard } from "@/components/EnglishAuctionHomeCard";
 import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
 import { HomeCollectionCard } from "@/components/HomeCollectionCard";
+import { HomeCreatorCard } from "@/components/HomeCreatorCard";
 import { HomeScrollRail } from "@/components/HomeScrollRail";
 import { HomeSectionHeader } from "@/components/HomeSectionHeader";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
@@ -12,6 +13,7 @@ import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { readViewerSession, readViewerTaste } from "@/lib/discovery/cookies";
 import { hasTaste, inferTasteFromCatalog } from "@/lib/discovery/taste";
+import { getCachedCreatorsHomeSection } from "@/lib/marketplace/creators-browse";
 import { getCachedHomeDiscovery } from "@/lib/marketplace/home-discovery";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
@@ -30,6 +32,22 @@ function collectionsSubtitle(
       return "Sparse sales activity — showing collections new this week.";
     case "mixed":
       return "7-day volume leaders, topped up with all-time volume and new collections.";
+  }
+}
+
+
+function creatorsSubtitle(
+  mode: "trending" | "most_active" | "newest" | "mixed",
+): string {
+  switch (mode) {
+    case "trending":
+      return "Ranked by completed primary USD volume over the last 7 days (at least one sale).";
+    case "most_active":
+      return "Sparse 7-day sales — showing most-active creators by published works.";
+    case "newest":
+      return "Sparse sales activity — showing newest creators by first listing.";
+    case "mixed":
+      return "7-day volume leaders, topped up with most-active and newest creators.";
   }
 }
 
@@ -63,7 +81,10 @@ export default async function HomePage() {
     taste,
     recordImpressions: false,
   });
-  const discovery = await getCachedHomeDiscovery();
+  const [discovery, creatorsHome] = await Promise.all([
+    getCachedHomeDiscovery(),
+    getCachedCreatorsHomeSection(),
+  ]);
   const personalized = Boolean(user);
 
   return (
@@ -137,6 +158,30 @@ export default async function HomePage() {
         </section>
       ) : null}
 
+
+      {creatorsHome.items.length > 0 ? (
+        <section className="site-section">
+          <HomeSectionHeader
+            title={
+              creatorsHome.subtitleMode === "trending"
+                ? "Trending creators"
+                : creatorsHome.subtitleMode === "most_active"
+                  ? "Most active creators"
+                  : creatorsHome.subtitleMode === "newest"
+                    ? "Newest creators"
+                    : "Creators to follow"
+            }
+            subtitle={creatorsSubtitle(creatorsHome.subtitleMode)}
+            viewAllHref={creatorsHome.viewAllHref}
+          />
+          <HomeScrollRail>
+            {creatorsHome.items.map((item) => (
+              <HomeCreatorCard key={item.id} item={item} />
+            ))}
+          </HomeScrollRail>
+        </section>
+      ) : null}
+
       {discovery.hotWorks.items.length > 0 ? (
         <section className="site-section">
           <HomeSectionHeader
@@ -173,8 +218,8 @@ export default async function HomePage() {
           <HomeSectionHeader
             title="English auctions ending soon"
             subtitle="Live open bidding — soonest ending first."
-            viewAllHref="/auctions"
-            viewAllLabel="All auctions"
+            viewAllHref="/auctions?saleMode=english"
+            viewAllLabel="All English auctions"
           />
           <HomeScrollRail>
             {discovery.englishEndingSoon.map((listing) => (

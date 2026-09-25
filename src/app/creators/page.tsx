@@ -1,177 +1,186 @@
+import { CreatorsSortTabs } from "@/components/CreatorsSortTabs";
 import { FollowButton } from "@/components/FollowButton";
 import { getSessionUser } from "@/lib/auth/session";
-import { isEmergingCreator } from "@/lib/discovery";
+import {
+  getCachedCreatorBrowseRows,
+  sortCreatorBrowseRows,
+} from "@/lib/marketplace/creators-browse";
+import {
+  CREATOR_TOP_MIN_VOLUME_USD_7D,
+  parseCreatorsSort,
+  type CreatorsSortId,
+} from "@/lib/marketplace/creators-browse-config";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function CreatorsIndexPage() {
+export const metadata = {
+  title: "Creators — FreshMint Marketplace",
+  description:
+    "Browse creators by 7-day sales volume, newest first listings, or all-time primary volume.",
+};
+
+function sortBlurb(sort: CreatorsSortId): string {
+  switch (sort) {
+    case "top":
+      return `Ranked by completed primary USD volume over the last 7 days. Spam guard: more than $${CREATOR_TOP_MIN_VOLUME_USD_7D} in that window (at least one completed sale). Creators need at least one published work.`;
+    case "new":
+      return "Creators whose first public listing landed in the last 7 days, with at least one published work.";
+    case "all_time":
+      return "Creators with completed primary sales, ranked by all-time volume.";
+  }
+}
+
+function emptyCopy(sort: CreatorsSortId): string {
+  switch (sort) {
+    case "top":
+      return "No creators cleared a completed sale in the last 7 days yet. Soft-launch from Create, or try New / All-time volume.";
+    case "new":
+      return "No creators published their first work this week. Soft-launch from Create.";
+    case "all_time":
+      return "No creators with completed primary volume yet. Browse Open Lane while the first sales land.";
+  }
+}
+
+function formatUsd(n: number): string {
+  return `$${Math.round(n).toLocaleString()}`;
+}
+
+export default async function CreatorsIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const rawSort = Array.isArray(sp.sort) ? sp.sort[0] : sp.sort;
+  const sort = parseCreatorsSort(rawSort);
   const engine = await getDiscoveryEngine();
   const user = await getSessionUser();
   const now = Date.now();
 
-  const creators = [...engine.state.creators.values()]
-    .map((creator) => {
-      const emerging = isEmergingCreator(creator, now);
-      const publicWorks = [...engine.state.listings.values()].filter(
-        (l) =>
-          l.creatorId === creator.id && !l.delisted && l.stage !== "draft",
-      ).length;
-      const risingWorks = [...engine.state.listings.values()].filter(
-        (l) =>
-          l.creatorId === creator.id &&
-          !l.delisted &&
-          (l.stage === "rising_eligible" ||
-            l.stage === "featured_eligible" ||
-            l.stage === "featured"),
-      ).length;
-      return { creator, emerging, publicWorks, risingWorks };
-    })
-    .filter((row) => row.publicWorks > 0)
-    .sort((a, b) => {
-      // Emerging first, then Rising activity, then volume.
-      if (a.emerging.emerging !== b.emerging.emerging) {
-        return a.emerging.emerging ? -1 : 1;
-      }
-      if (b.risingWorks !== a.risingWorks) return b.risingWorks - a.risingWorks;
-      return (
-        b.creator.lifetimePrimaryVolumeUsd - a.creator.lifetimePrimaryVolumeUsd
-      );
-    });
-
-  const emerging = creators.filter((c) => c.emerging.emerging);
-  const risingOriented = creators.filter(
-    (c) => !c.emerging.emerging && c.risingWorks > 0,
-  );
-  const rest = creators.filter(
-    (c) => !c.emerging.emerging && c.risingWorks === 0,
-  );
-
-  function CreatorRow({
-    creator,
-    emerging: em,
-    publicWorks,
-    risingWorks,
-  }: (typeof creators)[number]) {
-    const following =
-      user != null &&
-      (engine.state.follows.get(user.id)?.followedArtistIds.includes(creator.id) ??
-        false);
-    return (
-      <li
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0.85rem 0",
-          borderBottom: "1px solid var(--line)",
-        }}
-      >
-        <div style={{ minWidth: 0, flex: "1 1 14rem" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: "0.35rem",
-              flexWrap: "wrap",
-              marginBottom: "0.25rem",
-            }}
-          >
-            {em.emerging ? <span className="badge emerging">Emerging</span> : null}
-            {risingWorks > 0 ? (
-              <span className="badge">Rising · {risingWorks}</span>
-            ) : null}
-            {creator.establishedBadge ? (
-              <span className="badge featured">Established</span>
-            ) : null}
-            {creator.verifiedCreator ? (
-              <span className="badge">Verified</span>
-            ) : null}
-          </div>
-          <Link
-            href={`/creators/${creator.id}`}
-            className="display"
-            style={{ fontSize: "1.25rem", color: "inherit" }}
-          >
-            {creator.displayName}
-          </Link>
-          <p
-            style={{
-              margin: "0.2rem 0 0",
-              color: "var(--ink-muted)",
-              fontSize: "0.85rem",
-            }}
-          >
-            {publicWorks} works · {creator.completedSales} sales · $
-            {Math.round(creator.lifetimePrimaryVolumeUsd)} primary
-          </p>
-        </div>
-        <FollowButton artistId={creator.id} initiallyFollowing={following} />
-      </li>
-    );
-  }
+  const allRows = await getCachedCreatorBrowseRows();
+  const rows = sortCreatorBrowseRows(allRows, sort, now);
 
   return (
     <div className="page-wrap">
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Creators
       </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.75rem" }}>
-        Emerging and Rising-oriented directory — follow artists early, before
-        Featured inventory fills the room. Individual profiles live at{" "}
+      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1rem" }}>
+        Browseable directory with shareable sort tabs. Profiles live at{" "}
         <code style={{ fontSize: "0.85em" }}>/creators/[id]</code>.
       </p>
 
-      <section style={{ marginBottom: "2.5rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.4rem" }}>
-          Emerging ({emerging.length})
-        </h2>
-        {emerging.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
-            No emerging creators with public works right now. Soft-launch from{" "}
-            <Link href="/create">Create</Link>.
-          </p>
-        ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {emerging.map((row) => (
-              <CreatorRow key={row.creator.id} {...row} />
-            ))}
-          </ul>
-        )}
-      </section>
+      <CreatorsSortTabs active={sort} />
+      <p
+        style={{
+          color: "var(--ink-muted)",
+          fontSize: "0.9rem",
+          maxWidth: "56ch",
+          margin: "0.75rem 0 1.5rem",
+        }}
+      >
+        {sortBlurb(sort)}
+      </p>
 
-      <section style={{ marginBottom: "2.5rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.4rem" }}>
-          Rising-oriented ({risingOriented.length})
-        </h2>
-        {risingOriented.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
-            No graduated creators with Rising-eligible works yet. Browse{" "}
-            <Link href="/rising">Rising</Link>.
-          </p>
-        ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {risingOriented.map((row) => (
-              <CreatorRow key={row.creator.id} {...row} />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {rest.length > 0 ? (
-        <section>
-          <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.4rem" }}>
-            More creators ({rest.length})
+      {rows.length === 0 ? (
+        <section
+          style={{
+            border: "1px solid var(--line)",
+            padding: "1.1rem 1.15rem",
+            background: "var(--panel)",
+            maxWidth: "40rem",
+          }}
+        >
+          <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.2rem" }}>
+            Nothing here yet
           </h2>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {rest.map((row) => (
-              <CreatorRow key={row.creator.id} {...row} />
-            ))}
-          </ul>
+          <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
+            {emptyCopy(sort)}
+          </p>
+          <p style={{ margin: "0.85rem 0 0", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+            <Link href="/create" className="badge emerging">
+              Soft-launch a work
+            </Link>
+            <Link href="/open" className="badge">
+              Open Lane
+            </Link>
+          </p>
         </section>
-      ) : null}
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {rows.map((row) => {
+            const following =
+              user != null &&
+              (engine.state.follows
+                .get(user.id)
+                ?.followedArtistIds.includes(row.id) ??
+                false);
+            return (
+              <li
+                key={row.id}
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.75rem",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.85rem 0",
+                  borderBottom: "1px solid var(--line)",
+                }}
+              >
+                <div style={{ minWidth: 0, flex: "1 1 14rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.35rem",
+                      flexWrap: "wrap",
+                      marginBottom: "0.25rem",
+                    }}
+                  >
+                    {row.emerging ? (
+                      <span className="badge emerging">Emerging</span>
+                    ) : null}
+                    {row.establishedBadge ? (
+                      <span className="badge featured">Established</span>
+                    ) : null}
+                    {row.verifiedCreator ? (
+                      <span className="badge">Verified</span>
+                    ) : null}
+                  </div>
+                  <Link
+                    href={`/creators/${row.id}`}
+                    className="display"
+                    style={{ fontSize: "1.25rem", color: "inherit" }}
+                  >
+                    {row.displayName}
+                  </Link>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0",
+                      color: "var(--ink-muted)",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    {row.publishedWorks} works
+                    {row.collectionCount > 0
+                      ? ` · ${row.collectionCount} collections`
+                      : ""}
+                    {" · "}
+                    {sort === "top"
+                      ? `${formatUsd(row.volumeUsd7d)} 7d`
+                      : `${formatUsd(row.volumeUsdAllTime)} all-time`}
+                    {" · "}
+                    {row.completedSales} sales
+                  </p>
+                </div>
+                <FollowButton artistId={row.id} initiallyFollowing={following} />
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

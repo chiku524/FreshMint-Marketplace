@@ -23,7 +23,7 @@ const DISCOVER: DiscoveryLink[] = [
   { href: "/rising", label: "Rising", icon: "rising" },
   { href: "/featured", label: "Featured", icon: "featured" },
   { href: "/trending", label: "Most viewed", icon: "trending" },
-  { href: "/auctions", label: "Timed drops", icon: "auctions" },
+  { href: "/auctions", label: "Auctions", icon: "auctions" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/shelves", label: "Shelves", icon: "shelves" },
 ];

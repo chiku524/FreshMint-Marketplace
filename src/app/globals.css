@@ -2739,3 +2739,90 @@ html.fm-intro-pending .fm-intro-cover {
     width: auto;
   }
 }
+
+/* Shareable filter tabs (auctions, creators) */
+.fm-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+}
+
+.fm-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+
+.fm-filter-tab.is-active {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--bg-lift);
+}
+
+.fm-filter-tab:hover {
+  color: var(--ink);
+}
+
+/* Homepage creator cards */
+.fm-home-creator-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  width: min(78vw, 17.5rem);
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--bg-lift);
+  text-decoration: none;
+  color: inherit;
+}
+
+.fm-home-creator-card__avatar {
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.fm-home-creator-card__body {
+  min-width: 0;
+}
+
+.fm-home-creator-card__name {
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.fm-home-creator-card__meta,
+.fm-home-creator-card__stats {
+  margin-top: 0.15rem;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
+.fm-home-creator-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+@media (min-width: 900px) {
+  .fm-home-creator-card {
+    width: auto;
+  }
+}
