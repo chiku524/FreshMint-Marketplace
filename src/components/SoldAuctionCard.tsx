@@ -13,9 +13,11 @@ function formatSoldAt(ms: number) {
 export function SoldAuctionCard({
   item,
   creatorName,
+  creatorAvatarUrl,
 }: {
   item: SoldAuction;
   creatorName?: string;
+  creatorAvatarUrl?: string | null;
 }) {
   return (
     <WorkCard
@@ -23,6 +25,7 @@ export function SoldAuctionCard({
       bucket="sold"
       showActions={false}
       creatorName={creatorName}
+      creatorAvatarUrl={creatorAvatarUrl}
       trackImpression={false}
       footer={
         <>

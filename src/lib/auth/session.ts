@@ -50,6 +50,10 @@ export type SessionUser = {
   googleLinked: boolean;
   hasPassword: boolean;
   avatarUrl: string | null;
+  bio?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
 };
 
 function secretKey() {
@@ -93,6 +97,10 @@ function creatorToSession(creator: CreatorProfile): SessionUser {
     googleLinked: false,
     hasPassword: false,
     avatarUrl: creator.avatarUrl ?? null,
+    bio: creator.bio ?? "",
+    websiteUrl: creator.websiteUrl ?? null,
+    twitterUrl: creator.twitterUrl ?? null,
+    farcasterUrl: creator.farcasterUrl ?? null,
   };
 }
 
@@ -109,6 +117,10 @@ export function publicSession(user: SessionUser) {
     googleLinked: user.googleLinked,
     hasPassword: user.hasPassword,
     avatarUrl: user.avatarUrl,
+    bio: user.bio ?? "",
+    websiteUrl: user.websiteUrl ?? null,
+    twitterUrl: user.twitterUrl ?? null,
+    farcasterUrl: user.farcasterUrl ?? null,
   };
 }
 
@@ -256,6 +268,10 @@ function sessionUserFromDbUser(u: {
   googleId: string | null;
   passwordHash: string | null;
   avatarUrl: string | null;
+  bio?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
 }): SessionUser {
   return {
     id: u.id,
@@ -278,6 +294,10 @@ function sessionUserFromDbUser(u: {
     googleLinked: Boolean(u.googleId),
     hasPassword: Boolean(u.passwordHash),
     avatarUrl: u.avatarUrl,
+    bio: u.bio ?? "",
+    websiteUrl: u.websiteUrl ?? null,
+    twitterUrl: u.twitterUrl ?? null,
+    farcasterUrl: u.farcasterUrl ?? null,
   };
 }
 

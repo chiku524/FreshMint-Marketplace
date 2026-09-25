@@ -1,3 +1,4 @@
+import { FmImage } from "@/components/FmImage";
 import type { CSSProperties } from "react";
 
 function hueFromId(id: string): number {
@@ -44,15 +45,16 @@ export function CreatorAvatar({
 
   if (avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={avatarUrl}
-        alt=""
-        width={size}
-        height={size}
-        className={className}
-        style={{ ...style, objectFit: "cover" }}
-      />
+      <span className={className} style={{ ...style, padding: 0 }}>
+        <FmImage
+          src={avatarUrl}
+          alt=""
+          width={size}
+          height={size}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          sizes={`${size}px`}
+        />
+      </span>
     );
   }
 

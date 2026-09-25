@@ -27,6 +27,10 @@ export default async function MeSettingsPage() {
         userId={profile.userId}
         displayName={profile.displayName}
         avatarUrl={profile.avatarUrl}
+        bio={(profile as { bio?: string }).bio}
+        websiteUrl={(profile as { websiteUrl?: string | null }).websiteUrl}
+        twitterUrl={(profile as { twitterUrl?: string | null }).twitterUrl}
+        farcasterUrl={(profile as { farcasterUrl?: string | null }).farcasterUrl}
         email={profile.email}
         hasPassword={profile.hasPassword}
         googleLinked={profile.googleLinked}

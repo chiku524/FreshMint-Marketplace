@@ -17,6 +17,10 @@ export function ProfileSettings({
   userId,
   displayName,
   avatarUrl,
+  bio: initialBio = "",
+  websiteUrl: initialWebsite = null,
+  twitterUrl: initialTwitter = null,
+  farcasterUrl: initialFarcaster = null,
   email,
   hasPassword,
   googleLinked,
@@ -25,6 +29,10 @@ export function ProfileSettings({
   userId: string;
   displayName: string;
   avatarUrl: string | null;
+  bio?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
   email: string | null;
   hasPassword: boolean;
   googleLinked: boolean;
@@ -34,6 +42,10 @@ export function ProfileSettings({
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(displayName);
   const [photoUrl, setPhotoUrl] = useState<string | null>(avatarUrl);
+  const [bio, setBio] = useState(initialBio);
+  const [websiteUrl, setWebsiteUrl] = useState(initialWebsite ?? "");
+  const [twitterUrl, setTwitterUrl] = useState(initialTwitter ?? "");
+  const [farcasterUrl, setFarcasterUrl] = useState(initialFarcaster ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -234,6 +246,84 @@ export function ProfileSettings({
             style={{ cursor: "pointer", background: "transparent", justifySelf: "start" }}
           >
             Save name
+          </button>
+        </form>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void (async () => {
+              setBusy(true);
+              setError(null);
+              setOk(null);
+              try {
+                const res = await fetch("/api/auth/profile", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    bio,
+                    websiteUrl: websiteUrl || null,
+                    twitterUrl: twitterUrl || null,
+                    farcasterUrl: farcasterUrl || null,
+                  }),
+                });
+                const data = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(data.error ?? "update_failed");
+                setOk("Profile details saved");
+                router.refresh();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "update_failed");
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
+          style={{ display: "grid", gap: "0.6rem" }}
+        >
+          <label>
+            Short bio
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={500}
+              rows={3}
+              style={{ ...fieldStyle, resize: "vertical" }}
+            />
+          </label>
+          <label>
+            Website
+            <input
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https://"
+              style={fieldStyle}
+            />
+          </label>
+          <label>
+            Twitter / X
+            <input
+              value={twitterUrl}
+              onChange={(e) => setTwitterUrl(e.target.value)}
+              placeholder="https://x.com/…"
+              style={fieldStyle}
+            />
+          </label>
+          <label>
+            Farcaster
+            <input
+              value={farcasterUrl}
+              onChange={(e) => setFarcasterUrl(e.target.value)}
+              placeholder="https://warpcast.com/…"
+              style={fieldStyle}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={busy}
+            className="badge"
+            style={{ cursor: "pointer", background: "transparent", justifySelf: "start" }}
+          >
+            Save profile details
           </button>
         </form>
 

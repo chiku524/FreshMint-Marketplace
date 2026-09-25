@@ -39,6 +39,10 @@ export function toCreatorProfile(user: UserWithWallets): CreatorProfile {
     curatorScore: user.curatorScore,
     establishedBadge: user.establishedBadge,
     avatarUrl: user.avatarUrl ?? null,
+    bio: user.bio ?? "",
+    websiteUrl: user.websiteUrl ?? null,
+    twitterUrl: user.twitterUrl ?? null,
+    farcasterUrl: user.farcasterUrl ?? null,
   };
 }
 
@@ -101,6 +105,10 @@ export function toListing(listing: DbListing): Listing {
     mintTxHash: listing.mintTxHash,
     contractAddress: listing.contractAddress,
     tokenId: listing.tokenId,
+    isSecondary: Boolean(listing.isSecondary),
+    sellerId: listing.sellerId ?? null,
+    originListingId: listing.originListingId ?? null,
+    creatorRoyaltyBps: listing.creatorRoyaltyBps ?? 500,
   };
 }
 

@@ -151,6 +151,9 @@ export default async function AuctionsPage({
                 creatorName={
                   engine.state.creators.get(listing.creatorId)?.displayName
                 }
+                creatorAvatarUrl={
+                  engine.state.creators.get(listing.creatorId)?.avatarUrl
+                }
                 collection={
                   listing.collectionId
                     ? engine.state.collections.get(listing.collectionId) ?? null
@@ -183,6 +186,9 @@ export default async function AuctionsPage({
                 item={item}
                 creatorName={
                   engine.state.creators.get(item.listing.creatorId)?.displayName
+                }
+                creatorAvatarUrl={
+                  engine.state.creators.get(item.listing.creatorId)?.avatarUrl
                 }
               />
             ))}

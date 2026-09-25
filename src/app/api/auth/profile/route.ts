@@ -2,18 +2,34 @@ import {
   AccountError,
   updateAvatarUrl,
   updateDisplayName,
+  updateCreatorProfileFields,
 } from "@/lib/auth/account";
 import { getSessionUser } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+const optionalUrl = z
+  .union([z.string().max(2048), z.null()])
+  .optional()
+  .transform((v) => (v === "" ? null : v));
+
 const schema = z
   .object({
     displayName: z.string().trim().min(1).max(64).optional(),
     avatarUrl: z.union([z.string().max(2048), z.null()]).optional(),
+    bio: z.string().max(500).optional(),
+    websiteUrl: optionalUrl,
+    twitterUrl: optionalUrl,
+    farcasterUrl: optionalUrl,
   })
   .refine(
-    (body) => body.displayName !== undefined || body.avatarUrl !== undefined,
+    (body) =>
+      body.displayName !== undefined ||
+      body.avatarUrl !== undefined ||
+      body.bio !== undefined ||
+      body.websiteUrl !== undefined ||
+      body.twitterUrl !== undefined ||
+      body.farcasterUrl !== undefined,
     { message: "empty_patch" },
   );
 
@@ -29,9 +45,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    const out: { ok: true; displayName?: string; avatarUrl?: string | null } = {
-      ok: true,
-    };
+    const out: Record<string, unknown> = { ok: true };
     if (body.data.displayName !== undefined) {
       await updateDisplayName({
         userId: user.id,
@@ -44,6 +58,21 @@ export async function PATCH(req: NextRequest) {
         userId: user.id,
         avatarUrl: body.data.avatarUrl,
       });
+    }
+    if (
+      body.data.bio !== undefined ||
+      body.data.websiteUrl !== undefined ||
+      body.data.twitterUrl !== undefined ||
+      body.data.farcasterUrl !== undefined
+    ) {
+      const fields = await updateCreatorProfileFields({
+        userId: user.id,
+        bio: body.data.bio,
+        websiteUrl: body.data.websiteUrl,
+        twitterUrl: body.data.twitterUrl,
+        farcasterUrl: body.data.farcasterUrl,
+      });
+      Object.assign(out, fields);
     }
     return NextResponse.json(out);
   } catch (e) {

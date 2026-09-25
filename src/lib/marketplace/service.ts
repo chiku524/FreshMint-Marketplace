@@ -837,6 +837,32 @@ export async function transitionListingStage(
   target: LaunchStage,
 ) {
   const engine = await getDiscoveryEngine();
+  if (target === "soft_launch") {
+    const current = engine.state.listings.get(listingId);
+    const creator = current
+      ? engine.state.creators.get(current.creatorId)
+      : null;
+    if (current && creator) {
+      const {
+        NEW_CREATOR_DAILY_PUBLISH_LIMIT,
+        shouldRateLimitPublishes,
+      } = await import("@/lib/marketplace/trust");
+      if (
+        shouldRateLimitPublishes({
+          curatorScore: creator.curatorScore,
+          walletCreatedAtMs: creator.walletCreatedAt,
+        }) &&
+        (creator.openLaneListingsToday ?? 0) >= NEW_CREATOR_DAILY_PUBLISH_LIMIT
+      ) {
+        return {
+          ok: false as const,
+          errors: [
+            `new_creator_daily_limit_${NEW_CREATOR_DAILY_PUBLISH_LIMIT}`,
+          ],
+        };
+      }
+    }
+  }
   const result = engine.transitionListing(listingId, target);
   if (!result.ok || !result.listing) {
     return { ok: false as const, errors: result.errors };

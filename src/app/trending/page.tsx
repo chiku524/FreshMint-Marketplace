@@ -76,6 +76,9 @@ export default async function TrendingPage() {
               creatorName={
                 engine.state.creators.get(listing.creatorId)?.displayName
               }
+              creatorAvatarUrl={
+                engine.state.creators.get(listing.creatorId)?.avatarUrl
+              }
               collection={
                 listing.collectionId
                   ? engine.state.collections.get(listing.collectionId) ?? null

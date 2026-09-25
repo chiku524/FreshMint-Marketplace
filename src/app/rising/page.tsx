@@ -54,6 +54,9 @@ export default async function RisingPage() {
                 creatorName={
                   engine.state.creators.get(item.listing.creatorId)?.displayName
                 }
+                creatorAvatarUrl={
+                  engine.state.creators.get(item.listing.creatorId)?.avatarUrl
+                }
               />
             ))}
           </PuzzleRail>

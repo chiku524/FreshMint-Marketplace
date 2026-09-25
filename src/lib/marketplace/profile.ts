@@ -46,6 +46,10 @@ export type UserAssetProfile = {
   googleLinked: boolean;
   hasPassword: boolean;
   avatarUrl: string | null;
+  bio?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
   wallets: ProfileWallet[];
   created: Listing[];
   owned: Array<{
@@ -184,6 +188,10 @@ export function profileFromSession(user: SessionUser): UserAssetProfile {
       googleLinked: user.googleLinked,
       hasPassword: user.hasPassword,
       avatarUrl: user.avatarUrl,
+      bio: user.bio ?? "",
+      websiteUrl: user.websiteUrl ?? null,
+      twitterUrl: user.twitterUrl ?? null,
+      farcasterUrl: user.farcasterUrl ?? null,
       wallets: user.wallets.map((w) => ({
         chain: w.chain,
         network: null,

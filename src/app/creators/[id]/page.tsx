@@ -5,6 +5,7 @@ import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
+import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -73,6 +74,11 @@ export default async function CreatorProfilePage({
             {creator.verifiedCreator ? (
               <span className="badge">Verified</span>
             ) : null}
+            {isActiveSeller(creator.lifetimePrimaryVolumeUsd) ? (
+              <span className="badge featured" title={`≥ $${ACTIVE_SELLER_MIN_VOLUME_USD} all-time completed volume`}>
+                Active seller
+              </span>
+            ) : null}
           </div>
           <h1 className="display" style={{ margin: "0 0 0.4rem", fontSize: "2.6rem" }}>
             {creator.displayName}
@@ -82,6 +88,30 @@ export default async function CreatorProfilePage({
             {Math.round(creator.lifetimePrimaryVolumeUsd)} primary volume ·
             curator score {creator.curatorScore}
           </p>
+          {creator.bio ? (
+            <p style={{ margin: "0.65rem 0 0", maxWidth: "52ch", lineHeight: 1.5 }}>
+              {creator.bio}
+            </p>
+          ) : null}
+          {(creator.websiteUrl || creator.twitterUrl || creator.farcasterUrl) ? (
+            <p style={{ margin: "0.45rem 0 0", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+              {creator.websiteUrl ? (
+                <a href={creator.websiteUrl} className="badge" target="_blank" rel="noreferrer">
+                  Website
+                </a>
+              ) : null}
+              {creator.twitterUrl ? (
+                <a href={creator.twitterUrl} className="badge" target="_blank" rel="noreferrer">
+                  Twitter
+                </a>
+              ) : null}
+              {creator.farcasterUrl ? (
+                <a href={creator.farcasterUrl} className="badge" target="_blank" rel="noreferrer">
+                  Farcaster
+                </a>
+              ) : null}
+            </p>
+          ) : null}
           <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
             Wallets:{" "}
             {creator.wallets

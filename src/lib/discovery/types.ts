@@ -55,6 +55,10 @@ export interface CreatorProfile {
   establishedBadge: boolean;
   /** Public profile photo URL (Blob /uploads / https). */
   avatarUrl?: string | null;
+  bio?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
 }
 
 export interface ListingSignals {
@@ -119,6 +123,10 @@ export interface Listing {
   mintTxHash?: string | null;
   contractAddress?: string | null;
   tokenId?: string | null;
+  isSecondary?: boolean;
+  sellerId?: string | null;
+  originListingId?: string | null;
+  creatorRoyaltyBps?: number | null;
 }
 
 export interface Collection {

@@ -1,5 +1,7 @@
 "use client";
 
+import { FmImage } from "@/components/FmImage";
+
 import type { RankedListing, Listing, Collection } from "@/lib/discovery/types";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import Link from "next/link";
@@ -17,6 +19,7 @@ import {
 import { saleModeBadge } from "@/lib/marketplace/sale-mode";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
+import { CreatorAvatar } from "./CreatorAvatar";
 import { SaveButton } from "./SaveButton";
 
 const MENU_HOVER_MS = 500;
@@ -134,6 +137,7 @@ export function WorkCard({
   score,
   showActions = false,
   creatorName,
+  creatorAvatarUrl,
   collection = null,
   trackImpression = true,
   footer,
@@ -146,6 +150,7 @@ export function WorkCard({
   score?: number;
   showActions?: boolean;
   creatorName?: string;
+  creatorAvatarUrl?: string | null;
   collection?: Pick<Collection, "id" | "title"> | null;
   trackImpression?: boolean;
   footer?: ReactNode;
@@ -190,7 +195,18 @@ export function WorkCard({
       {creatorName || collection || placeText || emerging ? (
         <p className="work-tile__menu-meta">
           {creatorName ? (
-            <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
+            <Link
+              href={`/creators/${listing.creatorId}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+            >
+              <CreatorAvatar
+                id={listing.creatorId}
+                displayName={creatorName}
+                avatarUrl={creatorAvatarUrl}
+                size={18}
+              />
+              {creatorName}
+            </Link>
           ) : null}
           {collection ? (
             <>
@@ -257,11 +273,7 @@ export function WorkCard({
           className="work-media"
           style={
             media
-              ? {
-                  backgroundImage: `url(${media})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }
+              ? { position: "relative", overflow: "hidden" }
               : {
                   background: `
             linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
@@ -269,7 +281,16 @@ export function WorkCard({
           `,
                 }
           }
-        />
+        >
+          {media ? (
+            <FmImage
+              src={media}
+              alt=""
+              fill
+              sizes="(max-width: 640px) 90vw, 320px"
+            />
+          ) : null}
+        </div>
       </Link>
       <div className="work-tile__caption">
         <h3 className="display work-tile__title">
@@ -335,11 +356,13 @@ export function RankedWorkCard({
   item,
   showActions = true,
   creatorName,
+  creatorAvatarUrl,
   collection = null,
 }: {
   item: RankedListing;
   showActions?: boolean;
   creatorName?: string;
+  creatorAvatarUrl?: string | null;
   collection?: Pick<Collection, "id" | "title"> | null;
 }) {
   return (
@@ -350,6 +373,7 @@ export function RankedWorkCard({
       score={item.score}
       showActions={showActions}
       creatorName={creatorName}
+      creatorAvatarUrl={creatorAvatarUrl}
       collection={collection}
     />
   );

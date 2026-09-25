@@ -33,6 +33,10 @@ model User {
   passwordHash    String?
   googleId        String?   @unique
   avatarUrl       String?
+  bio             String   @default("")
+  websiteUrl      String?
+  twitterUrl      String?
+  farcasterUrl    String?
 
   /// TOTP 2FA
   totpEnabled      Boolean   @default(false)
@@ -158,6 +162,13 @@ model Listing {
   mintTxHash       String?
   contractAddress  String?
   tokenId          String?
+  /// Resale / secondary market listing (seller may differ from original creator).
+  isSecondary      Boolean @default(false)
+  /// Current seller (defaults to creatorId for primary).
+  sellerId         String?
+  originListingId  String?
+  /// Creator royalty on secondary sales (bps). Default 5%.
+  creatorRoyaltyBps Int @default(500)
 
   saves              Int   @default(0)
   follows            Int   @default(0)

@@ -401,6 +401,69 @@ export async function updateAvatarUrl(input: {
   return next;
 }
 
+
+function sanitizeProfileLink(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const v = value.trim();
+  if (!v) return null;
+  if (v.length > 2048) throw new AccountError("invalid_profile_link");
+  try {
+    const u = new URL(v);
+    if (u.protocol !== "https:" && u.protocol !== "http:") {
+      throw new AccountError("invalid_profile_link");
+    }
+    return u.toString();
+  } catch {
+    throw new AccountError("invalid_profile_link");
+  }
+}
+
+export async function updateCreatorProfileFields(input: {
+  userId: string;
+  bio?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
+}): Promise<{
+  bio?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  farcasterUrl?: string | null;
+}> {
+  const data: {
+    bio?: string;
+    websiteUrl?: string | null;
+    twitterUrl?: string | null;
+    farcasterUrl?: string | null;
+  } = {};
+  if (input.bio !== undefined) {
+    data.bio = input.bio.trim().slice(0, 500);
+  }
+  if (input.websiteUrl !== undefined) {
+    data.websiteUrl = sanitizeProfileLink(input.websiteUrl);
+  }
+  if (input.twitterUrl !== undefined) {
+    data.twitterUrl = sanitizeProfileLink(input.twitterUrl);
+  }
+  if (input.farcasterUrl !== undefined) {
+    data.farcasterUrl = sanitizeProfileLink(input.farcasterUrl);
+  }
+
+  if (await useMemory()) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const creator = getMemoryState().creators.get(input.userId);
+    if (!creator) throw new AccountError("user_not_found", 404);
+    getMemoryState().creators.set(input.userId, { ...creator, ...data });
+    return data;
+  }
+
+  await prisma.user.update({
+    where: { id: input.userId },
+    data,
+  });
+  return data;
+}
+
 export async function getAccountForUser(
   userId: string,
 ): Promise<AccountRecord | null> {
