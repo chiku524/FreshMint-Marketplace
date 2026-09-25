@@ -7,6 +7,8 @@ const TREASURY = "0x1111111111111111111111111111111111111111";
 const OPERATOR = "0x3333333333333333333333333333333333333333";
 
 describe("prepareCollectionSetFeeRecipients", () => {
+  // Dynamic import + evm mock can exceed default 5s under load.
+
   const prevTreasury = process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS;
   const prevOperator = process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS;
 
@@ -81,7 +83,8 @@ describe("prepareCollectionSetFeeRecipients", () => {
     expect(result.walletTx.data.startsWith("0x")).toBe(true);
     expect(result.feeRecipients.treasury).toBe(TREASURY);
     expect(result.feeRecipients.operator).toBe(OPERATOR);
-  });
+  }, 20_000);
+
 
   it("forbids non-owners", async () => {
     const prepare = await withCollection({

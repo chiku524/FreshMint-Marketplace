@@ -330,7 +330,7 @@ export async function getCachedCreatorsHomeSection(
     const cached = unstable_cache(
       async () => loadCreatorsHomeSection(Date.now()),
       ["creators-home-v1"],
-      { revalidate: 60 },
+      { revalidate: 90 },
     );
     return cached();
   } catch {
@@ -344,7 +344,7 @@ export async function getCachedCreatorBrowseRows(): Promise<CreatorBrowseRow[]> 
     const cached = unstable_cache(
       async () => buildCreatorBrowseRows(),
       ["creators-browse-v1"],
-      { revalidate: 60 },
+      { revalidate: 90 },
     );
     return cached();
   } catch {

@@ -529,7 +529,7 @@ export async function getCachedHomeDiscovery(
     const cached = unstable_cache(
       async () => loadHomeDiscovery(Date.now()),
       ["home-discovery-v1"],
-      { revalidate: 60 },
+      { revalidate: 90 },
     );
     return cached();
   } catch {
