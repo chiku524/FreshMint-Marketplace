@@ -1,3 +1,5 @@
+import { CreatorAvatar } from "@/components/CreatorAvatar";
+import { CreatorsPagination } from "@/components/CreatorsPagination";
 import { CreatorsSortTabs } from "@/components/CreatorsSortTabs";
 import { FollowButton } from "@/components/FollowButton";
 import { getSessionUser } from "@/lib/auth/session";
@@ -7,6 +9,8 @@ import {
 } from "@/lib/marketplace/creators-browse";
 import {
   CREATOR_TOP_MIN_VOLUME_USD_7D,
+  paginateItems,
+  parseCreatorsPage,
   parseCreatorsSort,
   type CreatorsSortId,
 } from "@/lib/marketplace/creators-browse-config";
@@ -55,12 +59,14 @@ export default async function CreatorsIndexPage({
   const sp = await searchParams;
   const rawSort = Array.isArray(sp.sort) ? sp.sort[0] : sp.sort;
   const sort = parseCreatorsSort(rawSort);
+  const page = parseCreatorsPage(sp.page);
   const engine = await getDiscoveryEngine();
   const user = await getSessionUser();
   const now = Date.now();
 
   const allRows = await getCachedCreatorBrowseRows();
-  const rows = sortCreatorBrowseRows(allRows, sort, now);
+  const sorted = sortCreatorBrowseRows(allRows, sort, now);
+  const slice = paginateItems(sorted, page);
 
   return (
     <div className="page-wrap">
@@ -68,7 +74,7 @@ export default async function CreatorsIndexPage({
         Creators
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1rem" }}>
-        Browseable directory with shareable sort tabs. Profiles live at{" "}
+        Browseable directory with shareable sort tabs and pages. Profiles live at{" "}
         <code style={{ fontSize: "0.85em" }}>/creators/[id]</code>.
       </p>
 
@@ -84,7 +90,7 @@ export default async function CreatorsIndexPage({
         {sortBlurb(sort)}
       </p>
 
-      {rows.length === 0 ? (
+      {slice.total === 0 ? (
         <section
           style={{
             border: "1px solid var(--line)",
@@ -109,77 +115,103 @@ export default async function CreatorsIndexPage({
           </p>
         </section>
       ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {rows.map((row) => {
-            const following =
-              user != null &&
-              (engine.state.follows
-                .get(user.id)
-                ?.followedArtistIds.includes(row.id) ??
-                false);
-            return (
-              <li
-                key={row.id}
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.75rem",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.85rem 0",
-                  borderBottom: "1px solid var(--line)",
-                }}
-              >
-                <div style={{ minWidth: 0, flex: "1 1 14rem" }}>
+        <>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {slice.items.map((row) => {
+              const following =
+                user != null &&
+                (engine.state.follows
+                  .get(user.id)
+                  ?.followedArtistIds.includes(row.id) ??
+                  false);
+              return (
+                <li
+                  key={row.id}
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.75rem",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.85rem 0",
+                    borderBottom: "1px solid var(--line)",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
-                      gap: "0.35rem",
-                      flexWrap: "wrap",
-                      marginBottom: "0.25rem",
+                      gap: "0.75rem",
+                      alignItems: "center",
+                      minWidth: 0,
+                      flex: "1 1 14rem",
                     }}
                   >
-                    {row.emerging ? (
-                      <span className="badge emerging">Emerging</span>
-                    ) : null}
-                    {row.establishedBadge ? (
-                      <span className="badge featured">Established</span>
-                    ) : null}
-                    {row.verifiedCreator ? (
-                      <span className="badge">Verified</span>
-                    ) : null}
+                    <CreatorAvatar
+                      id={row.id}
+                      displayName={row.displayName}
+                      avatarUrl={row.avatarUrl}
+                      size={48}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "0.35rem",
+                          flexWrap: "wrap",
+                          marginBottom: "0.25rem",
+                        }}
+                      >
+                        {row.emerging ? (
+                          <span className="badge emerging">Emerging</span>
+                        ) : null}
+                        {row.establishedBadge ? (
+                          <span className="badge featured">Established</span>
+                        ) : null}
+                        {row.verifiedCreator ? (
+                          <span className="badge">Verified</span>
+                        ) : null}
+                      </div>
+                      <Link
+                        href={`/creators/${row.id}`}
+                        className="display"
+                        style={{ fontSize: "1.25rem", color: "inherit" }}
+                      >
+                        {row.displayName}
+                      </Link>
+                      <p
+                        style={{
+                          margin: "0.2rem 0 0",
+                          color: "var(--ink-muted)",
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        {row.publishedWorks} works
+                        {row.collectionCount > 0
+                          ? ` · ${row.collectionCount} collections`
+                          : ""}
+                        {" · "}
+                        {sort === "top"
+                          ? `${formatUsd(row.volumeUsd7d)} 7d`
+                          : `${formatUsd(row.volumeUsdAllTime)} all-time`}
+                        {" · "}
+                        {row.completedSales} sales
+                      </p>
+                    </div>
                   </div>
-                  <Link
-                    href={`/creators/${row.id}`}
-                    className="display"
-                    style={{ fontSize: "1.25rem", color: "inherit" }}
-                  >
-                    {row.displayName}
-                  </Link>
-                  <p
-                    style={{
-                      margin: "0.2rem 0 0",
-                      color: "var(--ink-muted)",
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    {row.publishedWorks} works
-                    {row.collectionCount > 0
-                      ? ` · ${row.collectionCount} collections`
-                      : ""}
-                    {" · "}
-                    {sort === "top"
-                      ? `${formatUsd(row.volumeUsd7d)} 7d`
-                      : `${formatUsd(row.volumeUsdAllTime)} all-time`}
-                    {" · "}
-                    {row.completedSales} sales
-                  </p>
-                </div>
-                <FollowButton artistId={row.id} initiallyFollowing={following} />
-              </li>
-            );
-          })}
-        </ul>
+                  <FollowButton artistId={row.id} initiallyFollowing={following} />
+                </li>
+              );
+            })}
+          </ul>
+          <CreatorsPagination
+            sort={sort}
+            page={slice.page}
+            pageCount={slice.pageCount}
+            total={slice.total}
+            hasPrev={slice.hasPrev}
+            hasNext={slice.hasNext}
+          />
+        </>
       )}
     </div>
   );

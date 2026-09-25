@@ -1,11 +1,21 @@
-import { AccountError, updateDisplayName } from "@/lib/auth/account";
+import {
+  AccountError,
+  updateAvatarUrl,
+  updateDisplayName,
+} from "@/lib/auth/account";
 import { getSessionUser } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-const schema = z.object({
-  displayName: z.string().trim().min(1).max(64),
-});
+const schema = z
+  .object({
+    displayName: z.string().trim().min(1).max(64).optional(),
+    avatarUrl: z.union([z.string().max(2048), z.null()]).optional(),
+  })
+  .refine(
+    (body) => body.displayName !== undefined || body.avatarUrl !== undefined,
+    { message: "empty_patch" },
+  );
 
 export async function PATCH(req: NextRequest) {
   const user = await getSessionUser();
@@ -19,8 +29,23 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    await updateDisplayName({ userId: user.id, displayName: body.data.displayName });
-    return NextResponse.json({ ok: true, displayName: body.data.displayName });
+    const out: { ok: true; displayName?: string; avatarUrl?: string | null } = {
+      ok: true,
+    };
+    if (body.data.displayName !== undefined) {
+      await updateDisplayName({
+        userId: user.id,
+        displayName: body.data.displayName,
+      });
+      out.displayName = body.data.displayName;
+    }
+    if (body.data.avatarUrl !== undefined) {
+      out.avatarUrl = await updateAvatarUrl({
+        userId: user.id,
+        avatarUrl: body.data.avatarUrl,
+      });
+    }
+    return NextResponse.json(out);
   } catch (e) {
     if (e instanceof AccountError) {
       return NextResponse.json({ error: e.message }, { status: e.status });

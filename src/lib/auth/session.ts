@@ -92,7 +92,7 @@ function creatorToSession(creator: CreatorProfile): SessionUser {
     email: null,
     googleLinked: false,
     hasPassword: false,
-    avatarUrl: null,
+    avatarUrl: creator.avatarUrl ?? null,
   };
 }
 

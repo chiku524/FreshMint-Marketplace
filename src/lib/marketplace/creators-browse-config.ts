@@ -20,8 +20,7 @@ export function parseCreatorsSort(value: unknown): CreatorsSortId {
 }
 
 export function creatorsSortHref(sort: CreatorsSortId): string {
-  if (sort === "top") return "/creators";
-  return `/creators?sort=${sort}`;
+  return creatorsBrowseHref({ sort, page: 1 });
 }
 
 export function creatorMeetsTopVolumeGate(
@@ -46,4 +45,57 @@ export function isCreatorInNewWindow(
 ): boolean {
   if (firstListingAtMs == null || !Number.isFinite(firstListingAtMs)) return false;
   return firstListingAtMs <= now && now - firstListingAtMs <= windowMs;
+}
+
+export const CREATOR_BROWSE_PAGE_SIZE = 24;
+
+export function parseCreatorsPage(value: unknown): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number(raw);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.floor(n);
+}
+
+export function creatorsBrowseHref(input: {
+  sort: CreatorsSortId;
+  page?: number;
+}): string {
+  const sp = new URLSearchParams();
+  if (input.sort !== "top") sp.set("sort", input.sort);
+  const page = input.page ?? 1;
+  if (page > 1) sp.set("page", String(page));
+  const q = sp.toString();
+  return q ? `/creators?${q}` : "/creators";
+}
+
+export type PageSlice<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pageCount: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+};
+
+/** 1-based page clamp. Empty lists yield page=1, pageCount=1. */
+export function paginateItems<T>(
+  items: T[],
+  page: number,
+  pageSize: number = CREATOR_BROWSE_PAGE_SIZE,
+): PageSlice<T> {
+  const size = Math.max(1, Math.floor(pageSize) || CREATOR_BROWSE_PAGE_SIZE);
+  const total = items.length;
+  const pageCount = Math.max(1, Math.ceil(total / size) || 1);
+  const safePage = Math.min(Math.max(1, Math.floor(page) || 1), pageCount);
+  const start = (safePage - 1) * size;
+  return {
+    items: items.slice(start, start + size),
+    page: safePage,
+    pageSize: size,
+    total,
+    pageCount,
+    hasPrev: safePage > 1,
+    hasNext: safePage < pageCount,
+  };
 }

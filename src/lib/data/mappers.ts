@@ -38,6 +38,7 @@ export function toCreatorProfile(user: UserWithWallets): CreatorProfile {
     openLaneListingsToday: user.openLaneListingsToday,
     curatorScore: user.curatorScore,
     establishedBadge: user.establishedBadge,
+    avatarUrl: user.avatarUrl ?? null,
   };
 }
 

@@ -17,6 +17,7 @@ export type CreatorBrowseSource = "trending_7d" | "most_active" | "newest";
 export type CreatorBrowseRow = {
   id: string;
   displayName: string;
+  avatarUrl: string | null;
   volumeUsd7d: number;
   volumeUsdAllTime: number;
   publishedWorks: number;
@@ -224,6 +225,7 @@ export async function buildCreatorBrowseRows(input?: {
     rows.push({
       id: creator.id,
       displayName: creator.displayName,
+      avatarUrl: creator.avatarUrl ?? null,
       volumeUsd7d: vol7d.get(creator.id) ?? 0,
       volumeUsdAllTime,
       publishedWorks,

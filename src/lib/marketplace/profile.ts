@@ -143,7 +143,7 @@ function profileFromMemoryCreator(userId: string): UserAssetProfile | null {
     email: null,
     googleLinked: false,
     hasPassword: false,
-    avatarUrl: null,
+    avatarUrl: creator.avatarUrl ?? null,
     wallets: creator.wallets.map((w) => ({
       chain: w.chain,
       network: (w.network as NetworkId | null) ?? null,
@@ -167,6 +167,7 @@ export function profileFromSession(user: SessionUser): UserAssetProfile {
     establishedBadge: user.establishedBadge,
     completedSales: user.completedSales,
     lifetimePrimaryVolumeUsd: user.lifetimePrimaryVolumeUsd,
+    avatarUrl: user.avatarUrl,
   });
   return (
     profileFromMemoryCreator(user.id) ?? {

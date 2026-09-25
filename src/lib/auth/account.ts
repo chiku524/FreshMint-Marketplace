@@ -55,6 +55,7 @@ function emptyCreator(id: string, displayName: string): CreatorProfile {
     openLaneListingsToday: 0,
     curatorScore: 25,
     establishedBadge: false,
+    avatarUrl: null,
   };
 }
 
@@ -346,6 +347,58 @@ export async function updateDisplayName(input: {
     where: { id: input.userId },
     data: { displayName },
   });
+}
+
+const AVATAR_URL_MAX = 2048;
+
+/** Allow https URLs and same-origin /uploads paths from media upload. */
+export function isValidAvatarUrl(value: string): boolean {
+  const url = value.trim();
+  if (!url || url.length > AVATAR_URL_MAX) return false;
+  if (url.startsWith("/uploads/")) {
+    return !url.includes("..") && !url.includes("\\") && !/\s/.test(url);
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export async function updateAvatarUrl(input: {
+  userId: string;
+  avatarUrl: string | null;
+}): Promise<string | null> {
+  let next: string | null = input.avatarUrl;
+  if (next != null) {
+    next = next.trim();
+    if (next === "") next = null;
+    else if (!isValidAvatarUrl(next)) {
+      throw new AccountError("invalid_avatar_url");
+    }
+  }
+
+  if (await useMemory()) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const creator = getMemoryState().creators.get(input.userId);
+    if (!creator) throw new AccountError("user_not_found", 404);
+    getMemoryState().creators.set(input.userId, {
+      ...creator,
+      avatarUrl: next,
+    });
+    const account = getMemoryAccount(input.userId);
+    if (account) {
+      putMemoryAccount({ ...account, avatarUrl: next });
+    }
+    return next;
+  }
+
+  await prisma.user.update({
+    where: { id: input.userId },
+    data: { avatarUrl: next },
+  });
+  return next;
 }
 
 export async function getAccountForUser(

@@ -170,10 +170,14 @@ export function ensureMemoryCreator(input: {
   establishedBadge?: boolean;
   completedSales?: number;
   lifetimePrimaryVolumeUsd?: number;
+  avatarUrl?: string | null;
 }): CreatorProfile {
   const state = getMemoryState();
   const existing = state.creators.get(input.id);
   if (existing) {
+    if (input.avatarUrl !== undefined) {
+      existing.avatarUrl = input.avatarUrl;
+    }
     if (input.wallets?.length) {
       const seen = new Set(
         existing.wallets.map((w) => `${w.chain}:${w.address.toLowerCase()}`),
@@ -210,6 +214,7 @@ export function ensureMemoryCreator(input: {
     openLaneListingsToday: 0,
     curatorScore: input.curatorScore ?? 25,
     establishedBadge: input.establishedBadge ?? false,
+    avatarUrl: input.avatarUrl ?? null,
   };
   state.creators.set(input.id, created);
   return created;

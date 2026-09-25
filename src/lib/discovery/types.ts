@@ -53,6 +53,8 @@ export interface CreatorProfile {
   openLaneListingsToday: number;
   curatorScore: number;
   establishedBadge: boolean;
+  /** Public profile photo URL (Blob /uploads / https). */
+  avatarUrl?: string | null;
 }
 
 export interface ListingSignals {

@@ -1,3 +1,4 @@
+import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { FollowButton } from "@/components/FollowButton";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
@@ -54,7 +55,14 @@ export default async function CreatorProfilePage({
           marginBottom: "2rem",
         }}
       >
-        <div>
+        <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", minWidth: 0 }}>
+          <CreatorAvatar
+            id={creator.id}
+            displayName={creator.displayName}
+            avatarUrl={creator.avatarUrl}
+            size={72}
+          />
+          <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
             {emerging.emerging ? (
               <span className="badge emerging">Emerging</span>
@@ -80,8 +88,16 @@ export default async function CreatorProfilePage({
               .map((w) => `${w.chain}:${w.address.slice(0, 8)}…`)
               .join(" · ")}
           </p>
+          </div>
         </div>
-        <FollowButton artistId={id} initiallyFollowing={following} />
+        <div style={{ display: "grid", gap: "0.45rem", justifyItems: "end" }}>
+          <FollowButton artistId={id} initiallyFollowing={following} />
+          {user?.id === id ? (
+            <Link href="/me/settings" className="badge" style={{ fontSize: "0.82rem" }}>
+              Edit profile photo
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {collections.length ? (

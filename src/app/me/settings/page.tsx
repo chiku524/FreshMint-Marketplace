@@ -24,7 +24,9 @@ export default async function MeSettingsPage() {
       </p>
 
       <ProfileSettings
+        userId={profile.userId}
         displayName={profile.displayName}
+        avatarUrl={profile.avatarUrl}
         email={profile.email}
         hasPassword={profile.hasPassword}
         googleLinked={profile.googleLinked}

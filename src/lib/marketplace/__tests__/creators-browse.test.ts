@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  CREATOR_BROWSE_PAGE_SIZE,
   CREATOR_INDEX_MIN_PUBLISHED_WORKS,
   CREATOR_TOP_MIN_VOLUME_USD_7D,
   creatorHasPublishedWorks,
   creatorMeetsTopVolumeGate,
   isCreatorInNewWindow,
   parseCreatorsSort,
+  parseCreatorsPage,
+  paginateItems,
+  creatorsBrowseHref,
   creatorsSortHref,
   CREATOR_NEW_WINDOW_MS,
 } from "@/lib/marketplace/creators-browse-config";
@@ -19,6 +23,7 @@ import {
 function row(partial: Partial<CreatorBrowseRow> & { id: string }): CreatorBrowseRow {
   return {
     displayName: partial.id,
+    avatarUrl: null,
     volumeUsd7d: 0,
     volumeUsdAllTime: 0,
     publishedWorks: 1,
@@ -122,5 +127,45 @@ describe("sortCreatorBrowseRows", () => {
     expect(
       sortCreatorBrowseRows(rows, "all_time", now).map((r) => r.id),
     ).toEqual(["old", "hot", "newish"]);
+  });
+});
+
+describe("creators pagination", () => {
+  it("uses page size 24 and clamps out-of-range pages", () => {
+    expect(CREATOR_BROWSE_PAGE_SIZE).toBe(24);
+    expect(parseCreatorsPage(undefined)).toBe(1);
+    expect(parseCreatorsPage("0")).toBe(1);
+    expect(parseCreatorsPage("-3")).toBe(1);
+    expect(parseCreatorsPage("2")).toBe(2);
+
+    const items = Array.from({ length: 50 }, (_, i) => i);
+    const page1 = paginateItems(items, 1);
+    expect(page1.items).toHaveLength(24);
+    expect(page1.pageCount).toBe(3);
+    expect(page1.hasPrev).toBe(false);
+    expect(page1.hasNext).toBe(true);
+
+    const page3 = paginateItems(items, 99);
+    expect(page3.page).toBe(3);
+    expect(page3.items).toEqual(items.slice(48));
+    expect(page3.hasNext).toBe(false);
+
+    expect(paginateItems([], 5)).toEqual({
+      items: [],
+      page: 1,
+      pageSize: 24,
+      total: 0,
+      pageCount: 1,
+      hasPrev: false,
+      hasNext: false,
+    });
+  });
+
+  it("builds shareable hrefs with sort + page", () => {
+    expect(creatorsBrowseHref({ sort: "top" })).toBe("/creators");
+    expect(creatorsBrowseHref({ sort: "new", page: 2 })).toBe(
+      "/creators?sort=new&page=2",
+    );
+    expect(creatorsSortHref("all_time")).toBe("/creators?sort=all_time");
   });
 });
