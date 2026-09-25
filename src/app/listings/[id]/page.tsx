@@ -324,6 +324,8 @@ export default async function ListingDetailPage({
             listingType={listing.type}
             chain={listing.chain}
             network={listing.network}
+            isSecondary={Boolean(listing.isSecondary)}
+            creatorRoyaltyBps={listing.creatorRoyaltyBps ?? null}
             dropState={drop.state}
             repeatable={cap == null || cap > 1}
             minted={minted}

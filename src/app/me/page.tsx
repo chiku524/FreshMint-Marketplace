@@ -23,6 +23,7 @@ import {
   walletNftsNotOnMarketplace,
 } from "@/lib/wallet/inventory";
 import Link from "next/link";
+import { ResaleListButton } from "@/components/ResaleListButton";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -247,6 +248,22 @@ export default async function MeCollectionPage() {
                             )}
                           />
                         )}
+                        {"status" in item &&
+                        item.status === "completed" &&
+                        !("fromWallet" in item && item.fromWallet) ? (
+                          <span
+                            style={{ display: "block", marginTop: "0.35rem" }}
+                          >
+                            <ResaleListButton
+                              purchaseId={item.purchaseId}
+                              defaultPriceUsd={
+                                "amountUsd" in item
+                                  ? Number(item.amountUsd)
+                                  : null
+                              }
+                            />
+                          </span>
+                        ) : null}
                       </span>
                     </>
                   )
