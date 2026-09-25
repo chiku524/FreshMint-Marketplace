@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  humanizeCheckoutError,
+  resolveBuyAuthCta,
+} from "@/lib/marketplace/buy-auth-cta";
 
 type Bid = {
   id: string;
@@ -75,6 +80,9 @@ export function BidPanel({
   const [amount, setAmount] = useState(String(minBidUsd));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<
+    string | null | undefined
+  >(undefined);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   function load() {
@@ -92,6 +100,22 @@ export function BidPanel({
     const t = window.setInterval(load, 12_000);
     return () => window.clearInterval(t);
   }, [listingId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { user?: { id?: string } } | null) => {
+        if (cancelled) return;
+        setSessionUserId(d?.user?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionUserId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const t = window.setInterval(() => setNowTick(Date.now()), 1_000);
@@ -115,7 +139,11 @@ export function BidPanel({
       load();
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "bid_failed");
+      setError(
+        humanizeCheckoutError(
+          err instanceof Error ? err.message : "bid_failed",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -168,6 +196,7 @@ export function BidPanel({
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              disabled={busy || resolveBuyAuthCta(sessionUserId) !== "ready"}
               style={{
                 background: "var(--bg)",
                 border: "1px solid var(--line)",
@@ -176,15 +205,30 @@ export function BidPanel({
                 width: "8rem",
               }}
             />
-            <button
-              type="button"
-              className="badge featured"
-              disabled={busy}
-              style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => void onBid()}
-            >
-              {busy ? "Bidding…" : "Place bid"}
-            </button>
+            {resolveBuyAuthCta(sessionUserId) === "checking" ? (
+              <button
+                type="button"
+                className="badge featured"
+                disabled
+                style={{ cursor: "wait", background: "transparent" }}
+              >
+                Checking sign-in…
+              </button>
+            ) : resolveBuyAuthCta(sessionUserId) === "sign_in" ? (
+              <Link href={`/sign-in?next=/listings/${listingId}`} className="badge featured">
+                Sign in to continue
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="badge featured"
+                disabled={busy}
+                style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
+                onClick={() => void onBid()}
+              >
+                {busy ? "Placing bid…" : "Place bid"}
+              </button>
+            )}
           </div>
         </>
       ) : ended ? (

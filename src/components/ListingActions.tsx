@@ -16,7 +16,11 @@ import { useEffect, useMemo, useState } from "react";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
-import { resolveBuyPrimaryCta } from "@/lib/marketplace/buy-auth-cta";
+import {
+  humanizeCheckoutError,
+  resolveBuyPrimaryCta,
+} from "@/lib/marketplace/buy-auth-cta";
+import { captureCheckoutError } from "@/lib/observability/sentry";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
 
@@ -88,6 +92,8 @@ export function ListingActions({
   pendingPurchase = null,
   layout = "inline",
   showSave = true,
+  isSecondary = false,
+  creatorRoyaltyBps = null,
 }: {
   listingId: string;
   creatorId?: string;
@@ -104,6 +110,8 @@ export function ListingActions({
   /** Owner or editor — show stage controls. */
   canStageRising?: boolean;
   pendingPurchase?: { purchaseId: string; status: string } | null;
+  isSecondary?: boolean;
+  creatorRoyaltyBps?: number | null;
   /** Menu layout keeps checkout on the listing page so compact tiles stay readable. */
   layout?: "inline" | "menu";
   /** When false, Save lives on the WorkCard caption instead. */
@@ -117,6 +125,15 @@ export function ListingActions({
         ? "boing"
         : "ethereum")) as NetworkId;
   const [msg, setMsg] = useState<string | null>(null);
+  const showCheckoutError = (raw: string | null | undefined) => {
+    setMsg(humanizeCheckoutError(raw));
+    void captureCheckoutError(new Error(String(raw || "checkout_failed")), {
+      route: "ListingActions",
+      listingId,
+      userId: sessionUserId ?? undefined,
+      code: String(raw || "checkout_failed").slice(0, 64),
+    });
+  };
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [confirmBuy, setConfirmBuy] = useState(false);
   const [buying, setBuying] = useState(false);
@@ -638,7 +655,7 @@ export function ListingActions({
         "Owned on-chain",
       );
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "purchase_failed");
+      showCheckoutError(e instanceof Error ? e.message : "purchase_failed");
       setBuyStep("idle");
     } finally {
       setBuying(false);
@@ -851,7 +868,11 @@ export function ListingActions({
           >
             Lands in your {chain} wallet.
           </p>
-          <PlatformFeeBreakdown priceUsd={priceUsd} />
+          <PlatformFeeBreakdown
+            priceUsd={priceUsd}
+            isSecondary={isSecondary}
+            creatorRoyaltyBps={creatorRoyaltyBps}
+          />
           {crossChain ? (
             <BridgeQuoteSummary
               feeUsd={bridgeFeeUsd}

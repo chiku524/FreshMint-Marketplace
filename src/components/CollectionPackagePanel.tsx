@@ -1,6 +1,11 @@
 "use client";
 
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
+import {
+  humanizeCheckoutError,
+  resolveBuyPrimaryCta,
+} from "@/lib/marketplace/buy-auth-cta";
+import Link from "next/link";
 import type { Chain } from "@/lib/discovery/types";
 import {
   browserWalletAvailable,
@@ -59,6 +64,9 @@ export function CollectionPackagePanel({
   >(null);
   const [bridgeQuoteLoading, setBridgeQuoteLoading] = useState(false);
   const [showSimulate, setShowSimulate] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<
+    string | null | undefined
+  >(undefined);
 
   function load() {
     void fetch(`/api/collections/${collectionId}/package`, {
@@ -82,6 +90,22 @@ export function CollectionPackagePanel({
   useEffect(() => {
     load();
   }, [collectionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { user?: { id?: string } } | null) => {
+        if (cancelled) return;
+        setSessionUserId(d?.user?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionUserId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const listingNetwork = data?.network ?? null;
   const crossChain = Boolean(listingNetwork && payNetwork !== listingNetwork);
@@ -191,7 +215,7 @@ export function CollectionPackagePanel({
         setReceiveAddress(recv);
       }
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "wallet_connect_failed");
+      setMsg(humanizeCheckoutError(err instanceof Error ? err.message : "wallet_connect_failed"));
     }
   }
 
@@ -322,25 +346,73 @@ export function CollectionPackagePanel({
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              className="badge"
-              style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => void connectWallets()}
-            >
-              {paymentAddress ? "Wallet connected" : "Connect wallet"}
-            </button>
-            <button
-              type="button"
-              className="badge featured"
-              disabled={busy || (!paymentAddress && !showSimulate)}
-              style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => void buy({ simulate: false })}
-            >
-              {crossChain
-                ? `Bridge & buy package ($${packagePriceLabel})`
-                : `Buy remaining works ($${packagePriceLabel})`}
-            </button>
+            {(() => {
+              const primary = resolveBuyPrimaryCta({
+                sessionUserId,
+                confirmOpen: true,
+                paymentAddress,
+                crossChain,
+                buying: busy,
+                busyLabel: crossChain
+                  ? "Bridging & paying…"
+                  : "Paying…",
+              });
+              if (primary.kind === "checking") {
+                return (
+                  <button
+                    type="button"
+                    className="badge featured"
+                    disabled
+                    style={{ cursor: "wait", background: "transparent" }}
+                  >
+                    {primary.label}
+                  </button>
+                );
+              }
+              if (primary.kind === "sign_in") {
+                return (
+                  <Link
+                    href={`/sign-in?next=/collections/${collectionId}`}
+                    className="badge featured"
+                  >
+                    {primary.label}
+                  </Link>
+                );
+              }
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="badge"
+                    style={{ cursor: "pointer", background: "transparent" }}
+                    onClick={() => void connectWallets()}
+                    disabled={busy}
+                  >
+                    {paymentAddress ? "Wallet connected" : "Connect wallet"}
+                  </button>
+                  <button
+                    type="button"
+                    className="badge featured"
+                    disabled={
+                      busy ||
+                      (!paymentAddress && !showSimulate) ||
+                      primary.kind === "connect_wallet"
+                    }
+                    style={{
+                      cursor: busy ? "wait" : "pointer",
+                      background: "transparent",
+                    }}
+                    onClick={() => void buy({ simulate: false })}
+                  >
+                    {busy
+                      ? primary.label
+                      : crossChain
+                        ? `Bridge & buy package ($${packagePriceLabel})`
+                        : `Buy remaining works ($${packagePriceLabel})`}
+                  </button>
+                </>
+              );
+            })()}
           </div>
           {crossChain ? (
             <BridgeQuoteSummary

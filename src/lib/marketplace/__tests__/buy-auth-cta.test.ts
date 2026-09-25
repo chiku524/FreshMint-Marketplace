@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  humanizeCheckoutError,
   resolveBuyAuthCta,
   resolveBuyPrimaryCta,
 } from "@/lib/marketplace/buy-auth-cta";
@@ -32,19 +33,14 @@ describe("resolveBuyPrimaryCta", () => {
     ).toEqual({ kind: "checking", label: "Checking sign-in…" });
   });
 
-  it("uses Continue for signed-out and signed-in closed checkout", () => {
-    expect(resolveBuyPrimaryCta({ ...base, sessionUserId: null }).kind).toBe(
-      "sign_in",
-    );
-    expect(resolveBuyPrimaryCta({ ...base, sessionUserId: null }).label).toBe(
-      "Continue",
-    );
-    expect(
-      resolveBuyPrimaryCta({ ...base, sessionUserId: "u1" }).kind,
-    ).toBe("continue");
+  it("asks signed-out buyers to sign in", () => {
+    expect(resolveBuyPrimaryCta({ ...base, sessionUserId: null })).toEqual({
+      kind: "sign_in",
+      label: "Sign in to continue",
+    });
   });
 
-  it("advances to connect wallet then pay", () => {
+  it("advances connect → bridge/pay and supports resume", () => {
     expect(
       resolveBuyPrimaryCta({
         ...base,
@@ -62,7 +58,7 @@ describe("resolveBuyPrimaryCta", () => {
         paymentAddress: "0xabc",
         crossChain: false,
       }),
-    ).toEqual({ kind: "pay", label: "Pay" });
+    ).toEqual({ kind: "pay", label: "Pay now" });
 
     expect(
       resolveBuyPrimaryCta({
@@ -72,6 +68,35 @@ describe("resolveBuyPrimaryCta", () => {
         paymentAddress: "0xabc",
         crossChain: true,
       }),
-    ).toEqual({ kind: "bridge_pay", label: "Pay" });
+    ).toEqual({ kind: "bridge_pay", label: "Bridge & pay" });
+
+    expect(
+      resolveBuyPrimaryCta({
+        ...base,
+        sessionUserId: "u1",
+        canResume: true,
+      }),
+    ).toEqual({ kind: "resume", label: "Resume payment" });
+  });
+
+  it("disables double-submit with busy labels", () => {
+    expect(
+      resolveBuyPrimaryCta({
+        ...base,
+        sessionUserId: "u1",
+        confirmOpen: true,
+        paymentAddress: "0xabc",
+        crossChain: true,
+        buying: true,
+      }).label,
+    ).toBe("Bridging & paying…");
+  });
+});
+
+describe("humanizeCheckoutError", () => {
+  it("maps common Relay/wallet failures", () => {
+    expect(humanizeCheckoutError("relay_quote_failed")).toMatch(/bridge/i);
+    expect(humanizeCheckoutError("insufficient funds")).toMatch(/balance/i);
+    expect(humanizeCheckoutError("")).toMatch(/try again/i);
   });
 });
