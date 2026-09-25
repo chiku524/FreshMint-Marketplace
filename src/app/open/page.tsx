@@ -3,6 +3,7 @@ import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { isNetworkId } from "@/lib/chains/registry";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
+import { listingMatchesOpenExtras } from "@/lib/marketplace/search";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
@@ -23,10 +24,18 @@ export default async function OpenLanePage({
   const medium = typeof sp.medium === "string" ? sp.medium : undefined;
   const minPrice = typeof sp.minPrice === "string" ? sp.minPrice : undefined;
   const maxPrice = typeof sp.maxPrice === "string" ? sp.maxPrice : undefined;
+  const saleModeRaw = typeof sp.saleMode === "string" ? sp.saleMode : undefined;
+  const saleMode =
+    saleModeRaw === "fixed" ||
+    saleModeRaw === "timed_window" ||
+    saleModeRaw === "english"
+      ? saleModeRaw
+      : undefined;
+  const endingSoon = sp.endingSoon === "1" || sp.endingSoon === "true";
 
   const engine = await getDiscoveryEngine();
   const soldIds = await listClosedPrimarySaleIds();
-  const ranked = engine.rankOpenLane({
+  const rankedRaw = engine.rankOpenLane({
     chain:
       chain === "evm" || chain === "solana" || chain === "boing"
         ? chain
@@ -44,6 +53,12 @@ export default async function OpenLanePage({
         ? type
         : undefined,
   });
+  const ranked = rankedRaw.filter((item) =>
+    listingMatchesOpenExtras(item.listing, {
+      saleMode,
+      endingSoon,
+    }),
+  );
 
   return (
     <div className="page-wrap">
@@ -63,6 +78,8 @@ export default async function OpenLanePage({
         medium={medium}
         minPrice={minPrice}
         maxPrice={maxPrice}
+        saleMode={saleMode}
+        endingSoon={endingSoon ? "1" : undefined}
       />
       <p style={{ color: "var(--ink-muted)", margin: "1rem 0 1.5rem" }}>
         {ranked.length} works
@@ -81,6 +98,9 @@ export default async function OpenLanePage({
               sold={soldIds.has(item.listing.id)}
               creatorName={
                 engine.state.creators.get(item.listing.creatorId)?.displayName
+              }
+              creatorAvatarUrl={
+                engine.state.creators.get(item.listing.creatorId)?.avatarUrl
               }
               collection={
                 item.listing.collectionId

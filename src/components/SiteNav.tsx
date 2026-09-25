@@ -26,6 +26,7 @@ const PRIMARY_GROUPS: NavGroup[] = [
     id: "studio",
     label: "Create",
     items: [
+      { href: "/search", label: "Search" },
       { href: "/create", label: "Create" },
       { href: "/studio", label: "Studio" },
     ],

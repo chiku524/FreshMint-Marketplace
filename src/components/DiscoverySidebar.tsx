@@ -19,6 +19,7 @@ const BROWSE: DiscoveryLink[] = [
 ];
 
 const DISCOVER: DiscoveryLink[] = [
+  { href: "/search", label: "Search", icon: "trending" },
   { href: "/open", label: "Open Lane", icon: "open" },
   { href: "/rising", label: "Rising", icon: "rising" },
   { href: "/featured", label: "Featured", icon: "featured" },
