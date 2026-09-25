@@ -2,6 +2,10 @@ import { createNotification, notificationDedupeKey } from "@/lib/notifications";
 import {
   ENGLISH_WINNER_PAYMENT_DEADLINE_MS,
 } from "@/lib/marketplace/lifecycle";
+import {
+  maybeEmailEnglishExpired,
+  maybeEmailEnglishWin,
+} from "@/lib/mail/notify-email";
 
 function formatDeadline(deadlineAt: number): string {
   try {
@@ -27,17 +31,18 @@ export async function notifyEnglishWin(input: {
   const body = input.cascaded
     ? `The prior winner’s payment window expired. Pay $${input.amountUsd} for “${input.listingTitle ?? "listing"}” by ${formatDeadline(deadlineAt)}.`
     : `You won “${input.listingTitle ?? "listing"}” at $${input.amountUsd}. Pay by ${formatDeadline(deadlineAt)}.`;
-  return createNotification({
+  const dedupeKey = notificationDedupeKey(
+    input.cascaded ? "english_cascade" : "english_win",
+    input.listingId,
+    input.purchaseId,
+  );
+  const result = await createNotification({
     userId: input.winnerId,
     type: input.cascaded ? "english_cascade" : "english_win",
     title,
     body,
     href: `/listings/${input.listingId}`,
-    dedupeKey: notificationDedupeKey(
-      input.cascaded ? "english_cascade" : "english_win",
-      input.listingId,
-      input.purchaseId,
-    ),
+    dedupeKey,
     payload: {
       listingId: input.listingId,
       purchaseId: input.purchaseId,
@@ -47,6 +52,18 @@ export async function notifyEnglishWin(input: {
     },
     now: input.awardedAt,
   });
+  await maybeEmailEnglishWin({
+    created: result.created,
+    winnerId: input.winnerId,
+    listingId: input.listingId,
+    listingTitle: input.listingTitle,
+    purchaseId: input.purchaseId,
+    amountUsd: input.amountUsd,
+    deadlineAt,
+    cascaded: input.cascaded,
+    dedupeKey,
+  });
+  return result;
 }
 
 export async function notifyEnglishExpired(input: {
