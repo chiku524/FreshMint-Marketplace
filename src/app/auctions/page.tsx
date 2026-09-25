@@ -1,7 +1,15 @@
+import { AuctionsSaleModeTabs } from "@/components/AuctionsSaleModeTabs";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
 import { WorkCard } from "@/components/WorkCard";
-import { selectLiveAuctionStrip } from "@/lib/discovery";
+import {
+  auctionsFilterLabel,
+  auctionsSaleModeFromSearchParams,
+  filterListingsByAuctionsSaleMode,
+  isLiveAuctionListing,
+  listingMatchesAuctionsFilter,
+  type AuctionsSaleModeFilter,
+} from "@/lib/marketplace/auctions-filter";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { listSoldAuctions } from "@/lib/marketplace/sold-auctions";
 import Link from "next/link";
@@ -9,9 +17,9 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Timed drops — FreshMint Marketplace",
+  title: "Auctions — FreshMint Marketplace",
   description:
-    "Timed drop windows with fixed USD-quoted crypto checkout, plus cleared past sales.",
+    "Live timed drops and English auctions, plus cleared past primary sales.",
 };
 
 function DiscoverLinks() {
@@ -46,28 +54,57 @@ function DiscoverLinks() {
   );
 }
 
-export default async function AuctionsPage() {
+function liveHeading(filter: AuctionsSaleModeFilter, count: number): string {
+  if (filter === "english") return `Live English auctions (${count})`;
+  if (filter === "timed_window") return `Live timed drops (${count})`;
+  return `Live now (${count})`;
+}
+
+function archiveHeading(filter: AuctionsSaleModeFilter, count: number): string {
+  if (filter === "english") return `Cleared English auctions (${count})`;
+  if (filter === "timed_window") return `Cleared timed drops (${count})`;
+  return `Cleared sales (${count})`;
+}
+
+export default async function AuctionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const filter = auctionsSaleModeFromSearchParams(sp);
   const engine = await getDiscoveryEngine();
-  const live = selectLiveAuctionStrip([...engine.state.listings.values()]);
-  const sold = await listSoldAuctions(36);
+  const now = Date.now();
+
+  const liveAll = [...engine.state.listings.values()]
+    .filter((l) => isLiveAuctionListing(l, now))
+    .sort((a, b) => (a.auctionEndsAt ?? 0) - (b.auctionEndsAt ?? 0));
+  const live = filterListingsByAuctionsSaleMode(liveAll, filter);
+
+  const soldAll = await listSoldAuctions(48);
+  const sold = soldAll.filter((item) =>
+    listingMatchesAuctionsFilter(item.listing, filter),
+  );
   const empty = live.length === 0 && sold.length === 0;
+  const filterLabel = auctionsFilterLabel(filter);
 
   return (
     <div className="page-wrap">
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Timed drops
+        Auctions
       </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "2rem" }}>
-        Timed windows (buy at list price) and English auctions (open bidding) —
-        English auctions show open bidding on the listing page. Live endings can surface on the
-        homepage strip; cleared sales land here as proof of discovery converting
-        into primary sales.
+      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1rem" }}>
+        Timed windows (buy at list price) and English auctions (open bidding).
+        Filter is shareable via the URL. Cleared primary sales stay as proof of
+        discovery converting.
       </p>
+
+      <AuctionsSaleModeTabs active={filter} />
 
       {empty ? (
         <section
           style={{
-            marginBottom: "2.5rem",
+            margin: "1.5rem 0 2.5rem",
             border: "1px solid var(--line)",
             padding: "1.1rem 1.15rem",
             background: "var(--panel)",
@@ -75,28 +112,31 @@ export default async function AuctionsPage() {
           }}
         >
           <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
-            No timed drops live or cleared yet
+            No {filter === "all" ? "auctions" : filterLabel.toLowerCase()} live or
+            cleared yet
           </h2>
           <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
-            This lane stays empty until a creator schedules a timed window and
+            This lane stays empty until a creator schedules a matching window and
             collectors finish a primary sale. We do not invent live windows.
-            Start from Create with the timed-drop intent, or browse discovery /
-            calendar while you wait for the first window.
+            Try another tab, or start from Create with the timed-drop / English
+            intent.
           </p>
           <DiscoverLinks />
         </section>
       ) : null}
 
-      <section style={{ marginBottom: "3rem" }}>
+      <section style={{ marginTop: "1.75rem", marginBottom: "3rem" }}>
         <h2 className="display" style={{ margin: "0 0 1rem", fontSize: "1.45rem" }}>
-          Live now ({live.length})
+          {liveHeading(filter, live.length)}
         </h2>
         {live.length === 0 ? (
           <>
             <p style={{ color: "var(--ink-muted)", margin: 0, maxWidth: "48ch" }}>
-              No timed drop windows are open right now. When a timed window is live,
-              you buy at the listed USD quote in crypto before the end time — there
-              is no separate bid CTA (English auctions use open bidding on the listing).
+              {filter === "english"
+                ? "No English auctions are open right now. Open bidding appears on the listing when a window is live."
+                : filter === "timed_window"
+                  ? "No timed drop windows are open right now. When live, you buy at the listed USD quote before the end time."
+                  : "No auction windows are open right now."}
             </p>
             {!empty ? <DiscoverLinks /> : null}
           </>
@@ -124,16 +164,16 @@ export default async function AuctionsPage() {
 
       <section>
         <h2 className="display" style={{ margin: "0 0 0.5rem", fontSize: "1.45rem" }}>
-          Cleared timed drops ({sold.length})
+          {archiveHeading(filter, sold.length)}
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
-          Past artwork that sold successfully during a timed drop window —
+          Past artwork that sold successfully during an auction window —
           Emerging and established alike.
         </p>
         {sold.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No cleared timed drops yet. When a collector completes checkout during a
-            window, it appears here.
+            No cleared sales in this filter yet. When a collector completes
+            checkout during a matching window, it appears here.
           </p>
         ) : (
           <PuzzleRail>
