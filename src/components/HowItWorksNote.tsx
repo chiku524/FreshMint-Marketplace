@@ -13,7 +13,7 @@ const NOTES: Record<
 > = {
   home: {
     href: "/docs#discovery",
-    text: `Fair mix on the composed feed: ${Math.round(DISCOVERY_CONFIG.feedMix.emerging_rising * 100)}% Emerging Rising · ${Math.round(DISCOVERY_CONFIG.feedMix.following * 100)}% Following · ${Math.round(DISCOVERY_CONFIG.feedMix.featured * 100)}% Featured · ${Math.round(DISCOVERY_CONFIG.feedMix.auctions_live * 100)}% Live timed drops.`,
+    text: `Composed feeds reserve ~${Math.round(DISCOVERY_CONFIG.feedMix.emerging_rising * 100)}% for Emerging Rising — plus Following, Featured, and live drops.`,
   },
   create: {
     href: "/docs#discovery",

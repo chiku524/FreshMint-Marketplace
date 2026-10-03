@@ -18,14 +18,13 @@ export default async function FeaturedPage() {
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Featured
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.75rem" }}>
-        Fixed editorial / curator inventory ({budgets.featuredTotal} slots/day).
-        Optional paid Featured boosts appear in a labeled Promoted section and
-        never touch Rising or Open Lane fairness quotas.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Featured</h1>
+        <p className="page-lead__copy">
+          Curated picks ({budgets.featuredTotal} slots/day). Paid boosts stay in
+          Promoted — they never touch Rising or Open Lane quotas.
+        </p>
+      </header>
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.35rem" }}>

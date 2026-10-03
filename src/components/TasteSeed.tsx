@@ -32,21 +32,20 @@ export function TasteSeed({
   }
 
   return (
-    <div style={{ margin: "0 0 1.25rem" }}>
-      <p style={{ margin: "0 0 0.55rem", color: "var(--ink-muted)", fontSize: "0.92rem" }}>
+    <div className="fm-taste-seed">
+      <p className="fm-taste-seed__label">
         Pick a few tastes for Emerging — not someone else’s follow graph.
       </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+      <div className="fm-taste-seed__tags">
         {DISCOVERY_CONFIG.taste.seedTags.map((tag) => {
           const on = tags.includes(tag);
           return (
             <button
               key={tag}
               type="button"
-              className={on ? "badge emerging" : "badge"}
+              className={`fm-taste-seed__tag${on ? " is-on" : ""}`}
               onClick={() => void toggle(tag)}
               disabled={saving}
-              style={{ cursor: "pointer", border: "none" }}
             >
               {tag}
             </button>
