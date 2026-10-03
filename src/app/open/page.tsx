@@ -62,14 +62,13 @@ export default async function OpenLanePage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Open Lane
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.25rem" }}>
-        Permissionless browse across Ethereum, Base, Arbitrum, Optimism, Solana, and Boing.
-        Soft-launched works appear here, lightly ranked by quality — not dumped
-        onto the homepage firehose.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Open Lane</h1>
+        <p className="page-lead__copy">
+          Browse soft-launched works across Ethereum, Base, Arbitrum, Optimism,
+          Solana, and Boing — ranked lightly by quality, not dump-fed.
+        </p>
+      </header>
       <OpenLaneFilters
         chain={chain}
         network={network}

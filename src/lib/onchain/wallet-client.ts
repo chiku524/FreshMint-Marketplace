@@ -184,7 +184,65 @@ export async function sendSolanaWalletTx(
   return result.signature;
 }
 
+export type BoingSendResult = {
+  txHash: string;
+  contractAddress?: string | null;
+  raw?: unknown;
+};
+
+function extractBoingTxHashClient(result: unknown): string | null {
+  if (typeof result === "string") {
+    const t = result.trim();
+    if (t === "ok" || t === "0xok") return null;
+    if (/^0x[0-9a-fA-F]{64}$/.test(t)) return t.toLowerCase();
+    if (t.length >= 8) return t;
+    return null;
+  }
+  if (!result || typeof result !== "object") return null;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "tx_id",
+    "txId",
+    "hash",
+    "tx_hash",
+    "txHash",
+    "transactionHash",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string" && v !== "ok" && v.length >= 8) {
+      return v.startsWith("0x") ? v : `0x${v}`;
+    }
+  }
+  return null;
+}
+
+function extractBoingContractAddressClient(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "contractAddress",
+    "contract_address",
+    "contract",
+    "account_id",
+    "accountId",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v.trim())) {
+      return v.trim().toLowerCase();
+    }
+  }
+  return null;
+}
+
 export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
+  const sent = await sendBoingWalletTxDetailed(tx);
+  return sent.txHash;
+}
+
+/** Prefer this when deploy confirm needs the real contract AccountId. */
+export async function sendBoingWalletTxDetailed(
+  tx: BoingWalletTx,
+): Promise<BoingSendResult> {
   const provider = getBoingProvider();
   await provider.request({ method: "boing_requestAccounts" });
   try {
@@ -199,11 +257,13 @@ export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
     method: "boing_sendTransaction",
     params: [tx.tx],
   });
-  if (typeof result === "string") return result;
-  if (result && typeof result === "object" && "hash" in result) {
-    return String((result as { hash: unknown }).hash);
+
+  const txHash = extractBoingTxHashClient(result);
+  const contractAddress = extractBoingContractAddressClient(result);
+  if (!txHash) {
+    throw new Error("boing_tx_hash_missing");
   }
-  throw new Error("boing_tx_hash_missing");
+  return { txHash, contractAddress, raw: result };
 }
 
 export async function requestBuyerAddress(
