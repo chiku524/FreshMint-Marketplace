@@ -81,7 +81,7 @@ describe("boing purchase intent", () => {
 describe("boing deploy address helpers", () => {
   it("matches boing-sdk nonce-derived golden vector", () => {
     const sender = `0x${"01".repeat(32)}`;
-    expect(predictNonceDerivedContractAddress(sender, 0n)).toBe(
+    expect(predictNonceDerivedContractAddress(sender, BigInt(0))).toBe(
       "0x6d2179dfe190fd0ea25ea5136e65f6b04ff64a51d6476a01cc0078a0edb79602",
     );
   });

@@ -718,7 +718,7 @@ export async function syncCollectionDeployFromChain(input: {
       }
     }
   } else if (!contractAddress) {
-    contractAddress = collection.contractAddress;
+    contractAddress = collection.contractAddress ?? null;
   }
 
   if (!contractAddress || !txHash) {
@@ -785,7 +785,7 @@ export async function prepareCollectionPublishMints(input: {
   const batches = buildCollectionMintBatches({
     network,
     chain: collection.chain,
-    contractAddress: collection.contractAddress,
+    contractAddress: collection.contractAddress ?? "",
     creatorAddress: creator,
     escrowAddress: collection.escrowAddress || creator,
     items,

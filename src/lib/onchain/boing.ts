@@ -132,15 +132,15 @@ export function predictNonceDerivedContractAddress(
   }
   const nonce =
     typeof deployTxNonce === "bigint" ? deployTxNonce : BigInt(deployTxNonce);
-  if (nonce < 0n || nonce > 0xffff_ffff_ffff_ffffn) {
+  if (nonce < BigInt(0) || nonce > BigInt("0xffffffffffffffff")) {
     throw new Error("deployTxNonce must fit u64");
   }
   const senderBytes = Buffer.from(sender.slice(2), "hex");
   const nonceLe = Buffer.alloc(8);
   let n = nonce;
   for (let i = 0; i < 8; i++) {
-    nonceLe[i] = Number(n & 0xffn);
-    n >>= 8n;
+    nonceLe[i] = Number(n & BigInt(0xff));
+    n >>= BigInt(8);
   }
   const preimage = Buffer.concat([senderBytes, nonceLe]);
   return `0x${Buffer.from(blake3(preimage)).toString("hex")}`;
