@@ -2,13 +2,20 @@ import { ProfileSettings } from "@/components/ProfileSettings";
 import { WalletLinkPanel } from "@/components/WalletLinkPanel";
 import { isGoogleAuthConfigured } from "@/lib/auth/google";
 import { getSessionUser } from "@/lib/auth/session";
+import { getNetwork } from "@/lib/chains/registry";
 import {
   getUserAssetProfile,
   profileFromSession,
 } from "@/lib/marketplace/profile";
+import { fetchBoingBalancesForWallets } from "@/lib/wallet/inventory";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+function shortAddr(address: string): string {
+  if (address.length < 18) return address;
+  return `${address.slice(0, 10)}…${address.slice(-6)}`;
+}
 
 export default async function MeSettingsPage() {
   const user = await getSessionUser();
@@ -16,6 +23,10 @@ export default async function MeSettingsPage() {
 
   const profile =
     (await getUserAssetProfile(user.id)) ?? profileFromSession(user);
+  const boingBalances = await fetchBoingBalancesForWallets(profile.wallets);
+  const balanceByAddress = new Map(
+    boingBalances.map((b) => [b.address.toLowerCase(), b]),
+  );
 
   return (
     <>
@@ -45,6 +56,7 @@ export default async function MeSettingsPage() {
           Link EVM, Solana, or Boing by signing a message. If several EVM
           wallets are installed, you can pick Coinbase, MetaMask, Phantom, or
           another provider. NFTs in each linked address appear on Collection.
+          Linked Boing wallets also show a live BOING balance here.
         </p>
         {profile.wallets.length === 0 ? (
           <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem" }}>
@@ -60,15 +72,49 @@ export default async function MeSettingsPage() {
               gap: "0.45rem",
             }}
           >
-            {profile.wallets.map((w) => (
-              <li
-                key={`${w.chain}-${w.address}`}
-                className="badge"
-                style={{ justifySelf: "start", fontFamily: "monospace" }}
-              >
-                {w.network ?? w.chain}: {w.address}
-              </li>
-            ))}
+            {profile.wallets.map((w) => {
+              const bal =
+                w.chain === "boing"
+                  ? balanceByAddress.get(w.address.toLowerCase())
+                  : undefined;
+              return (
+                <li
+                  key={`${w.chain}-${w.address}`}
+                  className="badge"
+                  style={{ justifySelf: "start", fontFamily: "monospace" }}
+                  data-testid={
+                    w.chain === "boing" ? "boing-wallet-settings-row" : undefined
+                  }
+                >
+                  {w.network ?? w.chain}: {w.address}
+                  {bal?.ok ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={getNetwork("boing").explorerAddress(bal.address)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {bal.balance ?? "0"} BOING
+                      </a>
+                    </>
+                  ) : bal && !bal.ok ? (
+                    <> · balance unavailable</>
+                  ) : null}
+                  {w.chain === "boing" ? (
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "0.75rem",
+                        opacity: 0.8,
+                      }}
+                    >
+                      {shortAddr(w.address)} · FreshMint NFT scan is catalog-scoped
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
         <WalletLinkPanel />

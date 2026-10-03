@@ -13,6 +13,7 @@ import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import {
   findListingsByWalletNfts,
   getUserAssetProfile,
+  listBoingNftScanCandidates,
   profileFromSession,
 } from "@/lib/marketplace/profile";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -21,12 +22,18 @@ import {
   matchWalletNftsToListings,
   mergeWalletHeldListings,
   walletNftsNotOnMarketplace,
+  type LinkedWalletScanMeta,
 } from "@/lib/wallet/inventory";
 import Link from "next/link";
 import { ResaleListButton } from "@/components/ResaleListButton";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+function shortBoingAddress(address: string): string {
+  if (address.length < 18) return address;
+  return `${address.slice(0, 10)}…${address.slice(-6)}`;
+}
 
 export default async function MeCollectionPage() {
   const user = await getSessionUser();
@@ -42,11 +49,21 @@ export default async function MeCollectionPage() {
     ...profile.created,
     ...profile.owned.map((item) => item.listing),
   ];
-  const scanned = await fetchLinkedWalletNfts(profile.wallets, catalog);
+  const boingCandidates = await listBoingNftScanCandidates();
+  const scanMeta: LinkedWalletScanMeta = {
+    warnings: [],
+    boingBalances: [],
+  };
+  const scanned = await fetchLinkedWalletNfts(
+    profile.wallets,
+    [...catalog, ...boingCandidates],
+    { meta: scanMeta, skipCache: false },
+  );
   const extraListings = await findListingsByWalletNfts(scanned);
   const walletNfts = matchWalletNftsToListings(scanned, [
     ...catalog,
     ...extraListings,
+    ...boingCandidates,
   ]);
   const collected = mergeWalletHeldListings(
     profile.owned,
@@ -65,6 +82,7 @@ export default async function MeCollectionPage() {
   const liveSales = (profile.sales ?? []).filter(
     (sale) => sale.status === "completed" || purchaseIsOpenCheckout(sale.status),
   );
+  const hasBoingWallet = profile.wallets.some((w) => w.chain === "boing");
 
   return (
     <>
@@ -73,6 +91,73 @@ export default async function MeCollectionPage() {
         bridged.
       </p>
       <HowItWorksNote kind="collect" />
+
+      {hasBoingWallet ? (
+        <section
+          style={{
+            marginBottom: "1.75rem",
+            border: "1px solid var(--line)",
+            padding: "0.9rem 1rem",
+            background: "var(--panel)",
+          }}
+          data-testid="boing-wallet-balances"
+        >
+          <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.15rem" }}>
+            Boing balance
+          </h2>
+          <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+            Live native BOING from linked Boing wallets. NFT scan covers
+            FreshMint-known Boing tokens only (not a full chain indexer).
+          </p>
+          {scanMeta.boingBalances.length === 0 ? (
+            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+              No usable Boing wallet address linked.
+            </p>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.45rem" }}>
+              {scanMeta.boingBalances.map((bal) => (
+                <li
+                  key={bal.address}
+                  style={{ fontSize: "0.95rem", fontFamily: "monospace" }}
+                >
+                  {bal.ok ? (
+                    <>
+                      <a
+                        href={getNetwork("boing").explorerAddress(bal.address)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {shortBoingAddress(bal.address)}
+                      </a>
+                      {" · "}
+                      <strong style={{ fontFamily: "inherit" }}>
+                        {bal.balance ?? "0"} BOING
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      {shortBoingAddress(bal.address)} · balance unavailable
+                      {bal.error ? ` (${bal.error})` : ""}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {scanMeta.warnings.length > 0 ? (
+            <p
+              style={{
+                margin: "0.75rem 0 0",
+                color: "var(--ink-muted)",
+                fontSize: "0.85rem",
+              }}
+              data-testid="boing-scan-warnings"
+            >
+              {scanMeta.warnings.join(" ")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {openCheckouts.length > 0 ? (
         <section
@@ -285,7 +370,9 @@ export default async function MeCollectionPage() {
           </p>
         ) : inWallet.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No other NFTs found in linked wallets yet.
+            {hasBoingWallet
+              ? "No other FreshMint-known Boing NFTs found in linked wallets yet (or RPC was unreachable)."
+              : "No other NFTs found in linked wallets yet."}
           </p>
         ) : (
           <PuzzleRail>

@@ -19,6 +19,13 @@ export const SELECTOR_OWNER_OF = 0x03;
 export const SELECTOR_TRANSFER_NFT = 0x04;
 export const SELECTOR_SET_METADATA_HASH = 0x05;
 
+/**
+ * XOR mask for owner slot — mirrors `REF_NFT_OWNER_STORAGE_XOR` in
+ * `boing-execution` / `boing-sdk` (`BOING_REFNFT_OWNER01` + zero pad).
+ */
+export const REF_NFT_OWNER_STORAGE_XOR_HEX =
+  "0x424f494e475f5245464e46545f4f574e45523031000000000000000000000000";
+
 export function isBoingNativeAccountIdHex(value: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(value.trim());
 }
@@ -28,6 +35,63 @@ export function normalizeBoingAccountId(address: string): string {
   const hex = raw.startsWith("0x") ? raw.slice(2) : raw;
   if (!/^[0-9a-fA-F]{64}$/.test(hex)) return raw.toLowerCase();
   return `0x${hex.toLowerCase()}`;
+}
+
+/** Normalize a Boing token id to a 32-byte `0x`-prefixed hex word. */
+export function normalizeBoingTokenIdWord(tokenId: string): string | null {
+  const raw = tokenId.trim();
+  if (!raw) return null;
+  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw.toLowerCase();
+  if (/^[0-9a-fA-F]{64}$/.test(raw)) return `0x${raw.toLowerCase()}`;
+  // Sequential / decimal ids → big-endian u64 in the low 8 bytes.
+  if (/^\d+$/.test(raw)) {
+    try {
+      let n = BigInt(raw);
+      if (n < BigInt(0)) return null;
+      const out = Buffer.alloc(32);
+      for (let i = 31; i >= 24; i--) {
+        out[i] = Number(n & BigInt(0xff));
+        n >>= BigInt(8);
+      }
+      if (n !== BigInt(0)) return null;
+      return `0x${out.toString("hex")}`;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Provisional FreshMint placeholder — not a real on-chain Boing AccountId. */
+export function provisionalBoingCollectionAddress(collectionId: string): string {
+  return `0x${createHash("sha256")
+    .update(`boing-col:${collectionId}`)
+    .digest("hex")
+    .slice(0, 64)}`;
+}
+
+export function isProvisionalBoingCollectionAddress(
+  collectionId: string,
+  address: string | null | undefined,
+): boolean {
+  if (!address) return true;
+  if (address.startsWith("pending:")) return true;
+  if (!isBoingNativeAccountIdHex(address)) return true;
+  return (
+    normalizeBoingAccountId(address) ===
+    provisionalBoingCollectionAddress(collectionId)
+  );
+}
+
+/** `SLOAD` key for reference NFT owner: `token_id ^ REF_NFT_OWNER_STORAGE_XOR`. */
+export function referenceNftOwnerStorageKey(tokenIdHex32: string): string {
+  const tokenId = normalizeBoingTokenIdWord(tokenIdHex32);
+  if (!tokenId) throw new Error("boing_token_id_invalid");
+  const a = Buffer.from(tokenId.slice(2), "hex");
+  const b = Buffer.from(REF_NFT_OWNER_STORAGE_XOR_HEX.slice(2), "hex");
+  const out = Buffer.alloc(32);
+  for (let i = 0; i < 32; i++) out[i] = a[i]! ^ b[i]!;
+  return `0x${out.toString("hex")}`;
 }
 
 export function ensure0xHex(hex: string): `0x${string}` {
@@ -58,11 +122,158 @@ async function boingRpc<T>(method: string, params: unknown[] = []): Promise<T> {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     signal: AbortSignal.timeout(8000),
   });
-  const body = (await res.json()) as { result?: T; error?: { message?: string } };
+  const text = await res.text();
+  if (!res.ok) {
+    // Cloudflare / gateway HTML challenges often return non-JSON bodies.
+    throw new Error(`boing_rpc_http_${res.status}`);
+  }
+  let body: { result?: T; error?: { message?: string; code?: number } };
+  try {
+    body = JSON.parse(text) as {
+      result?: T;
+      error?: { message?: string; code?: number };
+    };
+  } catch {
+    throw new Error("boing_rpc_non_json");
+  }
   if (body.error) {
     throw new Error(body.error.message ?? `boing_rpc_${method}`);
   }
   return body.result as T;
+}
+
+export async function getBoingAccount(accountId: string): Promise<{
+  balance: string;
+  nonce: number;
+  stake: string;
+} | null> {
+  try {
+    const id = normalizeBoingAccountId(accountId);
+    if (!isBoingNativeAccountIdHex(id)) return null;
+    const acct = await boingRpc<{
+      balance?: string;
+      nonce?: number;
+      stake?: string;
+    }>("boing_getAccount", [id]);
+    return {
+      balance: acct.balance ?? "0",
+      nonce: Number(acct.nonce ?? 0),
+      stake: acct.stake ?? "0",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Native BOING balance (whole-unit u128 decimal string). */
+export async function getBoingNativeBalance(
+  accountId: string,
+): Promise<{ balance: string; ok: true } | { balance: null; ok: false; error: string }> {
+  const id = normalizeBoingAccountId(accountId);
+  if (!isBoingNativeAccountIdHex(id)) {
+    return { balance: null, ok: false, error: "invalid_boing_account" };
+  }
+  try {
+    const result = await boingRpc<{ balance?: string }>("boing_getBalance", [id]);
+    return { balance: result.balance ?? "0", ok: true };
+  } catch (e) {
+    // Fall back to getAccount — same truth, slightly heavier.
+    try {
+      const acct = await getBoingAccount(id);
+      if (acct) return { balance: acct.balance, ok: true };
+    } catch {
+      /* ignore */
+    }
+    return {
+      balance: null,
+      ok: false,
+      error: e instanceof Error ? e.message : "boing_balance_unavailable",
+    };
+  }
+}
+
+export async function getBoingContractStorage(
+  contractId: string,
+  storageKey: string,
+): Promise<string | null> {
+  try {
+    const contract = normalizeBoingAccountId(contractId);
+    const key = storageKey.startsWith("0x") ? storageKey : `0x${storageKey}`;
+    if (!isBoingNativeAccountIdHex(contract) || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
+      return null;
+    }
+    const result = await boingRpc<{ value?: string }>("boing_getContractStorage", [
+      contract,
+      key.toLowerCase(),
+    ]);
+    const value = result.value?.trim();
+    if (!value) return null;
+    return value.startsWith("0x") ? value.toLowerCase() : `0x${value.toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the current holder of a reference-NFT token.
+ * Prefers direct SLOAD (owner storage XOR); falls back to simulate `owner_of`.
+ */
+export async function getBoingNftOwner(input: {
+  collection: string;
+  tokenId: string;
+}): Promise<{ owner: string | null; ok: true } | { owner: null; ok: false; error: string }> {
+  const collection = normalizeBoingAccountId(input.collection);
+  const tokenId = normalizeBoingTokenIdWord(input.tokenId);
+  if (!isBoingNativeAccountIdHex(collection) || !tokenId) {
+    return { owner: null, ok: false, error: "invalid_boing_nft_ref" };
+  }
+
+  try {
+    const storageKey = referenceNftOwnerStorageKey(tokenId);
+    const fromStorage = await getBoingContractStorage(collection, storageKey);
+    if (fromStorage) {
+      if (/^0x0{64}$/.test(fromStorage)) {
+        return { owner: null, ok: true };
+      }
+      if (isBoingNativeAccountIdHex(fromStorage)) {
+        return { owner: normalizeBoingAccountId(fromStorage), ok: true };
+      }
+    }
+
+    const calldata = encodeBoingOwnerOf(tokenId);
+    const sim = await boingRpc<{
+      success?: boolean;
+      return_data?: string;
+      error?: string;
+    }>("boing_simulateContractCall", [collection, calldata, null, "latest"]);
+    if (!sim.success) {
+      return {
+        owner: null,
+        ok: false,
+        error: sim.error ?? "owner_of_simulate_failed",
+      };
+    }
+    const raw = (sim.return_data ?? "0x").trim().toLowerCase();
+    const word =
+      raw === "0x" || raw === ""
+        ? null
+        : raw.startsWith("0x")
+          ? raw.length >= 66
+            ? `0x${raw.slice(2).padStart(64, "0").slice(-64)}`
+            : raw.padEnd(66, "0").slice(0, 66)
+          : `0x${raw.padStart(64, "0").slice(-64)}`;
+    if (!word || /^0x0{64}$/.test(word)) return { owner: null, ok: true };
+    if (!isBoingNativeAccountIdHex(word)) {
+      return { owner: null, ok: false, error: "owner_of_bad_return" };
+    }
+    return { owner: normalizeBoingAccountId(word), ok: true };
+  } catch (e) {
+    return {
+      owner: null,
+      ok: false,
+      error: e instanceof Error ? e.message : "boing_owner_unavailable",
+    };
+  }
 }
 
 export async function probeBoingNetwork(): Promise<{
@@ -98,27 +309,6 @@ export async function verifyBoingTx(txHash: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** Provisional FreshMint placeholder — not a real on-chain Boing AccountId. */
-export function provisionalBoingCollectionAddress(collectionId: string): string {
-  return `0x${createHash("sha256")
-    .update(`boing-col:${collectionId}`)
-    .digest("hex")
-    .slice(0, 64)}`;
-}
-
-export function isProvisionalBoingCollectionAddress(
-  collectionId: string,
-  address: string | null | undefined,
-): boolean {
-  if (!address) return true;
-  if (address.startsWith("pending:")) return true;
-  if (!isBoingNativeAccountIdHex(address)) return true;
-  return (
-    normalizeBoingAccountId(address) ===
-    provisionalBoingCollectionAddress(collectionId)
-  );
 }
 
 /** Matches `boing_primitives::nonce_derived_contract_address` / boing-sdk. */
@@ -186,28 +376,6 @@ export function extractBoingContractAddress(result: unknown): string | null {
     }
   }
   return null;
-}
-
-export async function getBoingAccount(accountId: string): Promise<{
-  balance: string;
-  nonce: number;
-  stake: string;
-} | null> {
-  try {
-    const id = normalizeBoingAccountId(accountId);
-    const acct = await boingRpc<{
-      balance?: string;
-      nonce?: number;
-      stake?: string;
-    }>("boing_getAccount", [id]);
-    return {
-      balance: acct.balance ?? "0",
-      nonce: Number(acct.nonce ?? 0),
-      stake: acct.stake ?? "0",
-    };
-  } catch {
-    return null;
-  }
 }
 
 type BoingBlockTx = {
@@ -392,6 +560,13 @@ function tokenIdWordForListing(listingId: string): string {
 
 function metadataHashWord(uri: string): string {
   return Buffer.from(blake3(new TextEncoder().encode(uri))).toString("hex");
+}
+
+/** 96-byte reference NFT `owner_of(token_id)` calldata. */
+export function encodeBoingOwnerOf(tokenIdHex32: string): `0x${string}` {
+  const tokenId = normalizeBoingTokenIdWord(tokenIdHex32);
+  if (!tokenId) throw new Error("boing_token_id_invalid");
+  return `0x${selectorWord(SELECTOR_OWNER_OF)}${tokenId.slice(2)}${"00".repeat(32)}`;
 }
 
 /** 96-byte reference NFT calldata (selector last byte + two argument words). */
