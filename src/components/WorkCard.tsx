@@ -297,24 +297,16 @@ export function WorkCard({
           <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
         </h3>
         <p className="work-tile__meta">
-          {priceLabel(listing, bucket)}
-          {listing.type === "auction" ? ` · ${saleModeBadge(listing)}` : ""}
-          {placeText ? (
-            <>
-              {" · "}
-              <span
-                className={`badge${place === "promoted" ? " promoted" : place === "featured" ? " featured" : ""}`}
-                style={{ verticalAlign: "middle" }}
-              >
-                {placeText}
-              </span>
-            </>
+          <span className="work-tile__price">{priceLabel(listing, bucket)}</span>
+          {listing.type === "auction" ? (
+            <span className="work-tile__sep"> · {saleModeBadge(listing)}</span>
           ) : null}
-          {collection ? (
-            <>
-              {" · "}
-              <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
-            </>
+          {placeText && place !== "featured" ? (
+            <span
+              className={`work-tile__place badge${place === "promoted" ? " promoted" : ""}`}
+            >
+              {placeText}
+            </span>
           ) : null}
         </p>
         {showActions ? (

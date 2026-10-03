@@ -25,29 +25,28 @@ function collectionsSubtitle(
 ): string {
   switch (mode) {
     case "trending":
-      return "Ranked by completed sale volume over the last 7 days.";
+      return "Collections with the strongest sales this week.";
     case "top_volume":
-      return "Sparse 7-day sales — showing top all-time volume collections.";
+      return "Top collections by all-time volume.";
     case "new":
-      return "Sparse sales activity — showing collections new this week.";
+      return "Fresh collections from this week.";
     case "mixed":
-      return "7-day volume leaders, topped up with all-time volume and new collections.";
+      return "Volume leaders mixed with new collections.";
   }
 }
-
 
 function creatorsSubtitle(
   mode: "trending" | "most_active" | "newest" | "mixed",
 ): string {
   switch (mode) {
     case "trending":
-      return "Ranked by completed primary USD volume over the last 7 days (at least one sale).";
+      return "Creators with the strongest sales this week.";
     case "most_active":
-      return "Sparse 7-day sales — showing most-active creators by published works.";
+      return "Creators publishing the most right now.";
     case "newest":
-      return "Sparse sales activity — showing newest creators by first listing.";
+      return "New voices just entering the market.";
     case "mixed":
-      return "7-day volume leaders, topped up with most-active and newest creators.";
+      return "Rising volume, activity, and new creators.";
   }
 }
 
@@ -56,13 +55,13 @@ function hotSubtitle(
 ): string {
   switch (mode) {
     case "hot":
-      return "Scored from views, saves, bids, and purchases in the last 72 hours.";
+      return "Works gaining attention right now.";
     case "most_viewed":
-      return "Quiet last 72 hours — showing most-viewed public works.";
+      return "The most-viewed public works.";
     case "newest":
-      return "Quiet activity — showing newest published works.";
+      return "Just published.";
     case "mixed":
-      return "72-hour hot works, topped up with most-viewed and newest.";
+      return "Hot works, topped up with most-viewed and newest.";
   }
 }
 
@@ -88,44 +87,24 @@ export default async function HomePage() {
   const personalized = Boolean(user);
 
   return (
-    <div>
+    <div className="fm-home">
       <section className="fm-home-hero">
         <div className="fm-home-hero__copy">
-          <div
-            className="anim-rise"
-            style={{
-              margin: "0 0 0.85rem",
-              fontSize: "clamp(2.6rem, 7.5vw, 4.8rem)",
-            }}
-          >
+          <div className="fm-home-hero__brand anim-rise">
             <BrandMark size={56} />
           </div>
-          <h1
-            className="anim-rise-delay"
-            style={{
-              margin: "0 0 1rem",
-              fontSize: "clamp(1.35rem, 3vw, 1.85rem)",
-              fontWeight: 500,
-              lineHeight: 1.25,
-              maxWidth: "28ch",
-            }}
-          >
+          <h1 className="fm-home-hero__title anim-rise-delay">
             Discover new art before it floods the feed.
           </h1>
-          <HowItWorksNote kind="home" />
-          <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-            <Link
-              href="/open"
-              className="badge featured"
-              style={{ padding: "0.55rem 0.9rem" }}
-            >
+          <p className="fm-home-hero__lede anim-rise-delay">
+            Fair discovery for digital art — Emerging artists get a real quota,
+            not a slogan.
+          </p>
+          <div className="fm-home-hero__actions anim-rise-delay">
+            <Link href="/open" className="fm-btn fm-btn--primary">
               Browse works
             </Link>
-            <Link
-              href="/create"
-              className="badge emerging"
-              style={{ padding: "0.55rem 0.9rem" }}
-            >
+            <Link href="/create" className="fm-btn fm-btn--ghost">
               Soft-launch a work
             </Link>
           </div>
@@ -134,6 +113,10 @@ export default async function HomePage() {
           <FeaturedOfTheWeek />
         </div>
       </section>
+
+      <div className="fm-home-note">
+        <HowItWorksNote kind="home" />
+      </div>
 
       {discovery.collections.items.length > 0 ? (
         <section className="site-section">
@@ -157,7 +140,6 @@ export default async function HomePage() {
           </HomeScrollRail>
         </section>
       ) : null}
-
 
       {creatorsHome.items.length > 0 ? (
         <section className="site-section">
@@ -216,8 +198,8 @@ export default async function HomePage() {
       {discovery.englishEndingSoon.length > 0 ? (
         <section className="site-section">
           <HomeSectionHeader
-            title="English auctions ending soon"
-            subtitle="Live open bidding — soonest ending first."
+            title="Auctions ending soon"
+            subtitle="Open bidding, soonest ending first."
             viewAllHref="/auctions?saleMode=english"
             viewAllLabel="All English auctions"
           />
@@ -263,8 +245,8 @@ export default async function HomePage() {
       {discovery.newCollections.length > 0 ? (
         <section className="site-section">
           <HomeSectionHeader
-            title="New collections this week"
-            subtitle="Created in the last 7 days with at least one published work."
+            title="New collections"
+            subtitle="Created this week with at least one published work."
             viewAllHref="/collections/new"
           />
           <HomeScrollRail>
@@ -276,27 +258,20 @@ export default async function HomePage() {
       ) : null}
 
       <section className="site-section">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            gap: "1rem",
-            marginBottom: "1.25rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <h2 className="display" style={{ margin: 0, fontSize: "1.6rem" }}>
-            {personalized
-              ? `Composed for ${user!.displayName}`
-              : "Composed for you"}
-          </h2>
-          <span style={{ color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-            Rising slots/day: {home.budgets.risingTotal} · Emerging reserved:{" "}
-            {home.budgets.risingEmergingReserved}
-            {!personalized ? " · pick tastes below for Emerging" : ""}
-          </span>
-        </div>
+        <HomeSectionHeader
+          title={
+            personalized
+              ? `For ${user!.displayName}`
+              : "Composed for you"
+          }
+          subtitle={
+            personalized
+              ? "A fair mix of Emerging, Following, and Featured."
+              : "Pick tastes below to tune Emerging — then explore your feed."
+          }
+          viewAllHref="/open"
+          viewAllLabel="Browse all"
+        />
         {!personalized ? <TasteSeed selected={taste.styleTags} /> : null}
         <DiscoverySessionRecorder
           listingIds={home.feed.map((item) => item.listing.id)}
@@ -306,7 +281,7 @@ export default async function HomePage() {
             .filter((id): id is string => !!id)}
         />
         {home.feed.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             Feed is empty — soft-launch a work or follow an emerging artist.
           </p>
         ) : (

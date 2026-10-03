@@ -24,14 +24,13 @@ export default async function TrendingPage() {
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Most viewed
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1.75rem" }}>
-        Public works ordered by recorded page views, then saves, then unique
-        viewers. Those counters already live on each listing — this lane does
-        not invent a separate trend score.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Most viewed</h1>
+        <p className="page-lead__copy">
+          Public works ordered by views, then saves, then unique viewers — no
+          separate trend score.
+        </p>
+      </header>
 
       {collectionStrip.length > 0 ? (
         <section style={{ marginBottom: "1.75rem" }}>
