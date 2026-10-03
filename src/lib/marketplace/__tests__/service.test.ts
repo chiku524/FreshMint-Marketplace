@@ -24,6 +24,7 @@ import {
   nominateListingForUser,
   prepareCollectionDeployForUser,
   prepareCollectionPublishMints,
+  syncCollectionDeployFromChain,
   purchaseListing,
   quoteCryptoPurchase,
   recordSignal,
@@ -684,6 +685,36 @@ describe("marketplace service (memory mode)", () => {
     expect(prep.ok).toBe(true);
     if (!prep.ok) return;
     expect(prep.alreadyDeployed).toBe(true);
+  });
+
+  it("syncs a Boing deploy after mempool ok (pending marker + real address)", async () => {
+    const boingCreator = `0x${"44".repeat(32)}`;
+    const pending = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Mempool Ok Squad",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(pending.ok).toBe(true);
+    if (!pending.ok) return;
+    expect(pending.collection.deployStatus).toBe("pending_wallet");
+
+    const real = `0x${"55".repeat(32)}`;
+    const synced = await syncCollectionDeployFromChain({
+      collectionId: pending.collection.id,
+      creatorId: "artist-fresh",
+      creatorAddress: boingCreator,
+      contractAddress: real,
+      // Wallet/node returned { tx_hash: "ok" }; client passes a pending marker.
+      txHash: "pending:boing-accepted:deadbeefcafebabe",
+    });
+    expect(synced.ok).toBe(true);
+    if (!synced.ok) return;
+    expect(synced.collection.contractAddress).toBe(real);
+    expect(synced.collection.deployStatus).toBe("confirmed");
+    expect(isCollectionDeployReady(synced.collection)).toBe(true);
+    // Pending marker is acceptable evidence; confirm stores a real-looking hash.
+    expect(synced.collection.deployTxHash?.length).toBeGreaterThanOrEqual(8);
   });
 
   it("deploys a collection, mints at publish, and withdraws via transfer", async () => {
