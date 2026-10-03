@@ -8,10 +8,17 @@ import {
 import {
   buildBoingMintIntent,
   buildBoingPurchaseIntent,
+  encodeBoingOwnerOf,
   encodeBoingTransferNft,
   isBoingNativeAccountIdHex,
+  isProvisionalBoingCollectionAddress,
   normalizeBoingAccountId,
+  normalizeBoingTokenIdWord,
+  provisionalBoingCollectionAddress,
+  referenceNftOwnerStorageKey,
+  REF_NFT_OWNER_STORAGE_XOR_HEX,
   resolveBoingNftCollectionBytecode,
+  SELECTOR_OWNER_OF,
   SELECTOR_TRANSFER_NFT,
 } from "@/lib/onchain/boing";
 
@@ -82,6 +89,40 @@ describe("boing account ids", () => {
       `0x${"ab".repeat(32)}`,
     );
   });
+
+  it("detects provisional collection placeholders", () => {
+    const id = "col-test";
+    const provisional = provisionalBoingCollectionAddress(id);
+    expect(isProvisionalBoingCollectionAddress(id, provisional)).toBe(true);
+    expect(
+      isProvisionalBoingCollectionAddress(id, `0x${"22".repeat(32)}`),
+    ).toBe(false);
+  });
+
+  it("normalizes token id words and owner storage keys", () => {
+    const tid = `0x${"aa".repeat(32)}`;
+    expect(normalizeBoingTokenIdWord(tid)).toBe(tid);
+    expect(normalizeBoingTokenIdWord("7")).toMatch(/^0x0{62}07$/);
+    const key = referenceNftOwnerStorageKey(tid);
+    expect(key).toMatch(/^0x[0-9a-f]{64}$/);
+    const a = Buffer.from(tid.slice(2), "hex");
+    const b = Buffer.from(REF_NFT_OWNER_STORAGE_XOR_HEX.slice(2), "hex");
+    const expected = Buffer.alloc(32);
+    for (let i = 0; i < 32; i++) expected[i] = a[i]! ^ b[i]!;
+    expect(key).toBe(`0x${expected.toString("hex")}`);
+  });
+
+  it("encodes owner_of calldata", () => {
+    const tid = "bb".repeat(32);
+    const data = encodeBoingOwnerOf(tid);
+    expect(data.length).toBe(2 + 96 * 2);
+    expect(data).toMatch(
+      new RegExp(
+        `0x${"0".repeat(62)}${SELECTOR_OWNER_OF.toString(16).padStart(2, "0")}`,
+      ),
+    );
+    expect(data.endsWith(`${"00".repeat(32)}`)).toBe(true);
+  });
 });
 
 describe("boing mint intent", () => {
@@ -120,7 +161,9 @@ describe("boing mint intent", () => {
     expect(mint.walletTx.tx.to).toBe(`0x${"22".repeat(32)}`);
     expect(typeof mint.walletTx.tx.calldata).toBe("string");
     expect(String(mint.walletTx.tx.calldata)).toMatch(
-      new RegExp(`0x${"0".repeat(62)}${SELECTOR_TRANSFER_NFT.toString(16).padStart(2, "0")}`),
+      new RegExp(
+        `0x${"0".repeat(62)}${SELECTOR_TRANSFER_NFT.toString(16).padStart(2, "0")}`,
+      ),
     );
   });
 

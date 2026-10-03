@@ -1,8 +1,15 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { isAddress } from "viem";
-import { chainMode, rpcUrlFor, type NetworkId } from "@/lib/chains/registry";
+import { chainMode, getNetwork, rpcUrlFor, type NetworkId } from "@/lib/chains/registry";
 import type { Chain, Listing } from "@/lib/discovery/types";
-import { isBoingNativeAccountIdHex } from "@/lib/onchain/boing";
+import {
+  getBoingNativeBalance,
+  getBoingNftOwner,
+  isBoingNativeAccountIdHex,
+  isProvisionalBoingCollectionAddress,
+  normalizeBoingAccountId,
+  normalizeBoingTokenIdWord,
+} from "@/lib/onchain/boing";
 import type { ProfileWallet } from "@/lib/marketplace/profile";
 
 export type WalletNft = {
@@ -18,6 +25,20 @@ export type WalletNft = {
   mediaUrl?: string | null;
   explorerUrl: string;
   listingId?: string | null;
+};
+
+export type BoingWalletBalance = {
+  chain: "boing";
+  network: "boing";
+  address: string;
+  balance: string | null;
+  ok: boolean;
+  error?: string;
+};
+
+export type LinkedWalletScanMeta = {
+  warnings: string[];
+  boingBalances: BoingWalletBalance[];
 };
 
 type FetchFn = typeof fetch;
@@ -142,6 +163,14 @@ export function nftAssetKey(
   contractAddress: string,
   tokenId: string,
 ): string {
+  if (chain === "boing") {
+    const contract = isBoingNativeAccountIdHex(contractAddress)
+      ? normalizeBoingAccountId(contractAddress)
+      : contractAddress.toLowerCase();
+    const tid =
+      normalizeBoingTokenIdWord(tokenId) ?? tokenId.trim().toLowerCase();
+    return `boing:${contract}:${tid}`;
+  }
   const contract =
     chain === "evm" ? contractAddress.toLowerCase() : contractAddress;
   return `${chain}:${contract}:${normalizeTokenId(tokenId)}`;
@@ -400,6 +429,170 @@ async function readJson(
   }
 }
 
+const BOING_OWNER_SCAN_CAP = 48;
+const BOING_OWNER_SCAN_CONCURRENCY = 6;
+
+export type BoingScanCandidate = {
+  listingId: string;
+  contractAddress: string;
+  tokenId: string;
+  title: string;
+  description?: string | null;
+  mediaUrl?: string | null;
+  collectionId?: string | null;
+};
+
+/** FreshMint Boing listings that are safe to ownership-check on-chain. */
+export function boingScanCandidatesFromListings(
+  listings: Listing[],
+): BoingScanCandidate[] {
+  const seen = new Set<string>();
+  const out: BoingScanCandidate[] = [];
+  for (const listing of listings) {
+    if (listing.chain !== "boing" && listing.network !== "boing") continue;
+    const contract = listing.contractAddress?.trim();
+    const tokenId = listing.tokenId?.trim();
+    if (!contract || !tokenId) continue;
+    if (!isBoingNativeAccountIdHex(contract)) continue;
+    if (
+      listing.collectionId &&
+      isProvisionalBoingCollectionAddress(listing.collectionId, contract)
+    ) {
+      continue;
+    }
+    const tid = normalizeBoingTokenIdWord(tokenId);
+    if (!tid) continue;
+    const key = `${normalizeBoingAccountId(contract)}:${tid}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      listingId: listing.id,
+      contractAddress: normalizeBoingAccountId(contract),
+      tokenId: tid,
+      title: listing.title,
+      description: listing.description ?? null,
+      mediaUrl: listing.mediaUrl ?? null,
+      collectionId: listing.collectionId,
+    });
+    if (out.length >= BOING_OWNER_SCAN_CAP) break;
+  }
+  return out;
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!);
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(concurrency, Math.max(items.length, 1)) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * MVP Boing NFT scan: verify ownership of FreshMint-known (contract, tokenId)
+ * pairs. Does not enumerate arbitrary on-chain NFTs.
+ */
+export async function fetchBoingNftsForAddress(
+  address: string,
+  candidates: BoingScanCandidate[],
+  deps: { warnings?: string[] } = {},
+): Promise<WalletNft[]> {
+  const owner = normalizeBoingAccountId(address);
+  if (!isBoingNativeAccountIdHex(owner) || candidates.length === 0) return [];
+
+  const network = getNetwork("boing");
+  const found: WalletNft[] = [];
+  let rpcFailures = 0;
+
+  const results = await mapPool(
+    candidates,
+    BOING_OWNER_SCAN_CONCURRENCY,
+    async (candidate) => {
+      const owned = await getBoingNftOwner({
+        collection: candidate.contractAddress,
+        tokenId: candidate.tokenId,
+      });
+      return { candidate, owned };
+    },
+  );
+
+  for (const { candidate, owned } of results) {
+    if (!owned.ok) {
+      rpcFailures += 1;
+      continue;
+    }
+    if (!owned.owner || owned.owner !== owner) continue;
+    found.push({
+      id: nftAssetKey("boing", candidate.contractAddress, candidate.tokenId),
+      chain: "boing",
+      network: "boing",
+      networkLabel: network.label,
+      ownerAddress: owner,
+      contractAddress: candidate.contractAddress,
+      tokenId: candidate.tokenId,
+      title: candidate.title || `Boing ${candidate.tokenId.slice(0, 10)}…`,
+      description: candidate.description ?? null,
+      mediaUrl: resolveMediaUrl(candidate.mediaUrl),
+      explorerUrl: network.explorerAddress(candidate.contractAddress),
+      listingId: candidate.listingId,
+    });
+  }
+
+  if (rpcFailures > 0 && found.length === 0 && candidates.length > 0) {
+    deps.warnings?.push(
+      `Boing NFT ownership checks failed for ${rpcFailures}/${candidates.length} FreshMint-known tokens (RPC/Cloudflare). Showing catalog matches only when RPC is reachable.`,
+    );
+  } else if (rpcFailures > 0) {
+    deps.warnings?.push(
+      `Boing NFT scan partially failed (${rpcFailures} token checks). Results may be incomplete.`,
+    );
+  }
+
+  return found;
+}
+
+export async function fetchBoingBalancesForWallets(
+  wallets: ProfileWallet[],
+): Promise<BoingWalletBalance[]> {
+  const boingWallets = wallets.filter(
+    (w) => w.chain === "boing" && isUsableWalletAddress(w.chain, w.address),
+  );
+  return Promise.all(
+    boingWallets.map(async (wallet) => {
+      const result = await getBoingNativeBalance(wallet.address);
+      if (result.ok) {
+        return {
+          chain: "boing" as const,
+          network: "boing" as const,
+          address: normalizeBoingAccountId(wallet.address),
+          balance: result.balance,
+          ok: true,
+        };
+      }
+      return {
+        chain: "boing" as const,
+        network: "boing" as const,
+        address: normalizeBoingAccountId(wallet.address),
+        balance: null,
+        ok: false,
+        error: result.error,
+      };
+    }),
+  );
+}
+
 async function fetchEvmNftsForAddress(
   address: string,
   fetcher: FetchFn,
@@ -537,7 +730,11 @@ function dedupeNfts(nfts: WalletNft[]): WalletNft[] {
 export async function fetchLinkedWalletNfts(
   wallets: ProfileWallet[],
   listings: Listing[] = [],
-  deps: { fetch?: FetchFn; skipCache?: boolean } = {},
+  deps: {
+    fetch?: FetchFn;
+    skipCache?: boolean;
+    meta?: LinkedWalletScanMeta;
+  } = {},
 ): Promise<WalletNft[]> {
   const usable = wallets.filter((w) => isUsableWalletAddress(w.chain, w.address));
   if (usable.length === 0) return [];
@@ -545,10 +742,34 @@ export async function fetchLinkedWalletNfts(
   const key = cacheKey(usable);
   const cached = cache.get(key);
   if (!deps.skipCache && cached && Date.now() - cached.at < CACHE_MS) {
+    if (deps.meta) {
+      deps.meta.boingBalances = await fetchBoingBalancesForWallets(usable);
+      for (const bal of deps.meta.boingBalances) {
+        if (!bal.ok) {
+          deps.meta.warnings.push(
+            `BOING balance unavailable for ${bal.address.slice(0, 10)}… (${bal.error ?? "rpc"}).`,
+          );
+        }
+      }
+    }
     return matchWalletNftsToListings(cached.nfts, listings);
   }
 
   const fetcher = deps.fetch ?? fetch;
+  const boingCandidates = boingScanCandidatesFromListings(listings);
+  const warnings = deps.meta?.warnings;
+
+  if (deps.meta) {
+    deps.meta.boingBalances = await fetchBoingBalancesForWallets(usable);
+    for (const bal of deps.meta.boingBalances) {
+      if (!bal.ok) {
+        deps.meta.warnings.push(
+          `BOING balance unavailable for ${bal.address.slice(0, 10)}… (${bal.error ?? "rpc"}).`,
+        );
+      }
+    }
+  }
+
   const collected = await Promise.all(
     usable.map(async (wallet) => {
       if (wallet.chain === "evm") {
@@ -556,6 +777,11 @@ export async function fetchLinkedWalletNfts(
       }
       if (wallet.chain === "solana") {
         return fetchSolanaNftsForAddress(wallet.address, fetcher);
+      }
+      if (wallet.chain === "boing") {
+        return fetchBoingNftsForAddress(wallet.address, boingCandidates, {
+          warnings,
+        });
       }
       return [];
     }),
