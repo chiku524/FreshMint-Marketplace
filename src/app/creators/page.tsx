@@ -70,13 +70,12 @@ export default async function CreatorsIndexPage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Creators
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1rem" }}>
-        Browseable directory with shareable sort tabs and pages. Profiles live at{" "}
-        <code style={{ fontSize: "0.85em" }}>/creators/[id]</code>.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Creators</h1>
+        <p className="page-lead__copy">
+          A browsable directory of artists — sort, page, and open any profile.
+        </p>
+      </header>
 
       <CreatorsSortTabs active={sort} />
       <p

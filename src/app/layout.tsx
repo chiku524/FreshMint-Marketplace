@@ -52,18 +52,9 @@ export default async function RootLayout({
           <div className="fm-intro-cover" aria-hidden="true" />
           <LogoIntroSplash />
           <PageEngraveBackground />
-          <header
-            className="site-header"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "1rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-              <Link href="/" style={{ fontSize: "1.3rem" }}>
+          <header className="site-header">
+            <div className="site-header__start">
+              <Link href="/" className="site-header__brand" aria-label="FreshMint home">
                 <BrandMark size={32} />
               </Link>
               <SiteNav signedIn={Boolean(initialUser)} />
@@ -73,11 +64,10 @@ export default async function RootLayout({
           <div className="site-frame">
             <DiscoverySidebar />
             <div className="site-frame__main">
-              <main style={{ flex: 1 }}>{children}</main>
+              <main className="site-main">{children}</main>
               <footer className="site-footer">
-                <span>
-                  Attention is scarce. Emerging artists get a coded quota — not a
-                  slogan.
+                <span className="site-footer__tagline">
+                  Attention is scarce. Emerging artists get a coded quota.
                 </span>
                 <span className="site-footer__links">
                   <Link href="/docs#settlement">How it works</Link>

@@ -90,14 +90,13 @@ export default async function AuctionsPage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Auctions
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1rem" }}>
-        Timed windows (buy at list price) and English auctions (open bidding).
-        Filter is shareable via the URL. Cleared primary sales stay as proof of
-        discovery converting.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Auctions</h1>
+        <p className="page-lead__copy">
+          Timed drops at list price and English open bidding. Filters stay in
+          the URL so you can share a view.
+        </p>
+      </header>
 
       <AuctionsSaleModeTabs active={filter} />
 
