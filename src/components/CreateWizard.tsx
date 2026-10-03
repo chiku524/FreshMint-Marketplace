@@ -271,8 +271,49 @@ export function CreateWizard() {
       const sent = await sendBoingWalletTxDetailed(
         deployIntent.walletTx as Parameters<typeof sendBoingWalletTxDetailed>[0],
       );
-      txHash = sent.txHash;
       if (sent.contractAddress) contractAddress = sent.contractAddress;
+
+      // Boing node returns `{ tx_hash: "ok" }` on mempool accept — not a real
+      // tx id. Link the deploy from chain instead of erroring.
+      if (!sent.txHash && sent.mempoolAccepted) {
+        setDeployNote("Wallet accepted deploy — confirming from chain…");
+        const pendingMarker = `pending:boing-accepted:${Date.now().toString(16)}`;
+        let lastError = "onchain_deploy_not_found";
+        for (let attempt = 0; attempt < 5; attempt++) {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+          const sync = await fetch(`/api/collections/${id}/deploy`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "sync",
+              creatorAddress: creatorAddress || undefined,
+              contractAddress: sent.contractAddress || undefined,
+              txHash: pendingMarker,
+            }),
+          });
+          const syncData = await sync.json();
+          if (sync.ok && syncData.collection) {
+            const addr = String(syncData.collection.contractAddress || "");
+            setDeployNote(
+              addr
+                ? `Collection deployed · ${addr.slice(0, 10)}…`
+                : "Collection deployed (synced from chain)",
+            );
+            return;
+          }
+          lastError = syncData.error || lastError;
+        }
+        throw new Error(
+          lastError === "onchain_deploy_not_found"
+            ? "Deploy landed in the wallet but FreshMint could not link it yet — wait a few seconds and retry"
+            : lastError,
+        );
+      }
+
+      txHash = sent.txHash;
     } else {
       txHash = await maybeSendWalletTx({
         walletTx: deployIntent.walletTx,

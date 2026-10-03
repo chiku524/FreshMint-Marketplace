@@ -406,7 +406,8 @@ export async function createCollectionForUser(input: {
 
   if (mode === "memory" || isMemoryMode()) {
     collection = {
-      id: `col-mem-${Date.now()}`,
+      // Include entropy — two creates in the same millisecond must not collide.
+      id: `col-mem-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
       title,
       creatorId: input.creatorId,
       chain,
@@ -697,7 +698,8 @@ export async function syncCollectionDeployFromChain(input: {
       });
       if (found) {
         contractAddress = found.contractAddress;
-        if (!txHash) {
+        // Prefer a stable sync id over wallet mempool placeholders (`ok` / pending:).
+        if (!txHash || txHash.startsWith("pending:")) {
           txHash = `0x${createHash("sha256")
             .update(
               `boing-sync:${collection.id}:${found.contractAddress}:${found.blockHeight}`,
@@ -710,10 +712,18 @@ export async function syncCollectionDeployFromChain(input: {
           collectionId: collection.id,
           fallbackAddress: collection.contractAddress,
         });
-        // Only accept nonce-1 guess when caller also supplies a tx hash
-        // (recent wallet confirm). Blind guesses risk linking the wrong deploy.
+        // Only accept nonce-derived guess when caller supplies evidence of a
+        // recent wallet submit (real hash or mempool-accepted pending marker).
+        // Blind guesses risk linking the wrong deploy.
         if (resolved && input.txHash) {
           contractAddress = resolved;
+          if (!txHash || txHash.startsWith("pending:")) {
+            txHash = `0x${createHash("sha256")
+              .update(
+                `boing-sync:${collection.id}:${resolved}:nonce-derived`,
+              )
+              .digest("hex")}`;
+          }
         }
       }
     }
@@ -723,6 +733,13 @@ export async function syncCollectionDeployFromChain(input: {
 
   if (!contractAddress || !txHash) {
     return { ok: false as const, error: "onchain_deploy_not_found" };
+  }
+
+  // Replace wallet mempool placeholders with a stable FreshMint sync id.
+  if (txHash.startsWith("pending:")) {
+    txHash = `0x${createHash("sha256")
+      .update(`boing-sync:${collection.id}:${contractAddress}`)
+      .digest("hex")}`;
   }
 
   return confirmCollectionDeploy({

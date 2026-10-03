@@ -11,6 +11,7 @@ import {
   encodeBoingOwnerOf,
   encodeBoingTransferNft,
   extractBoingTxHash,
+  isBoingMempoolAccepted,
   isBoingNativeAccountIdHex,
   isProvisionalBoingCollectionAddress,
   normalizeBoingAccountId,
@@ -106,6 +107,19 @@ describe("boing deploy address helpers", () => {
     expect(extractBoingTxHash({ tx_id: hash })).toBe(hash);
     expect(extractBoingTxHash({ hash })).toBe(hash);
     expect(extractBoingTxHash({ tx_hash: "ok" })).toBeNull();
+    expect(extractBoingTxHash({ result: { tx_id: hash } })).toBe(hash);
+    expect(extractBoingTxHash([hash])).toBe(hash);
+  });
+
+  it("treats node mempool ok as accepted without a tx id", () => {
+    expect(isBoingMempoolAccepted("ok")).toBe(true);
+    expect(isBoingMempoolAccepted("0xok")).toBe(true);
+    expect(isBoingMempoolAccepted({ tx_hash: "ok" })).toBe(true);
+    expect(isBoingMempoolAccepted({ result: { tx_hash: "ok" } })).toBe(true);
+    expect(isBoingMempoolAccepted(`0x${"ab".repeat(32)}`)).toBe(false);
+    expect(isBoingMempoolAccepted({ tx_id: `0x${"cd".repeat(32)}` })).toBe(
+      false,
+    );
   });
 });
 

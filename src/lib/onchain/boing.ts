@@ -336,26 +336,100 @@ export function predictNonceDerivedContractAddress(
   return `0x${Buffer.from(blake3(preimage)).toString("hex")}`;
 }
 
+/**
+ * Boing node `boing_submitTransaction` returns `{ "tx_hash": "ok" }` (or the
+ * literal string `"ok"`) when the tx is accepted into the mempool — not a
+ * 32-byte transaction id. Boing Express often surfaces that value unchanged.
+ */
+export function isBoingMempoolAccepted(result: unknown): boolean {
+  if (typeof result === "string") {
+    const t = result.trim().toLowerCase();
+    return t === "ok" || t === "0xok" || t === "accepted" || t === "success";
+  }
+  if (Array.isArray(result)) {
+    return result.some((item) => isBoingMempoolAccepted(item));
+  }
+  if (!result || typeof result !== "object") return false;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "tx_hash",
+    "txHash",
+    "hash",
+    "tx_id",
+    "txId",
+    "status",
+    "result",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string") {
+      const t = v.trim().toLowerCase();
+      if (t === "ok" || t === "0xok" || t === "accepted" || t === "success") {
+        return true;
+      }
+    }
+  }
+  if ("result" in o && isBoingMempoolAccepted(o.result)) return true;
+  if ("data" in o && isBoingMempoolAccepted(o.data)) return true;
+  return false;
+}
+
+function normalizeExtractedBoingTxId(value: string): string | null {
+  const t = value.trim();
+  if (!t) return null;
+  // Node mempool acceptance is sometimes the literal "ok" — not a tx id.
+  if (
+    t === "ok" ||
+    t === "0xok" ||
+    t.toLowerCase() === "accepted" ||
+    t.toLowerCase() === "success"
+  ) {
+    return null;
+  }
+  if (/^0x[0-9a-fA-F]{64}$/.test(t)) return t.toLowerCase();
+  if (/^[0-9a-fA-F]{64}$/.test(t)) return `0x${t.toLowerCase()}`;
+  if (t.length >= 8) return t.startsWith("0x") ? t : `0x${t}`;
+  return null;
+}
+
 /** Normalize wallet / RPC result shapes into a 32-byte tx id hex when possible. */
 export function extractBoingTxHash(result: unknown): string | null {
   if (typeof result === "string") {
-    const t = result.trim();
-    if (/^0x[0-9a-fA-F]{64}$/.test(t)) return t.toLowerCase();
-    // Node mempool acceptance is sometimes the literal "ok" — not a tx id.
-    if (t === "ok" || t === "0xok") return null;
-    if (t.length >= 8) return t;
+    return normalizeExtractedBoingTxId(result);
+  }
+  if (Array.isArray(result)) {
+    for (const item of result) {
+      const found = extractBoingTxHash(item);
+      if (found) return found;
+    }
     return null;
   }
   if (!result || typeof result !== "object") return null;
   const o = result as Record<string, unknown>;
-  for (const key of ["tx_id", "txId", "hash", "tx_hash", "txHash", "transactionHash"]) {
+  for (const key of [
+    "tx_id",
+    "txId",
+    "hash",
+    "tx_hash",
+    "txHash",
+    "transactionHash",
+    "transaction_id",
+    "transactionId",
+    "id",
+    "signature",
+  ]) {
     const v = o[key];
-    if (typeof v === "string" && v !== "ok" && v.length >= 8) {
-      return v.startsWith("0x") ? v : `0x${v}`;
+    if (typeof v === "string") {
+      const found = normalizeExtractedBoingTxId(v);
+      if (found) return found;
     }
   }
-  if (typeof o.contractAddress === "string" || typeof o.contract_address === "string") {
-    // Some wallets return { contractAddress, tx_id } — hash extracted above when present.
+  if ("result" in o) {
+    const nested = extractBoingTxHash(o.result);
+    if (nested) return nested;
+  }
+  if ("data" in o) {
+    const nested = extractBoingTxHash(o.data);
+    if (nested) return nested;
   }
   return null;
 }
