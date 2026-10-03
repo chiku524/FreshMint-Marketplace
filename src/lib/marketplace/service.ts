@@ -1,4 +1,5 @@
 import "@/lib/env";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { DiscoveryEngine } from "@/lib/discovery";
 import { loadMarketplaceState, persistCreatorStats, persistListingSignals } from "@/lib/data/repository";
@@ -45,6 +46,7 @@ import {
 } from "@/lib/onchain/solana";
 import {
   buildBoingMintIntent,
+  isProvisionalBoingCollectionAddress,
   verifyBoingTx,
 } from "@/lib/onchain/boing";
 import { hashTextMedia } from "@/lib/media/upload";
@@ -485,12 +487,31 @@ export async function createCollectionForUser(input: {
   };
 }
 
+export function isCollectionDeployReady(
+  collection: Pick<
+    Collection,
+    "deployStatus" | "contractAddress" | "id" | "chain" | "network"
+  >,
+): boolean {
+  if (collection.deployStatus !== "confirmed") return false;
+  const addr = collection.contractAddress?.trim();
+  if (!addr || addr.startsWith("pending:")) return false;
+  const network = resolveNetwork(collection.network, collection.chain);
+  if (network === "boing") {
+    // Reject FreshMint sha256 placeholders that were never replaced with the
+    // real nonce-derived Boing AccountId after wallet deploy.
+    if (isProvisionalBoingCollectionAddress(collection.id, addr)) return false;
+  }
+  return true;
+}
+
 export async function confirmCollectionDeploy(input: {
   collectionId: string;
   creatorId: string;
   txHash: string;
   contractAddress?: string | null;
   escrowAddress?: string | null;
+  creatorAddress?: string | null;
 }) {
   if (!input.txHash || input.txHash.length < 8) {
     return { ok: false as const, error: "invalid_tx" };
@@ -502,7 +523,7 @@ export async function confirmCollectionDeploy(input: {
     return { ok: false as const, error: "collection_forbidden" };
   }
 
-  const contractAddress =
+  let contractAddress =
     input.contractAddress?.trim() ||
     existing.contractAddress ||
     `pending:${input.collectionId}`;
@@ -510,6 +531,30 @@ export async function confirmCollectionDeploy(input: {
     input.escrowAddress?.trim() ||
     existing.escrowAddress ||
     null;
+
+  const network = resolveNetwork(existing.network, existing.chain);
+  if (network === "boing") {
+    const {
+      isProvisionalBoingCollectionAddress,
+      resolveBoingDeployContractAddress,
+    } = await import("@/lib/onchain/boing");
+    if (
+      isProvisionalBoingCollectionAddress(input.collectionId, contractAddress)
+    ) {
+      const creatorAddress =
+        input.creatorAddress?.trim() ||
+        engine.state.creators
+          .get(input.creatorId)
+          ?.wallets.find((w) => w.chain === "boing")?.address ||
+        "";
+      const resolved = await resolveBoingDeployContractAddress({
+        creatorAddress,
+        collectionId: input.collectionId,
+        fallbackAddress: contractAddress,
+      });
+      if (resolved) contractAddress = resolved;
+    }
+  }
 
   const next: Collection = {
     ...existing,
@@ -542,6 +587,158 @@ export async function confirmCollectionDeploy(input: {
   return { ok: true as const, collection: mapped };
 }
 
+/** Re-issue a deploy wallet intent for a collection that never reached confirmed. */
+export async function prepareCollectionDeployForUser(input: {
+  collectionId: string;
+  creatorId: string;
+  creatorAddress?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+  if (isCollectionDeployReady(collection)) {
+    return {
+      ok: true as const,
+      collection,
+      deployIntent: null,
+      alreadyDeployed: true as const,
+    };
+  }
+
+  const network = resolveNetwork(collection.network, collection.chain);
+  const chain = vmFromNetwork(network);
+  const creatorAddress =
+    input.creatorAddress?.trim() ||
+    engine.state.creators
+      .get(input.creatorId)
+      ?.wallets.find((w) => w.chain === chain)?.address ||
+    "";
+
+  const { buildCollectionDeployIntent } = await import("@/lib/onchain/collection");
+  const deployIntent = buildCollectionDeployIntent({
+    collectionId: collection.id,
+    title: collection.title,
+    creatorAddress,
+    network,
+    chain,
+  });
+
+  return {
+    ok: true as const,
+    collection: {
+      ...collection,
+      deployStatus: "pending_wallet" as const,
+      escrowAddress: deployIntent.escrowAddress,
+    },
+    deployIntent,
+    alreadyDeployed: false as const,
+  };
+}
+
+/**
+ * Heal false "not deployed" when the collection already exists on-chain
+ * (wallet succeeded but DB confirm never ran / stored a provisional address).
+ */
+export async function syncCollectionDeployFromChain(input: {
+  collectionId: string;
+  creatorId: string;
+  creatorAddress?: string | null;
+  contractAddress?: string | null;
+  txHash?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+  if (isCollectionDeployReady(collection)) {
+    return { ok: true as const, collection, synced: false as const };
+  }
+
+  const network = resolveNetwork(collection.network, collection.chain);
+  const chain = vmFromNetwork(network);
+  const creatorAddress =
+    input.creatorAddress?.trim() ||
+    engine.state.creators
+      .get(input.creatorId)
+      ?.wallets.find((w) => w.chain === chain)?.address ||
+    "";
+
+  let contractAddress = input.contractAddress?.trim() || null;
+  let txHash = input.txHash?.trim() || collection.deployTxHash || null;
+
+  if (network === "boing") {
+    const {
+      findBoingNftCollectionDeploy,
+      isBoingNativeAccountIdHex,
+      isProvisionalBoingCollectionAddress,
+      normalizeBoingAccountId,
+      resolveBoingDeployContractAddress,
+    } = await import("@/lib/onchain/boing");
+
+    if (
+      contractAddress &&
+      isBoingNativeAccountIdHex(contractAddress) &&
+      !isProvisionalBoingCollectionAddress(collection.id, contractAddress)
+    ) {
+      contractAddress = normalizeBoingAccountId(contractAddress);
+    } else {
+      contractAddress = null;
+    }
+
+    if (!contractAddress && creatorAddress) {
+      const found = await findBoingNftCollectionDeploy({
+        senderAddress: creatorAddress,
+        assetName: collection.title.trim().slice(0, 32),
+      });
+      if (found) {
+        contractAddress = found.contractAddress;
+        if (!txHash) {
+          txHash = `0x${createHash("sha256")
+            .update(
+              `boing-sync:${collection.id}:${found.contractAddress}:${found.blockHeight}`,
+            )
+            .digest("hex")}`;
+        }
+      } else {
+        const resolved = await resolveBoingDeployContractAddress({
+          creatorAddress,
+          collectionId: collection.id,
+          fallbackAddress: collection.contractAddress,
+        });
+        // Only accept nonce-1 guess when caller also supplies a tx hash
+        // (recent wallet confirm). Blind guesses risk linking the wrong deploy.
+        if (resolved && input.txHash) {
+          contractAddress = resolved;
+        }
+      }
+    }
+  } else if (!contractAddress) {
+    contractAddress = collection.contractAddress ?? null;
+  }
+
+  if (!contractAddress || !txHash) {
+    return { ok: false as const, error: "onchain_deploy_not_found" };
+  }
+
+  return confirmCollectionDeploy({
+    collectionId: input.collectionId,
+    creatorId: input.creatorId,
+    txHash,
+    contractAddress,
+    escrowAddress: collection.escrowAddress,
+    creatorAddress,
+  }).then((result) =>
+    result.ok
+      ? { ok: true as const, collection: result.collection, synced: true as const }
+      : result,
+  );
+}
+
 export async function prepareCollectionPublishMints(input: {
   collectionId: string;
   creatorId: string;
@@ -554,7 +751,7 @@ export async function prepareCollectionPublishMints(input: {
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
   }
-  if (collection.deployStatus !== "confirmed" || !collection.contractAddress) {
+  if (!isCollectionDeployReady(collection)) {
     return { ok: false as const, error: "collection_not_deployed" };
   }
 
@@ -588,7 +785,7 @@ export async function prepareCollectionPublishMints(input: {
   const batches = buildCollectionMintBatches({
     network,
     chain: collection.chain,
-    contractAddress: collection.contractAddress,
+    contractAddress: collection.contractAddress ?? "",
     creatorAddress: creator,
     escrowAddress: collection.escrowAddress || creator,
     items,
@@ -763,11 +960,27 @@ export async function reserveCollectionMedia(input: {
   return { ok: true as const, mediaBytes: updated.mediaBytes };
 }
 
-export async function listCollectionsForUser(creatorId: string) {
+export async function listCollectionsForUser(
+  creatorId: string,
+  opts?: {
+    network?: NetworkId | string | null;
+    /** When true, only collections with a confirmed real on-chain address. */
+    deployedOnly?: boolean;
+  },
+) {
   const engine = await getDiscoveryEngine();
-  return [...engine.state.collections.values()].filter(
-    (c) => c.creatorId === creatorId,
-  );
+  const networkFilter = opts?.network
+    ? resolveNetwork(opts.network)
+    : null;
+  return [...engine.state.collections.values()].filter((c) => {
+    if (c.creatorId !== creatorId) return false;
+    if (networkFilter) {
+      const cNet = resolveNetwork(c.network, c.chain);
+      if (cNet !== networkFilter) return false;
+    }
+    if (opts?.deployedOnly && !isCollectionDeployReady(c)) return false;
+    return true;
+  });
 }
 
 function attachListingToCollectionState(

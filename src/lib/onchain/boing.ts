@@ -100,6 +100,241 @@ export async function verifyBoingTx(txHash: string): Promise<boolean> {
   }
 }
 
+/** Provisional FreshMint placeholder — not a real on-chain Boing AccountId. */
+export function provisionalBoingCollectionAddress(collectionId: string): string {
+  return `0x${createHash("sha256")
+    .update(`boing-col:${collectionId}`)
+    .digest("hex")
+    .slice(0, 64)}`;
+}
+
+export function isProvisionalBoingCollectionAddress(
+  collectionId: string,
+  address: string | null | undefined,
+): boolean {
+  if (!address) return true;
+  if (address.startsWith("pending:")) return true;
+  if (!isBoingNativeAccountIdHex(address)) return true;
+  return (
+    normalizeBoingAccountId(address) ===
+    provisionalBoingCollectionAddress(collectionId)
+  );
+}
+
+/** Matches `boing_primitives::nonce_derived_contract_address` / boing-sdk. */
+export function predictNonceDerivedContractAddress(
+  senderHex: string,
+  deployTxNonce: bigint | number,
+): string {
+  const sender = normalizeBoingAccountId(senderHex);
+  if (!isBoingNativeAccountIdHex(sender)) {
+    throw new Error("boing_account_id_required");
+  }
+  const nonce =
+    typeof deployTxNonce === "bigint" ? deployTxNonce : BigInt(deployTxNonce);
+  if (nonce < BigInt(0) || nonce > BigInt("0xffffffffffffffff")) {
+    throw new Error("deployTxNonce must fit u64");
+  }
+  const senderBytes = Buffer.from(sender.slice(2), "hex");
+  const nonceLe = Buffer.alloc(8);
+  let n = nonce;
+  for (let i = 0; i < 8; i++) {
+    nonceLe[i] = Number(n & BigInt(0xff));
+    n >>= BigInt(8);
+  }
+  const preimage = Buffer.concat([senderBytes, nonceLe]);
+  return `0x${Buffer.from(blake3(preimage)).toString("hex")}`;
+}
+
+/** Normalize wallet / RPC result shapes into a 32-byte tx id hex when possible. */
+export function extractBoingTxHash(result: unknown): string | null {
+  if (typeof result === "string") {
+    const t = result.trim();
+    if (/^0x[0-9a-fA-F]{64}$/.test(t)) return t.toLowerCase();
+    // Node mempool acceptance is sometimes the literal "ok" — not a tx id.
+    if (t === "ok" || t === "0xok") return null;
+    if (t.length >= 8) return t;
+    return null;
+  }
+  if (!result || typeof result !== "object") return null;
+  const o = result as Record<string, unknown>;
+  for (const key of ["tx_id", "txId", "hash", "tx_hash", "txHash", "transactionHash"]) {
+    const v = o[key];
+    if (typeof v === "string" && v !== "ok" && v.length >= 8) {
+      return v.startsWith("0x") ? v : `0x${v}`;
+    }
+  }
+  if (typeof o.contractAddress === "string" || typeof o.contract_address === "string") {
+    // Some wallets return { contractAddress, tx_id } — hash extracted above when present.
+  }
+  return null;
+}
+
+export function extractBoingContractAddress(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "contractAddress",
+    "contract_address",
+    "contract",
+    "account_id",
+    "accountId",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string" && isBoingNativeAccountIdHex(v)) {
+      return normalizeBoingAccountId(v);
+    }
+  }
+  return null;
+}
+
+export async function getBoingAccount(accountId: string): Promise<{
+  balance: string;
+  nonce: number;
+  stake: string;
+} | null> {
+  try {
+    const id = normalizeBoingAccountId(accountId);
+    const acct = await boingRpc<{
+      balance?: string;
+      nonce?: number;
+      stake?: string;
+    }>("boing_getAccount", [id]);
+    return {
+      balance: acct.balance ?? "0",
+      nonce: Number(acct.nonce ?? 0),
+      stake: acct.stake ?? "0",
+    };
+  } catch {
+    return null;
+  }
+}
+
+type BoingBlockTx = {
+  nonce?: number;
+  sender?: string;
+  payload?: Record<string, unknown>;
+};
+
+/**
+ * Scan recent blocks for an NFT collection deploy by this sender (+ optional asset name).
+ * Uses nonce-derived address prediction — no need for full tx-id bincode.
+ */
+export async function findBoingNftCollectionDeploy(input: {
+  senderAddress: string;
+  assetName?: string | null;
+  lookbackBlocks?: number;
+}): Promise<{
+  contractAddress: string;
+  txNonce: number;
+  blockHeight: number;
+  assetName?: string;
+} | null> {
+  if (!isBoingNativeAccountIdHex(input.senderAddress)) return null;
+  const sender = normalizeBoingAccountId(input.senderAddress);
+  const wantName = input.assetName?.trim().slice(0, 32) || null;
+  const lookback = Math.min(Math.max(input.lookbackBlocks ?? 64, 8), 256);
+
+  let tip = 0;
+  try {
+    const height = await boingRpc<number>("boing_chainHeight", []);
+    tip = Number(height);
+  } catch {
+    return null;
+  }
+  if (!Number.isFinite(tip) || tip < 0) return null;
+
+  const from = Math.max(0, tip - lookback + 1);
+  for (let h = tip; h >= from; h--) {
+    let block: { transactions?: BoingBlockTx[] } | null = null;
+    try {
+      block = await boingRpc<{ transactions?: BoingBlockTx[] }>(
+        "boing_getBlockByHeight",
+        [h, false],
+      );
+    } catch {
+      continue;
+    }
+    const txs = block?.transactions ?? [];
+    for (let i = txs.length - 1; i >= 0; i--) {
+      const tx = txs[i]!;
+      const txSender =
+        typeof tx.sender === "string"
+          ? normalizeBoingAccountId(tx.sender)
+          : "";
+      if (txSender !== sender) continue;
+      const payload = tx.payload;
+      if (!payload || typeof payload !== "object") continue;
+      const meta =
+        (payload.ContractDeployWithPurposeAndMetadata as
+          | Record<string, unknown>
+          | undefined) ??
+        (payload.contract_deploy_meta as Record<string, unknown> | undefined);
+      const purpose =
+        (payload.ContractDeployWithPurpose as Record<string, unknown> | undefined) ??
+        (payload.contract_deploy_purpose as Record<string, unknown> | undefined);
+      const deploy = meta ?? purpose;
+      if (!deploy) continue;
+      const category = String(
+        deploy.purpose_category ?? deploy.purposeCategory ?? "",
+      ).toLowerCase();
+      if (category && category !== "nft") continue;
+      const assetName =
+        typeof deploy.asset_name === "string"
+          ? deploy.asset_name
+          : typeof deploy.assetName === "string"
+            ? deploy.assetName
+            : undefined;
+      if (wantName && assetName && assetName !== wantName) continue;
+      if (wantName && !assetName) continue;
+      const nonce = Number(tx.nonce);
+      if (!Number.isFinite(nonce) || nonce < 0) continue;
+      return {
+        contractAddress: predictNonceDerivedContractAddress(sender, nonce),
+        txNonce: nonce,
+        blockHeight: h,
+        assetName,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * After a successful wallet deploy, resolve the real contract AccountId.
+ * Prefers an explicit address from the wallet, then receipt-adjacent nonce prediction.
+ */
+export async function resolveBoingDeployContractAddress(input: {
+  creatorAddress: string;
+  walletResult?: unknown;
+  collectionId?: string;
+  fallbackAddress?: string | null;
+}): Promise<string | null> {
+  const fromWallet = extractBoingContractAddress(input.walletResult);
+  if (fromWallet) return fromWallet;
+
+  const fallback = input.fallbackAddress?.trim();
+  if (
+    fallback &&
+    isBoingNativeAccountIdHex(fallback) &&
+    !(
+      input.collectionId &&
+      isProvisionalBoingCollectionAddress(input.collectionId, fallback)
+    )
+  ) {
+    return normalizeBoingAccountId(fallback);
+  }
+
+  if (!isBoingNativeAccountIdHex(input.creatorAddress)) return null;
+  const creator = normalizeBoingAccountId(input.creatorAddress);
+  const acct = await getBoingAccount(creator);
+  if (acct && acct.nonce > 0) {
+    // Deploy consumed the prior nonce; current nonce is next unused.
+    return predictNonceDerivedContractAddress(creator, acct.nonce - 1);
+  }
+  return null;
+}
+
 export type BoingQaResult = "allow" | "reject" | "unsure";
 
 export async function preflightBoingNftDeployQa(input: {
@@ -183,9 +418,15 @@ export function buildBoingMintIntent(input: {
   metadataUri: string;
   listingId: string;
   title: string;
+  /** Per-collection AccountId when already deployed; falls back to market env. */
+  collectionAddress?: string | null;
 }): MintIntent & { walletTx: BoingWalletTx } {
   const tokenId = tokenIdWordForListing(input.listingId);
-  const collection = marketAddressFor("boing");
+  const fromInput =
+    input.collectionAddress && isBoingNativeAccountIdHex(input.collectionAddress)
+      ? normalizeBoingAccountId(input.collectionAddress)
+      : null;
+  const collection = fromInput || marketAddressFor("boing");
   const creatorIsBoing = isBoingNativeAccountIdHex(input.creatorAddress);
   const creator = creatorIsBoing
     ? normalizeBoingAccountId(input.creatorAddress)
@@ -200,6 +441,8 @@ export function buildBoingMintIntent(input: {
   const tx = collection
     ? {
         type: "contract_call",
+        // Boing Express expects `contract` (not EVM-style `to`).
+        contract: collection,
         to: collection,
         from: creator,
         calldata: creatorIsBoing
@@ -295,6 +538,7 @@ export function buildBoingPurchaseIntent(input: {
       method: "boing_sendTransaction",
       tx: {
         type: "contract_call",
+        contract: configured,
         to: configured,
         from: buyer,
         calldata: encodeBoingTransferNft(buyer, tokenId),

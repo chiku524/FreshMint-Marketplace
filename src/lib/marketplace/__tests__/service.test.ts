@@ -12,13 +12,17 @@ import {
   confirmCollectionMintBatch,
   confirmCryptoPurchase,
   confirmOnchainTx,
+  confirmCollectionDeploy,
   createCollectionForUser,
   createListingForUser,
   getDiscoveryEngine,
+  isCollectionDeployReady,
+  listCollectionsForUser,
   updateCollectionDrop,
   followArtist,
   listPendingNominations,
   nominateListingForUser,
+  prepareCollectionDeployForUser,
   prepareCollectionPublishMints,
   purchaseListing,
   quoteCryptoPurchase,
@@ -28,6 +32,7 @@ import {
   transitionListingStage,
   withdrawPurchaseToWallet,
 } from "@/lib/marketplace/service";
+import { provisionalBoingCollectionAddress } from "@/lib/onchain/boing";
 import { createShelf } from "@/lib/marketplace/editorial";
 import { splitSaleProceeds } from "@/lib/fees/platform";
 
@@ -608,6 +613,77 @@ describe("marketplace service (memory mode)", () => {
       txHash: "memosig1234567890abcdef",
     });
     expect(confirmed.ok).toBe(true);
+  });
+
+  it("filters mine collections by network and deploy readiness", async () => {
+    const boingCreator = `0x${"11".repeat(32)}`;
+    const pendingBoing = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Goon Squad",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(pendingBoing.ok).toBe(true);
+    if (!pendingBoing.ok) return;
+    expect(pendingBoing.collection.deployStatus).toBe("pending_wallet");
+    expect(
+      isCollectionDeployReady(pendingBoing.collection),
+    ).toBe(false);
+
+    const eth = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Eth Set",
+      network: "ethereum",
+      creatorAddress: "",
+    });
+    expect(eth.ok).toBe(true);
+    if (!eth.ok) return;
+
+    const onBoing = await listCollectionsForUser("artist-fresh", {
+      network: "boing",
+    });
+    expect(onBoing.every((c) => c.network === "boing")).toBe(true);
+    expect(onBoing.some((c) => c.id === pendingBoing.collection.id)).toBe(true);
+
+    const deployedBoing = await listCollectionsForUser("artist-fresh", {
+      network: "boing",
+      deployedOnly: true,
+    });
+    expect(
+      deployedBoing.some((c) => c.id === pendingBoing.collection.id),
+    ).toBe(false);
+
+    const real = `0x${"22".repeat(32)}`;
+    const confirmed = await confirmCollectionDeploy({
+      collectionId: pendingBoing.collection.id,
+      creatorId: "artist-fresh",
+      txHash: `0x${"cd".repeat(32)}`,
+      contractAddress: real,
+      creatorAddress: boingCreator,
+    });
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) return;
+    expect(confirmed.collection.contractAddress).toBe(real);
+    expect(isCollectionDeployReady(confirmed.collection)).toBe(true);
+
+    const provisional = provisionalBoingCollectionAddress(
+      pendingBoing.collection.id,
+    );
+    expect(
+      isCollectionDeployReady({
+        ...confirmed.collection,
+        contractAddress: provisional,
+      }),
+    ).toBe(false);
+
+    const prep = await prepareCollectionDeployForUser({
+      collectionId: pendingBoing.collection.id,
+      creatorId: "artist-fresh",
+      creatorAddress: boingCreator,
+    });
+    expect(prep.ok).toBe(true);
+    if (!prep.ok) return;
+    expect(prep.alreadyDeployed).toBe(true);
   });
 
   it("deploys a collection, mints at publish, and withdraws via transfer", async () => {

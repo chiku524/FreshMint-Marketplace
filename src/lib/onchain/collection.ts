@@ -3,6 +3,7 @@ import { resolveNetwork, vmFromNetwork, type NetworkId } from "@/lib/chains/regi
 import type { Chain } from "@/lib/discovery/types";
 import {
   buildBoingMintIntent,
+  provisionalBoingCollectionAddress,
   resolveBoingNftCollectionBytecode,
 } from "@/lib/onchain/boing";
 import {
@@ -103,16 +104,14 @@ export function buildCollectionDeployIntent(input: {
   if (chain === "boing") {
     const bytecode = resolveBoingNftCollectionBytecode();
     const escrow = escrowFor("boing", input.creatorAddress);
-    const simulated = `0x${createHash("sha256")
-      .update(`boing-col:${input.collectionId}`)
-      .digest("hex")
-      .slice(0, 64)}`;
+    // Placeholder until wallet confirm resolves the nonce-derived AccountId.
+    const provisional = provisionalBoingCollectionAddress(input.collectionId);
     if (!input.creatorAddress) {
       return {
         chain: "boing",
         network: "boing",
         status: "simulated",
-        contractAddress: simulated,
+        contractAddress: provisional,
         txHash: `0x${randomBytes(32).toString("hex")}`,
         escrowAddress: escrow,
       };
@@ -121,7 +120,7 @@ export function buildCollectionDeployIntent(input: {
       chain: "boing",
       network: "boing",
       status: "pending_wallet",
-      contractAddress: simulated,
+      contractAddress: provisional,
       txHash: "",
       escrowAddress: escrow,
       walletTx: {
@@ -229,6 +228,7 @@ export function buildCollectionMintBatches(input: {
         metadataUri: item.tokenUri,
         listingId: item.listingId,
         title: item.title ?? item.listingId,
+        collectionAddress: input.contractAddress,
       });
       batches.push({
         chain: "boing",

@@ -9,8 +9,12 @@ import {
   buildBoingMintIntent,
   buildBoingPurchaseIntent,
   encodeBoingTransferNft,
+  extractBoingTxHash,
   isBoingNativeAccountIdHex,
+  isProvisionalBoingCollectionAddress,
   normalizeBoingAccountId,
+  predictNonceDerivedContractAddress,
+  provisionalBoingCollectionAddress,
   resolveBoingNftCollectionBytecode,
   SELECTOR_TRANSFER_NFT,
 } from "@/lib/onchain/boing";
@@ -68,8 +72,35 @@ describe("boing purchase intent", () => {
     });
     expect(buy.status).toBe("pending_wallet");
     expect(buy.walletTx?.tx.type).toBe("contract_call");
+    expect(buy.walletTx?.tx.contract).toBe(collection);
     expect(buy.walletTx?.tx.to).toBe(collection);
     expect(String(buy.walletTx?.tx.calldata)).toMatch(/^0x/);
+  });
+});
+
+describe("boing deploy address helpers", () => {
+  it("matches boing-sdk nonce-derived golden vector", () => {
+    const sender = `0x${"01".repeat(32)}`;
+    expect(predictNonceDerivedContractAddress(sender, BigInt(0))).toBe(
+      "0x6d2179dfe190fd0ea25ea5136e65f6b04ff64a51d6476a01cc0078a0edb79602",
+    );
+  });
+
+  it("flags provisional FreshMint placeholders", () => {
+    const id = "col-goon-squad";
+    const provisional = provisionalBoingCollectionAddress(id);
+    expect(isProvisionalBoingCollectionAddress(id, provisional)).toBe(true);
+    expect(
+      isProvisionalBoingCollectionAddress(id, `0x${"22".repeat(32)}`),
+    ).toBe(false);
+  });
+
+  it("extracts tx ids from wallet result shapes", () => {
+    const hash = `0x${"ab".repeat(32)}`;
+    expect(extractBoingTxHash(hash)).toBe(hash);
+    expect(extractBoingTxHash({ tx_id: hash })).toBe(hash);
+    expect(extractBoingTxHash({ hash })).toBe(hash);
+    expect(extractBoingTxHash({ tx_hash: "ok" })).toBeNull();
   });
 });
 
@@ -117,11 +148,29 @@ describe("boing mint intent", () => {
     if (previous) process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION = previous;
     else delete process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION;
     expect(mint.walletTx.tx.type).toBe("contract_call");
+    expect(mint.walletTx.tx.contract).toBe(`0x${"22".repeat(32)}`);
     expect(mint.walletTx.tx.to).toBe(`0x${"22".repeat(32)}`);
     expect(typeof mint.walletTx.tx.calldata).toBe("string");
     expect(String(mint.walletTx.tx.calldata)).toMatch(
       new RegExp(`0x${"0".repeat(62)}${SELECTOR_TRANSFER_NFT.toString(16).padStart(2, "0")}`),
     );
+  });
+
+  it("prefers an explicit per-collection address over the market env", () => {
+    const previous = process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION;
+    process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION = `0x${"22".repeat(32)}`;
+    const perCollection = `0x${"33".repeat(32)}`;
+    const mint = buildBoingMintIntent({
+      creatorAddress: ACCOUNT,
+      metadataUri: "https://example.com/meta.json",
+      listingId: "listing-boing-3",
+      title: "Goon Squad Mint",
+      collectionAddress: perCollection,
+    });
+    if (previous) process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION = previous;
+    else delete process.env.NEXT_PUBLIC_BOING_NFT_COLLECTION;
+    expect(mint.walletTx.tx.contract).toBe(perCollection);
+    expect(mint.contractAddress).toBe(perCollection);
   });
 
   it("encodes reference transfer_nft as 96-byte calldata", () => {

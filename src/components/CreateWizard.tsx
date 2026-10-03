@@ -14,6 +14,7 @@ import {
 import {
   maybeSendWalletTx,
   requestBuyerAddress,
+  sendBoingWalletTxDetailed,
   sendEvmWalletTx,
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
@@ -25,6 +26,16 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+
+function collectionNetworkOf(c: CollectionOption): string {
+  return (c.network || c.chain || "").toLowerCase();
+}
+
+function isDeployReadyOption(c: CollectionOption): boolean {
+  if (c.deployStatus !== "confirmed") return false;
+  const addr = c.contractAddress?.trim();
+  return Boolean(addr && !addr.startsWith("pending:"));
+}
 
 type Intent = "drop" | "single" | "auction";
 type DropKind = "limited" | "open";
@@ -160,48 +171,209 @@ export function CreateWizard() {
 
 
   function loadMine() {
-    void fetch("/api/collections?mine=1", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { collections: [] }))
-      .then((data: { collections?: CollectionOption[] }) => {
-        setCollections(data.collections ?? []);
-      })
-      .catch(() => setCollections([]));
+    const base = new URLSearchParams({ mine: "1", network });
+    const deployedParams = new URLSearchParams({
+      mine: "1",
+      network,
+      deployed: "1",
+    });
+    void (async () => {
+      try {
+        const res = await fetch(`/api/collections?${base}`, {
+          credentials: "include",
+        });
+        const data = (await res.json()) as { collections?: CollectionOption[] };
+        const mine = data.collections ?? [];
+
+        // Heal false negatives: wallet deploy landed on-chain but DB never confirmed.
+        // Uses session-linked wallets on the server — no browser wallet prompt here.
+        const pending = mine.filter((c) => !isDeployReadyOption(c));
+        if (pending.length) {
+          await Promise.all(
+            pending.map((c) =>
+              fetch(`/api/collections/${c.id}/deploy`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "sync" }),
+              }).catch(() => null),
+            ),
+          );
+        }
+
+        const readyRes = await fetch(`/api/collections?${deployedParams}`, {
+          credentials: "include",
+        });
+        const readyData = (await readyRes.json()) as {
+          collections?: CollectionOption[];
+        };
+        setCollections(readyData.collections ?? []);
+      } catch {
+        setCollections([]);
+      }
+    })();
   }
 
   useEffect(() => {
     loadMine();
     window.addEventListener("fm-collections-changed", loadMine);
     return () => window.removeEventListener("fm-collections-changed", loadMine);
-  }, []);
+    // Reload when mint network changes so the dropdown stays network-scoped.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMine closes over network
+  }, [network]);
+
+  useEffect(() => {
+    if (!collectionId) return;
+    const selectedCollection = collections.find((c) => c.id === collectionId);
+    if (!selectedCollection) {
+      // Selection belongs to another network (or is undeployed) — clear it.
+      setCollectionId("");
+    }
+  }, [collections, collectionId]);
+
+  const networkCollections = useMemo(
+    () =>
+      collections.filter(
+        (c) =>
+          collectionNetworkOf(c) === network ||
+          (network !== "solana" &&
+            network !== "boing" &&
+            collectionNetworkOf(c) === "evm" &&
+            !c.network),
+      ),
+    [collections, network],
+  );
 
   function goBack() {
     setError(null);
     setStepIndex((i) => Math.max(0, i - 1));
   }
 
+  async function runDeployWalletAndConfirm(input: {
+    id: string;
+    deployIntent: {
+      status: string;
+      contractAddress: string;
+      escrowAddress?: string;
+      walletTx?: unknown;
+    };
+    creatorAddress?: string | null;
+  }): Promise<void> {
+    const { id, deployIntent, creatorAddress } = input;
+    if (!deployIntent.walletTx) return;
+    setDeployNote("Confirm collection deploy in your wallet (you pay gas)…");
+    const wt = deployIntent.walletTx as EvmWalletTx & { chain: string };
+    let txHash: string | null = null;
+    let contractAddress = deployIntent.contractAddress;
+    if (wt.chain === "evm") {
+      txHash = await sendEvmWalletTx(wt);
+    } else if (wt.chain === "boing") {
+      const sent = await sendBoingWalletTxDetailed(
+        deployIntent.walletTx as Parameters<typeof sendBoingWalletTxDetailed>[0],
+      );
+      txHash = sent.txHash;
+      if (sent.contractAddress) contractAddress = sent.contractAddress;
+    } else {
+      txHash = await maybeSendWalletTx({
+        walletTx: deployIntent.walletTx,
+        listingId: id,
+        action: "mint",
+      });
+    }
+    if (!txHash) {
+      throw new Error(
+        "Wallet required to deploy the collection contract on your mint network",
+      );
+    }
+    const confirm = await fetch(`/api/collections/${id}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        txHash,
+        contractAddress,
+        escrowAddress: deployIntent.escrowAddress,
+        creatorAddress: creatorAddress || undefined,
+      }),
+    });
+    const confirmData = await confirm.json();
+    if (!confirm.ok) {
+      throw new Error(confirmData.error || "deploy_confirm_failed");
+    }
+    setDeployNote(`Collection deployed · ${txHash.slice(0, 10)}…`);
+  }
+
   async function ensureCollection(): Promise<string> {
+    const walletChain =
+      network === "solana" ? "solana" : network === "boing" ? "boing" : "evm";
+
     if (collectionId) {
       const existing = collections.find((c) => c.id === collectionId);
-      if (
-        existing?.deployStatus === "confirmed" &&
-        existing.contractAddress
-      ) {
+      if (existing && isDeployReadyOption(existing)) {
         return collectionId;
       }
-      // Existing collection still needs deploy confirmation.
-      if (existing && existing.deployStatus !== "confirmed") {
+
+      const creatorAddress = await requestBuyerAddress(walletChain);
+
+      // Heal: on-chain deploy succeeded but DB still says pending / provisional.
+      const syncRes = await fetch(`/api/collections/${collectionId}/deploy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sync",
+          creatorAddress: creatorAddress || undefined,
+        }),
+      });
+      const syncData = await syncRes.json();
+      if (syncRes.ok && syncData.collection) {
+        setDeployNote("Linked existing on-chain collection deploy.");
+        window.dispatchEvent(new Event("fm-collections-changed"));
+        loadMine();
+        return collectionId;
+      }
+
+      // Resume wallet deploy when nothing on-chain was found to sync.
+      const prepRes = await fetch(`/api/collections/${collectionId}/deploy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "prepare",
+          creatorAddress: creatorAddress || undefined,
+        }),
+      });
+      const prepData = await prepRes.json();
+      if (prepRes.status === 401) throw new Error("sign_in");
+      if (!prepRes.ok) {
         throw new Error(
-          "This collection is not deployed on-chain yet — create a new one or finish deploy",
+          prepData.error === "onchain_deploy_not_found"
+            ? "Could not find this collection on-chain — try creating a new one on the selected network"
+            : prepData.error || "deploy_prepare_failed",
         );
       }
-      return collectionId;
+      if (prepData.alreadyDeployed) {
+        loadMine();
+        return collectionId;
+      }
+      if (prepData.deployIntent?.walletTx) {
+        await runDeployWalletAndConfirm({
+          id: collectionId,
+          deployIntent: prepData.deployIntent,
+          creatorAddress,
+        });
+        window.dispatchEvent(new Event("fm-collections-changed"));
+        loadMine();
+        return collectionId;
+      }
+      throw new Error(
+        "This collection is not deployed on-chain yet — create a new one or finish deploy",
+      );
     }
     const title = newTitle.trim();
     if (!title) throw new Error("Choose an existing collection or name a new one");
 
-    const creatorAddress = await requestBuyerAddress(
-      network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
-    );
+    const creatorAddress = await requestBuyerAddress(walletChain);
 
     const res = await fetch("/api/collections", {
       method: "POST",
@@ -232,38 +404,11 @@ export function CreateWizard() {
       | undefined;
 
     if (deployIntent?.walletTx) {
-      setDeployNote("Confirm collection deploy in your wallet (you pay gas)…");
-      const wt = deployIntent.walletTx as EvmWalletTx & { chain: string };
-      let txHash: string | null = null;
-      if (wt.chain === "evm") {
-        txHash = await sendEvmWalletTx(wt);
-      } else {
-        txHash = await maybeSendWalletTx({
-          walletTx: deployIntent.walletTx,
-          listingId: id,
-          action: "mint",
-        });
-      }
-      if (!txHash) {
-        throw new Error(
-          "Wallet required to deploy the collection contract on your mint network",
-        );
-      }
-      const confirm = await fetch(`/api/collections/${id}/deploy`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          txHash,
-          contractAddress: deployIntent.contractAddress,
-          escrowAddress: deployIntent.escrowAddress,
-        }),
+      await runDeployWalletAndConfirm({
+        id,
+        deployIntent,
+        creatorAddress,
       });
-      const confirmData = await confirm.json();
-      if (!confirm.ok) {
-        throw new Error(confirmData.error || "deploy_confirm_failed");
-      }
-      setDeployNote(`Collection deployed · ${txHash.slice(0, 10)}…`);
     } else if (data.collection?.deployStatus === "confirmed") {
       setDeployNote("Collection contract ready (simulated or already deployed).");
     }
@@ -836,13 +981,28 @@ export function CreateWizard() {
                 <select
                   value={collectionId}
                   onChange={(e) => {
-                    setCollectionId(e.target.value);
-                    if (e.target.value) setNewTitle("");
+                    const id = e.target.value;
+                    setCollectionId(id);
+                    if (id) {
+                      setNewTitle("");
+                      const chosen = networkCollections.find((c) => c.id === id);
+                      const net = chosen ? collectionNetworkOf(chosen) : "";
+                      if (
+                        net === "ethereum" ||
+                        net === "base" ||
+                        net === "arbitrum" ||
+                        net === "optimism" ||
+                        net === "solana" ||
+                        net === "boing"
+                      ) {
+                        setNetwork(net);
+                      }
+                    }
                   }}
                   style={fieldStyle}
                 >
                   <option value="">Create one below…</option>
-                  {collections.map((c) => (
+                  {networkCollections.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>
@@ -867,7 +1027,10 @@ export function CreateWizard() {
               Mint network
               <select
                 value={network}
-                onChange={(e) => setNetwork(e.target.value)}
+                onChange={(e) => {
+                  setNetwork(e.target.value);
+                  setCollectionId("");
+                }}
                 style={fieldStyle}
               >
                 <option value="ethereum">Ethereum (Sepolia)</option>
@@ -878,6 +1041,11 @@ export function CreateWizard() {
                 <option value="boing">Boing Testnet</option>
               </select>
             </label>
+            <p className="create-wizard__lead" style={{ marginTop: "0.75rem" }}>
+              Existing collections list only sets you own on{" "}
+              <strong>{network}</strong> that are already deployed on-chain.
+              Create a new title below to deploy a fresh contract.
+            </p>
           </>
         ) : null}
 

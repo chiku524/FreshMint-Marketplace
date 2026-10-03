@@ -22,8 +22,17 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+    const networkParam = req.nextUrl.searchParams.get("network");
+    const network =
+      networkParam && isNetworkId(networkParam) ? networkParam : null;
+    const deployedOnly =
+      req.nextUrl.searchParams.get("deployed") === "1" ||
+      req.nextUrl.searchParams.get("deployedOnly") === "1";
     return NextResponse.json({
-      collections: await listCollectionsForUser(user.id),
+      collections: await listCollectionsForUser(user.id, {
+        network,
+        deployedOnly,
+      }),
     });
   }
 
