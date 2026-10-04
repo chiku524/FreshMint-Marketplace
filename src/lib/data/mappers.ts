@@ -124,6 +124,7 @@ export function toCollection(c: DbCollection): Collection {
     instagramUrl?: string | null;
     packageSellEnabled?: boolean;
     packagePriceUsd?: number | null;
+    nftTemplateVersion?: string | null;
   };
   return {
     id: c.id,
@@ -150,6 +151,7 @@ export function toCollection(c: DbCollection): Collection {
     contractAddress: c.contractAddress ?? null,
     deployTxHash: c.deployTxHash ?? null,
     deployStatus: c.deployStatus ?? "none",
+    nftTemplateVersion: row.nftTemplateVersion ?? "1",
     escrowAddress: c.escrowAddress ?? null,
     packageSellEnabled: Boolean(row.packageSellEnabled),
     packagePriceUsd: row.packagePriceUsd ?? null,

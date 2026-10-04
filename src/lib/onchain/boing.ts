@@ -3,6 +3,7 @@ import { blake3 } from "@noble/hashes/blake3";
 import { marketAddressFor, rpcUrlFor } from "@/lib/chains/registry";
 import type { MintIntent } from "./evm";
 import { DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX } from "./boing-artifacts/defaultReferenceNftCollectionTemplateBytecodeHex";
+import { DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX } from "./boing-artifacts/defaultReferenceNftCollectionTemplateV2BytecodeHex";
 
 export const BOING_TESTNET_CHAIN_ID = 6913;
 export const BOING_TESTNET_CHAIN_ID_HEX = "0x1b01";
@@ -10,7 +11,19 @@ export const BOING_TESTNET_CHAIN_ID_HEX = "0x1b01";
 /** Official pinned NFT collection template (`boing-execution` / `boing-sdk`). */
 export const REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID =
   "boing.reference_nft_collection.v0";
-export const REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION = "1";
+/** Legacy single-token mint template (no `mint_batch`). */
+export const REFERENCE_NFT_COLLECTION_TEMPLATE_V1 = "1";
+/** Template with selector `0x06` `mint_batch` (up to 50 tokens / tx). */
+export const REFERENCE_NFT_COLLECTION_TEMPLATE_V2 = "2";
+/**
+ * Preferred deploy template version when v2 bytecode is available; otherwise `"1"`.
+ * Existing on-chain v1 collections never gain `0x06` — use per-collection `nftTemplateVersion`.
+ */
+export const REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION =
+  REFERENCE_NFT_COLLECTION_TEMPLATE_V1;
+
+/** Max tokens per `mint_batch` contract_call (protocol / Express target). */
+export const BOING_MINT_BATCH_SIZE = 50;
 
 const QA_PLACEHOLDER_DESCRIPTION_HASH = `0x${"00".repeat(32)}`;
 
@@ -18,6 +31,8 @@ const QA_PLACEHOLDER_DESCRIPTION_HASH = `0x${"00".repeat(32)}`;
 export const SELECTOR_OWNER_OF = 0x03;
 export const SELECTOR_TRANSFER_NFT = 0x04;
 export const SELECTOR_SET_METADATA_HASH = 0x05;
+/** Template v2: atomic multi-token mint + metadata. */
+export const SELECTOR_MINT_BATCH = 0x06;
 
 /**
  * XOR mask for owner slot — mirrors `REF_NFT_OWNER_STORAGE_XOR` in
@@ -100,11 +115,90 @@ export function ensure0xHex(hex: string): `0x${string}` {
   return (t.startsWith("0x") || t.startsWith("0X") ? t : `0x${t}`) as `0x${string}`;
 }
 
-/** Official template, or `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX` override. */
-export function resolveBoingNftCollectionBytecode(): `0x${string}` {
+export type BoingNftTemplateVersion =
+  | typeof REFERENCE_NFT_COLLECTION_TEMPLATE_V1
+  | typeof REFERENCE_NFT_COLLECTION_TEMPLATE_V2;
+
+export function normalizeBoingNftTemplateVersion(
+  value: string | null | undefined,
+): BoingNftTemplateVersion {
+  return value?.trim() === REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+    ? REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+    : REFERENCE_NFT_COLLECTION_TEMPLATE_V1;
+}
+
+/** True when collection was deployed with template v2 (`mint_batch`). */
+export function supportsBoingMintBatch(
+  templateVersion: string | null | undefined,
+): boolean {
+  return (
+    normalizeBoingNftTemplateVersion(templateVersion) ===
+    REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+  );
+}
+
+/**
+ * v2 bytecode when pinned or set via
+ * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX`, or when
+ * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION=2` + the shared override hex.
+ */
+export function resolveBoingNftCollectionV2Bytecode(): `0x${string}` | null {
+  const v2Env =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX?.trim();
+  if (v2Env) return ensure0xHex(v2Env);
+  const versionOverride =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION?.trim();
+  const sharedOverride =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX?.trim();
+  if (versionOverride === REFERENCE_NFT_COLLECTION_TEMPLATE_V2 && sharedOverride) {
+    return ensure0xHex(sharedOverride);
+  }
+  if (DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX) {
+    return DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX;
+  }
+  return null;
+}
+
+export function isBoingNftTemplateV2DeployAvailable(): boolean {
+  const hex = resolveBoingNftCollectionV2Bytecode();
+  return Boolean(hex && hex.length > 10);
+}
+
+/** Template version used for **new** collection deploys. */
+export function resolveBoingNftDeployTemplateVersion(): BoingNftTemplateVersion {
+  if (isBoingNftTemplateV2DeployAvailable()) {
+    return REFERENCE_NFT_COLLECTION_TEMPLATE_V2;
+  }
+  return REFERENCE_NFT_COLLECTION_TEMPLATE_V1;
+}
+
+/** Official template for the given version (v1 always available). */
+export function resolveBoingNftCollectionBytecodeForVersion(
+  version: string | null | undefined,
+): `0x${string}` {
+  if (supportsBoingMintBatch(version)) {
+    const v2 = resolveBoingNftCollectionV2Bytecode();
+    if (!v2) throw new Error("boing_nft_template_v2_bytecode_missing");
+    return v2;
+  }
+  // v1 heal / fallback — keep the historical shared override.
   const override = process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX;
-  if (override?.trim()) return ensure0xHex(override);
+  const versionEnv =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION?.trim();
+  if (
+    override?.trim() &&
+    versionEnv !== REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+  ) {
+    return ensure0xHex(override);
+  }
   return DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX;
+}
+
+/** Bytecode for new deploys: v2 when available, otherwise pinned v1. */
+export function resolveBoingNftCollectionBytecode(): `0x${string}` {
+  return resolveBoingNftCollectionBytecodeForVersion(
+    resolveBoingNftDeployTemplateVersion(),
+  );
 }
 
 export interface BoingWalletTx {
@@ -415,12 +509,94 @@ export async function probeBoingNetwork(): Promise<{
   }
 }
 
-export async function verifyBoingTx(txHash: string): Promise<boolean> {
+/** Mempool `"ok"` / FreshMint pending markers — not receipt-fetchable tx ids. */
+export function isBoingMempoolPlaceholderTxId(
+  txHash: string | null | undefined,
+): boolean {
+  const t = (txHash ?? "").trim().toLowerCase();
+  if (!t) return true;
+  if (t === "ok" || t === "0xok" || t === "accepted" || t === "success") {
+    return true;
+  }
+  if (t.startsWith("pending:") || t.startsWith("pending:boing-accepted:")) {
+    return true;
+  }
+  return false;
+}
+
+/** True when `txHash` looks like a 32-byte Boing tx id suitable for receipt poll. */
+export function isBoingReceiptTxId(txHash: string | null | undefined): boolean {
+  if (!txHash || isBoingMempoolPlaceholderTxId(txHash)) return false;
+  return /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
+}
+
+export function isBoingReceiptSuccessful(receipt: unknown): boolean {
+  if (receipt == null) return false;
+  if (typeof receipt === "boolean") return receipt;
+  if (typeof receipt !== "object") return true;
+  const o = receipt as Record<string, unknown>;
+  if ("success" in o && o.success === false) return false;
+  if ("ok" in o && o.ok === false) return false;
+  const status = o.status ?? o.result ?? o.outcome;
+  if (typeof status === "string") {
+    const t = status.trim().toLowerCase();
+    if (
+      t === "revert" ||
+      t === "reverted" ||
+      t === "failed" ||
+      t === "failure" ||
+      t === "error"
+    ) {
+      return false;
+    }
+  }
+  if (typeof status === "number" && status === 0) return false;
+  return true;
+}
+
+export async function getBoingTransactionReceipt(
+  txId: string,
+): Promise<unknown | null> {
+  if (!isBoingReceiptTxId(txId)) return null;
   try {
-    const receipt = await boingRpc<unknown>("boing_getTransactionReceipt", [
-      txHash,
-    ]);
-    return receipt != null;
+    return await boingRpc<unknown>("boing_getTransactionReceipt", [txId]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Poll `boing_getTransactionReceipt(tx_id)` until present/success or timeout.
+ * Does **not** treat mempool `"ok"` as a tx id.
+ */
+export async function waitForBoingTransactionReceipt(
+  txId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<{ ok: true; receipt: unknown } | { ok: false; error: string }> {
+  if (!isBoingReceiptTxId(txId)) {
+    return { ok: false, error: "boing_tx_id_not_receipt_fetchable" };
+  }
+  const timeoutMs = opts?.timeoutMs ?? 90_000;
+  const intervalMs = opts?.intervalMs ?? 1_500;
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const receipt = await getBoingTransactionReceipt(txId);
+    if (receipt != null) {
+      if (!isBoingReceiptSuccessful(receipt)) {
+        return { ok: false, error: "boing_tx_reverted" };
+      }
+      return { ok: true, receipt };
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { ok: false, error: "boing_receipt_timeout" };
+}
+
+export async function verifyBoingTx(txHash: string): Promise<boolean> {
+  if (isBoingMempoolPlaceholderTxId(txHash)) return false;
+  try {
+    const receipt = await getBoingTransactionReceipt(txHash);
+    return receipt != null && isBoingReceiptSuccessful(receipt);
   } catch {
     return false;
   }
@@ -773,6 +949,92 @@ export function encodeBoingSetMetadataHash(
   return `0x${selectorWord(SELECTOR_SET_METADATA_HASH)}${tokenIdHex32.replace(/^0x/, "")}${metadataHashHex32.replace(/^0x/, "")}`;
 }
 
+function u64WordBe(n: number): string {
+  if (!Number.isInteger(n) || n < 1 || n > 0xffff_ffff) {
+    throw new Error("boing_mint_batch_n_invalid");
+  }
+  const out = Buffer.alloc(32);
+  let v = BigInt(n);
+  for (let i = 31; i >= 24; i--) {
+    out[i] = Number(v & BigInt(0xff));
+    v >>= BigInt(8);
+  }
+  return out.toString("hex");
+}
+
+/**
+ * Template v2 `mint_batch(to, tokenIds[], metadataHashes[])` calldata bytes.
+ * Layout: selector word + `to` + `n` + token id words + metadata hash words.
+ * Mirrors upcoming `boing-sdk` `encodeReferenceMintBatchCalldata`.
+ */
+export function encodeReferenceMintBatchCalldata(
+  toHexAccount32: string,
+  tokenIds: string[],
+  metadataHashes: string[],
+): Uint8Array {
+  const n = tokenIds.length;
+  if (n < 1 || n > BOING_MINT_BATCH_SIZE) {
+    throw new Error("boing_mint_batch_size");
+  }
+  if (metadataHashes.length !== n) {
+    throw new Error("boing_mint_batch_length_mismatch");
+  }
+  const hex = encodeReferenceMintBatchCalldataHex(
+    toHexAccount32,
+    tokenIds,
+    metadataHashes,
+  );
+  return Buffer.from(hex.slice(2), "hex");
+}
+
+/** Hex form of {@link encodeReferenceMintBatchCalldata} (`0x` + 96+64n bytes). */
+export function encodeReferenceMintBatchCalldataHex(
+  toHexAccount32: string,
+  tokenIds: string[],
+  metadataHashes: string[],
+): `0x${string}` {
+  const n = tokenIds.length;
+  if (n < 1 || n > BOING_MINT_BATCH_SIZE) {
+    throw new Error("boing_mint_batch_size");
+  }
+  if (metadataHashes.length !== n) {
+    throw new Error("boing_mint_batch_length_mismatch");
+  }
+  let body = `${selectorWord(SELECTOR_MINT_BATCH)}${accountWord(toHexAccount32)}${u64WordBe(n)}`;
+  for (const id of tokenIds) {
+    const word = normalizeBoingTokenIdWord(id);
+    if (!word) throw new Error("boing_token_id_invalid");
+    body += word.slice(2);
+  }
+  for (const hash of metadataHashes) {
+    const word = normalizeBoingTokenIdWord(hash);
+    if (!word) throw new Error("boing_metadata_hash_invalid");
+    body += word.slice(2);
+  }
+  return `0x${body}`;
+}
+
+/** @deprecated Prefer SDK-aligned {@link encodeReferenceMintBatchCalldataHex}. */
+export function encodeBoingMintBatch(
+  toAccount: string,
+  tokenIds: string[],
+  metadataHashes: string[],
+): `0x${string}` {
+  return encodeReferenceMintBatchCalldataHex(
+    toAccount,
+    tokenIds,
+    metadataHashes,
+  );
+}
+
+export function boingTokenIdForListing(listingId: string): string {
+  return tokenIdWordForListing(listingId);
+}
+
+export function boingMetadataHashForUri(uri: string): string {
+  return metadataHashWord(uri);
+}
+
 function descriptionHashFromUri(uri: string): `0x${string}` {
   return `0x${metadataHashWord(uri)}`;
 }
@@ -840,6 +1102,73 @@ export function buildBoingMintIntent(input: {
       chainId: BOING_TESTNET_CHAIN_ID,
       method: "boing_sendTransaction",
       tx,
+    },
+  };
+}
+
+/**
+ * One `boing_sendTransaction` `contract_call` for up to {@link BOING_MINT_BATCH_SIZE}
+ * tokens via template v2 `mint_batch` (selector `0x06`).
+ */
+export function buildBoingBatchMintIntent(input: {
+  creatorAddress: string;
+  collectionAddress: string;
+  items: { listingId: string; tokenUri: string; title?: string }[];
+  collectionTitle?: string;
+}): {
+  status: "pending_wallet" | "simulated";
+  contractAddress: string;
+  listingIds: string[];
+  provisionalTokenIds: string[];
+  txHash: string;
+  walletTx: BoingWalletTx;
+} {
+  if (!input.items.length || input.items.length > BOING_MINT_BATCH_SIZE) {
+    throw new Error("boing_mint_batch_size");
+  }
+  if (!isBoingNativeAccountIdHex(input.collectionAddress)) {
+    throw new Error("boing_collection_required");
+  }
+  if (!isBoingNativeAccountIdHex(input.creatorAddress)) {
+    throw new Error("boing_account_id_required");
+  }
+  const collection = normalizeBoingAccountId(input.collectionAddress);
+  const creator = normalizeBoingAccountId(input.creatorAddress);
+  const listingIds = input.items.map((i) => i.listingId);
+  const provisionalTokenIds = listingIds.map((id) => tokenIdWordForListing(id));
+  const metadataHashes = input.items.map((i) =>
+    metadataHashWord(i.tokenUri),
+  );
+  const assetName =
+    (input.collectionTitle ?? input.items[0]?.title ?? "FreshMint")
+      .trim()
+      .slice(0, 32) || "FreshMint";
+  const calldata = encodeReferenceMintBatchCalldataHex(
+    creator,
+    provisionalTokenIds,
+    metadataHashes,
+  );
+  return {
+    status: "pending_wallet",
+    contractAddress: collection,
+    listingIds,
+    provisionalTokenIds,
+    txHash: "",
+    walletTx: {
+      chain: "boing",
+      network: "boing",
+      chainId: BOING_TESTNET_CHAIN_ID,
+      method: "boing_sendTransaction",
+      tx: {
+        type: "contract_call",
+        contract: collection,
+        to: collection,
+        from: creator,
+        calldata,
+        purpose_category: "nft",
+        asset_name: assetName,
+        asset_symbol: "FMINT",
+      },
     },
   };
 }

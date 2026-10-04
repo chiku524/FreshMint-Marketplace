@@ -3,7 +3,9 @@
 import {
   maybeSendWalletTx,
   requestBuyerAddress,
+  sendBoingMintWalletTx,
   sendEvmWalletTx,
+  type BoingWalletTx,
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
@@ -116,6 +118,18 @@ export function CollectionPublishPanel({
           const wt = batch.walletTx as EvmWalletTx & { chain: string };
           if (wt.chain === "evm") {
             txHash = await sendEvmWalletTx(wt);
+          } else if (wt.chain === "boing") {
+            try {
+              txHash = await sendBoingMintWalletTx(wt as BoingWalletTx);
+            } catch (err) {
+              const code = err instanceof Error ? err.message : "";
+              if (code === "boing_tx_id_required") {
+                throw new Error(
+                  "Boing wallet did not return a transaction id (mempool ok is not a mint receipt). Wait a moment and retry this batch.",
+                );
+              }
+              throw err;
+            }
           } else {
             txHash =
               (await maybeSendWalletTx({

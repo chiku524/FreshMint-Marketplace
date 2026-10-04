@@ -2,9 +2,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { resolveNetwork, vmFromNetwork, type NetworkId } from "@/lib/chains/registry";
 import type { Chain } from "@/lib/discovery/types";
 import {
+  BOING_MINT_BATCH_SIZE,
+  buildBoingBatchMintIntent,
   buildBoingMintIntent,
   provisionalBoingCollectionAddress,
   resolveBoingNftCollectionBytecode,
+  resolveBoingNftDeployTemplateVersion,
+  supportsBoingMintBatch,
 } from "@/lib/onchain/boing";
 import {
   buildEvmBatchMintIntent,
@@ -12,14 +16,13 @@ import {
   buildEvmTransferIntent,
   EVM_MINT_BATCH_SIZE,
   type BatchMintIntent,
-  type CollectionDeployIntent,
   type WalletTxRequest,
 } from "@/lib/onchain/evm";
 import { buildSolanaMintIntent } from "@/lib/onchain/solana";
 import { isAddress } from "viem";
 import { platformFeeRecipients } from "@/lib/fees/platform";
 
-export { EVM_MINT_BATCH_SIZE };
+export { EVM_MINT_BATCH_SIZE, BOING_MINT_BATCH_SIZE };
 
 export type AnyWalletTx =
   | WalletTxRequest
@@ -45,6 +48,8 @@ export type CrossChainDeployIntent = {
   contractAddress: string;
   txHash: string;
   escrowAddress: string;
+  /** Boing reference NFT template version used for this deploy. */
+  nftTemplateVersion?: string;
   walletTx?: AnyWalletTx;
 };
 
@@ -102,6 +107,7 @@ export function buildCollectionDeployIntent(input: {
   }
 
   if (chain === "boing") {
+    const nftTemplateVersion = resolveBoingNftDeployTemplateVersion();
     const bytecode = resolveBoingNftCollectionBytecode();
     const escrow = escrowFor("boing", input.creatorAddress);
     // Placeholder until wallet confirm resolves the nonce-derived AccountId.
@@ -114,6 +120,7 @@ export function buildCollectionDeployIntent(input: {
         contractAddress: provisional,
         txHash: `0x${randomBytes(32).toString("hex")}`,
         escrowAddress: escrow,
+        nftTemplateVersion,
       };
     }
     return {
@@ -123,6 +130,7 @@ export function buildCollectionDeployIntent(input: {
       contractAddress: provisional,
       txHash: "",
       escrowAddress: escrow,
+      nftTemplateVersion,
       walletTx: {
         chain: "boing",
         network: "boing",
@@ -187,6 +195,12 @@ export function buildCollectionMintBatches(input: {
   escrowAddress: string;
   items: { listingId: string; tokenUri: string; title?: string }[];
   startingTokenId?: number;
+  /**
+   * Boing reference NFT template version for this collection.
+   * `"1"` (default) → one wallet tx per piece; `"2"` → `mint_batch` chunks of ≤50.
+   */
+  nftTemplateVersion?: string | null;
+  collectionTitle?: string;
 }): CrossChainMintBatch[] {
   const network = resolveNetwork(input.network, input.chain);
   const chain = vmFromNetwork(network);
@@ -220,7 +234,31 @@ export function buildCollectionMintBatches(input: {
     return batches;
   }
 
-  // Solana / Boing: one wallet tx per piece (platform still tracks batches for UX).
+  if (chain === "boing" && supportsBoingMintBatch(input.nftTemplateVersion)) {
+    for (let i = 0; i < input.items.length; i += BOING_MINT_BATCH_SIZE) {
+      const slice = input.items.slice(i, i + BOING_MINT_BATCH_SIZE);
+      const mint = buildBoingBatchMintIntent({
+        creatorAddress: input.creatorAddress,
+        collectionAddress: input.contractAddress,
+        items: slice,
+        collectionTitle: input.collectionTitle,
+      });
+      batches.push({
+        chain: "boing",
+        network: "boing",
+        status: mint.status === "pending_wallet" ? "pending_wallet" : "simulated",
+        contractAddress: mint.contractAddress,
+        escrowAddress: input.escrowAddress,
+        listingIds: mint.listingIds,
+        provisionalTokenIds: mint.provisionalTokenIds,
+        txHash: mint.txHash,
+        walletTx: mint.walletTx,
+      });
+    }
+    return batches;
+  }
+
+  // Solana / Boing v1: one wallet tx per piece (platform still tracks batches for UX).
   for (const item of input.items) {
     if (chain === "boing") {
       const mint = buildBoingMintIntent({

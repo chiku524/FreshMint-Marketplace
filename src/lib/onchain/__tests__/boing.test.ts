@@ -306,3 +306,54 @@ describe("boing mint intent", () => {
     expect(data.endsWith(tokenId)).toBe(true);
   });
 });
+
+describe("boing mint_batch v2 encoding", () => {
+  it("encodes selector 0x06 and 96+64n bytes", async () => {
+    const {
+      encodeReferenceMintBatchCalldataHex,
+      SELECTOR_MINT_BATCH,
+      BOING_MINT_BATCH_SIZE,
+    } = await import("@/lib/onchain/boing");
+    const to = ACCOUNT;
+    const ids = [`0x${"aa".repeat(32)}`, `0x${"bb".repeat(32)}`];
+    const hashes = [`0x${"11".repeat(32)}`, `0x${"22".repeat(32)}`];
+    const hex = encodeReferenceMintBatchCalldataHex(to, ids, hashes);
+    const bytes = (hex.length - 2) / 2;
+    expect(bytes).toBe(96 + 64 * 2);
+    expect(hex).toMatch(
+      new RegExp(
+        `^0x${"0".repeat(62)}${SELECTOR_MINT_BATCH.toString(16).padStart(2, "0")}`,
+      ),
+    );
+    expect(BOING_MINT_BATCH_SIZE).toBe(50);
+  });
+
+  it("rejects n > 50", async () => {
+    const { encodeReferenceMintBatchCalldataHex } = await import(
+      "@/lib/onchain/boing"
+    );
+    const ids = Array.from({ length: 51 }, (_, i) =>
+      `0x${i.toString(16).padStart(64, "0")}`,
+    );
+    expect(() =>
+      encodeReferenceMintBatchCalldataHex(ACCOUNT, ids, ids),
+    ).toThrow(/boing_mint_batch_size/);
+  });
+});
+
+describe("boing receipt tx ids", () => {
+  it("does not treat mempool ok as a receipt-fetchable tx id", async () => {
+    const {
+      extractBoingTxHash,
+      isBoingMempoolPlaceholderTxId,
+      isBoingReceiptTxId,
+    } = await import("@/lib/onchain/boing");
+    expect(extractBoingTxHash({ tx_hash: "ok" })).toBeNull();
+    expect(isBoingMempoolPlaceholderTxId("ok")).toBe(true);
+    expect(isBoingMempoolPlaceholderTxId("pending:boing-accepted:abc")).toBe(
+      true,
+    );
+    expect(isBoingReceiptTxId("ok")).toBe(false);
+    expect(isBoingReceiptTxId(`0x${"ab".repeat(32)}`)).toBe(true);
+  });
+});

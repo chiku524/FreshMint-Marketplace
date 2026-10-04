@@ -47,6 +47,7 @@ import {
 import {
   buildBoingMintIntent,
   isProvisionalBoingCollectionAddress,
+  resolveBoingNftDeployTemplateVersion,
   verifyBoingTx,
 } from "@/lib/onchain/boing";
 import { hashTextMedia } from "@/lib/media/upload";
@@ -548,6 +549,8 @@ export async function createCollectionForUser(input: {
       contractAddress: null,
       deployTxHash: null,
       deployStatus: "pending_wallet",
+      nftTemplateVersion:
+        chain === "boing" ? resolveBoingNftDeployTemplateVersion() : "1",
       escrowAddress: null,
       createdAt: Date.now(),
     };
@@ -564,6 +567,8 @@ export async function createCollectionForUser(input: {
           chain,
           network,
           deployStatus: "pending_wallet",
+          nftTemplateVersion:
+            chain === "boing" ? resolveBoingNftDeployTemplateVersion() : "1",
           ...profile,
         },
       });
@@ -612,6 +617,7 @@ export async function createCollectionForUser(input: {
       txHash: deployIntent.txHash,
       contractAddress: deployIntent.contractAddress,
       escrowAddress: deployIntent.escrowAddress,
+      nftTemplateVersion: deployIntent.nftTemplateVersion,
     });
     if (confirmed.ok) {
       return {
@@ -660,6 +666,8 @@ export async function confirmCollectionDeploy(input: {
   contractAddress?: string | null;
   escrowAddress?: string | null;
   creatorAddress?: string | null;
+  /** Boing template version used for this deploy (`"1"` | `"2"`). */
+  nftTemplateVersion?: string | null;
 }) {
   if (!input.txHash || input.txHash.length < 8) {
     return { ok: false as const, error: "invalid_tx" };
@@ -681,9 +689,14 @@ export async function confirmCollectionDeploy(input: {
     null;
 
   const network = resolveNetwork(existing.network, existing.chain);
+  let nftTemplateVersion =
+    existing.nftTemplateVersion?.trim() ||
+    input.nftTemplateVersion?.trim() ||
+    "1";
   if (network === "boing") {
     const {
       isProvisionalBoingCollectionAddress,
+      normalizeBoingNftTemplateVersion,
       resolveBoingDeployContractAddress,
     } = await import("@/lib/onchain/boing");
     if (
@@ -702,6 +715,13 @@ export async function confirmCollectionDeploy(input: {
       });
       if (resolved) contractAddress = resolved;
     }
+    // Stamp deploy-time template: explicit input, else what new deploys use now,
+    // else keep existing (defaults to v1 for legacy rows).
+    nftTemplateVersion = normalizeBoingNftTemplateVersion(
+      input.nftTemplateVersion ??
+        existing.nftTemplateVersion ??
+        "1",
+    );
   }
 
   const next: Collection = {
@@ -709,6 +729,7 @@ export async function confirmCollectionDeploy(input: {
     contractAddress,
     deployTxHash: input.txHash,
     deployStatus: "confirmed",
+    nftTemplateVersion,
     escrowAddress,
   };
 
@@ -727,6 +748,7 @@ export async function confirmCollectionDeploy(input: {
       contractAddress,
       deployTxHash: input.txHash,
       deployStatus: "confirmed",
+      nftTemplateVersion,
       escrowAddress,
     },
   });
@@ -774,12 +796,33 @@ export async function prepareCollectionDeployForUser(input: {
     chain,
   });
 
+  const nftTemplateVersion =
+    deployIntent.nftTemplateVersion ?? collection.nftTemplateVersion ?? "1";
+  let stored = collection;
+
+  if (nftTemplateVersion !== collection.nftTemplateVersion) {
+    const { ensureDatabaseReady } = await import("@/lib/db-ready");
+    const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+    const mode = await ensureDatabaseReady();
+    stored = { ...collection, nftTemplateVersion };
+    if (mode === "memory" || isMemoryMode()) {
+      getMemoryEngine().state.collections.set(collection.id, stored);
+    } else {
+      await prisma.collection.update({
+        where: { id: collection.id },
+        data: { nftTemplateVersion },
+      });
+      engine.state.collections.set(collection.id, stored);
+    }
+  }
+
   return {
     ok: true as const,
     collection: {
-      ...collection,
+      ...stored,
       deployStatus: "pending_wallet" as const,
       escrowAddress: deployIntent.escrowAddress,
+      nftTemplateVersion,
     },
     deployIntent,
     alreadyDeployed: false as const,
@@ -954,6 +997,9 @@ export async function prepareCollectionPublishMints(input: {
     escrowAddress: collection.escrowAddress || creator,
     items,
     startingTokenId: 1,
+    // Existing Boing collections (incl. Baked Nation) stay v1 → one mint / tx.
+    nftTemplateVersion: collection.nftTemplateVersion ?? "1",
+    collectionTitle: collection.title,
   });
 
   return { ok: true as const, batches, alreadyMinted: false as const };
@@ -975,6 +1021,39 @@ export async function confirmCollectionMintBatch(input: {
   if (!collection) return { ok: false as const, error: "collection_not_found" };
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const network = resolveNetwork(collection.network, collection.chain);
+  if (network === "boing") {
+    const {
+      isBoingMempoolPlaceholderTxId,
+      waitForBoingTransactionReceipt,
+    } = await import("@/lib/onchain/boing");
+    // Mempool `"ok"` / pending markers are not receipt keys — do not confirm mint.
+    if (
+      isBoingMempoolPlaceholderTxId(input.txHash) ||
+      input.txHash.startsWith("simulated-mint:")
+    ) {
+      if (input.txHash.startsWith("simulated-mint:")) {
+        // Allow simulated confirms in memory/dev flows only.
+        const { isMemoryMode } = await import("@/lib/data/memory-store");
+        const { ensureDatabaseReady } = await import("@/lib/db-ready");
+        const mode = await ensureDatabaseReady();
+        if (!(mode === "memory" || isMemoryMode())) {
+          return { ok: false as const, error: "boing_tx_id_required" };
+        }
+      } else {
+        return { ok: false as const, error: "boing_tx_id_required" };
+      }
+    } else {
+      const receipt = await waitForBoingTransactionReceipt(input.txHash, {
+        timeoutMs: 45_000,
+        intervalMs: 1_200,
+      });
+      if (!receipt.ok) {
+        return { ok: false as const, error: receipt.error };
+      }
+    }
   }
 
   const contractAddress =

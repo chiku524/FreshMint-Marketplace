@@ -78,4 +78,72 @@ describe("collection deploy + mint intents", () => {
     expect(transfer.walletTx?.to).toBe(COLLECTION);
     expect(transfer.tokenId).toBe("7");
   });
+
+  it("defaults omitted Boing template version to per-piece mint (v1)", () => {
+    const creator = `0x${"11".repeat(32)}`;
+    const collection = `0x${"22".repeat(32)}`;
+    const batches = buildCollectionMintBatches({
+      network: "boing",
+      contractAddress: collection,
+      creatorAddress: creator,
+      escrowAddress: creator,
+      items: [
+        { listingId: "baked-1", tokenUri: "https://example.com/1.json" },
+        { listingId: "baked-2", tokenUri: "https://example.com/2.json" },
+      ],
+    });
+    expect(batches).toHaveLength(2);
+  });
+
+  it("keeps Boing v1 collections at one mint per wallet tx", () => {
+    const creator = `0x${"11".repeat(32)}`;
+    const collection = `0x${"22".repeat(32)}`;
+    const items = Array.from({ length: 3 }, (_, i) => ({
+      listingId: `bn-${i}`,
+      tokenUri: `https://example.com/${i}.json`,
+    }));
+    const batches = buildCollectionMintBatches({
+      network: "boing",
+      contractAddress: collection,
+      creatorAddress: creator,
+      escrowAddress: creator,
+      items,
+      nftTemplateVersion: "1",
+    });
+    expect(batches).toHaveLength(3);
+    for (const batch of batches) {
+      expect(batch.listingIds).toHaveLength(1);
+      expect((batch.walletTx as { tx?: { calldata?: string } }).tx?.calldata).toMatch(
+        /0x0{62}04/,
+      );
+    }
+  });
+
+  it("chunks Boing v2 mint_batch into at most 50 tokens per contract_call", () => {
+    const creator = `0x${"11".repeat(32)}`;
+    const collection = `0x${"22".repeat(32)}`;
+    const items = Array.from({ length: 51 }, (_, i) => ({
+      listingId: `v2-${i}`,
+      tokenUri: `https://example.com/${i}.json`,
+    }));
+    const batches = buildCollectionMintBatches({
+      network: "boing",
+      contractAddress: collection,
+      creatorAddress: creator,
+      escrowAddress: creator,
+      items,
+      nftTemplateVersion: "2",
+    });
+    expect(batches).toHaveLength(2);
+    expect(batches[0]?.listingIds).toHaveLength(50);
+    expect(batches[1]?.listingIds).toHaveLength(1);
+    const calldata = String(
+      (batches[0]?.walletTx as { tx?: { calldata?: string } }).tx?.calldata ?? "",
+    );
+    expect(calldata).toMatch(/0x0{62}06/);
+    expect((calldata.length - 2) / 2).toBe(96 + 64 * 50);
+    expect(
+      (batches[0]?.walletTx as { tx?: { type?: string } }).tx?.type,
+    ).toBe("contract_call");
+  });
 });

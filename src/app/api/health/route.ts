@@ -11,8 +11,10 @@ import { getDatabaseUrl, isPostgresConfigured } from "@/lib/env";
 import {
   probeBoingNetwork,
   REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID,
-  REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION,
+  REFERENCE_NFT_COLLECTION_TEMPLATE_V1,
+  isBoingNftTemplateV2DeployAvailable,
   resolveBoingNftCollectionBytecode,
+  resolveBoingNftDeployTemplateVersion,
 } from "@/lib/onchain/boing";
 import { NextResponse } from "next/server";
 
@@ -45,7 +47,9 @@ export async function GET() {
       rpc: boing,
       nftTemplate: {
         artifactId: REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID,
-        version: REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION,
+        version: resolveBoingNftDeployTemplateVersion(),
+        v1: REFERENCE_NFT_COLLECTION_TEMPLATE_V1,
+        v2Available: isBoingNftTemplateV2DeployAvailable(),
         bytecodeBytes: (resolveBoingNftCollectionBytecode().length - 2) / 2,
       },
     },

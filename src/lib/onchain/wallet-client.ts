@@ -329,6 +329,18 @@ export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
   throw new Error("boing_tx_hash_missing");
 }
 
+/**
+ * Mint confirms require a receipt-fetchable 32-byte tx id.
+ * Mempool `{ tx_hash: "ok" }` is not a real id — do not confirm on it.
+ */
+export async function sendBoingMintWalletTx(tx: BoingWalletTx): Promise<string> {
+  const sent = await sendBoingWalletTxDetailed(tx);
+  if (sent.txHash && /^0x[0-9a-fA-F]{64}$/.test(sent.txHash.trim())) {
+    return sent.txHash.trim().toLowerCase();
+  }
+  throw new Error("boing_tx_id_required");
+}
+
 /** Prefer this when deploy confirm needs the real contract AccountId. */
 export async function sendBoingWalletTxDetailed(
   tx: BoingWalletTx,

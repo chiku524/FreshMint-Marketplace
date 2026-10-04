@@ -37,8 +37,10 @@ import { isExplorableTxHash } from "@/lib/onchain/explorer";
 import {
   maybeSendWalletTx,
   requestBuyerAddress,
+  sendBoingMintWalletTx,
   sendBoingWalletTxDetailed,
   sendEvmWalletTx,
+  type BoingWalletTx,
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import Link from "next/link";
@@ -476,6 +478,7 @@ export function CreateWizard() {
       status: string;
       contractAddress: string;
       escrowAddress?: string;
+      nftTemplateVersion?: string;
       walletTx?: unknown;
     };
     creatorAddress?: string | null;
@@ -556,6 +559,7 @@ export function CreateWizard() {
         contractAddress,
         escrowAddress: deployIntent.escrowAddress,
         creatorAddress: creatorAddress || undefined,
+        nftTemplateVersion: deployIntent.nftTemplateVersion,
       }),
     });
     const confirmData = await confirm.json();
@@ -1228,6 +1232,18 @@ export function CreateWizard() {
             const wt = batch.walletTx as EvmWalletTx & { chain: string };
             if (wt.chain === "evm") {
               txHash = await sendEvmWalletTx(wt);
+            } else if (wt.chain === "boing") {
+              try {
+                txHash = await sendBoingMintWalletTx(wt as BoingWalletTx);
+              } catch (err) {
+                const code = err instanceof Error ? err.message : "";
+                if (code === "boing_tx_id_required") {
+                  throw new Error(
+                    "Boing wallet did not return a transaction id (mempool ok is not a mint receipt). Wait a moment and retry this batch.",
+                  );
+                }
+                throw err;
+              }
             } else {
               txHash =
                 (await maybeSendWalletTx({

@@ -61,13 +61,22 @@ Protocol QA **rejects empty bytecode** (`MALFORMED_BYTECODE`). The wallet payloa
 
 ### Calldata (after a collection exists)
 
-Reference ABI is 96 bytes: selector in the **last byte** of word 0, then two argument words ([BOING-REFERENCE-NFT.md](https://github.com/Boing-Network/boing.network/blob/main/docs/BOING-REFERENCE-NFT.md)):
+Reference ABI for **template v1** is 96 bytes: selector in the **last byte** of word 0, then two argument words ([BOING-REFERENCE-NFT.md](https://github.com/Boing-Network/boing.network/blob/main/docs/BOING-REFERENCE-NFT.md)):
 
 | Selector | Name | Use |
 |----------|------|-----|
 | `0x03` | `owner_of` | Read holder |
 | `0x04` | `transfer_nft` | Transfer, or admin mint when owner is zero |
 | `0x05` | `set_metadata_hash` | Bind metadata hash to `token_id` |
+| `0x06` | `mint_batch` | **Template v2 only** — mint up to 50 tokens in one `contract_call` |
+
+**Existing collections (including Baked Nation) stay on v1** — they do not gain `0x06`. FreshMint records `Collection.nftTemplateVersion` at deploy (`"1"` or `"2"`). Mint prepare uses `mint_batch` only when that field is `"2"`.
+
+**Template v2** (`mint_batch`) calldata is `96 + 64n` bytes (`n` ≤ 50): selector word + `to` + `n` + token ids + metadata hashes. Encode with `encodeReferenceMintBatchCalldata` / `encodeReferenceMintBatchCalldataHex` in `src/lib/onchain/boing.ts` (same names as `boing-sdk` once published).
+
+New collection deploys use v2 bytecode when `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX` is set (dump **line 3**). Until then, new deploys stay on pinned v1. Heal/redeploy of **pending** collections can pick up v2; confirmed v1 addresses are never switched.
+
+Mint confirm waits for `boing_getTransactionReceipt(tx_id)` and does **not** treat mempool `{ tx_hash: "ok" }` as a tx id.
 
 ### App flow
 

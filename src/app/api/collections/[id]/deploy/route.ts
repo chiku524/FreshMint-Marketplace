@@ -14,6 +14,7 @@ const confirmSchema = z.object({
   contractAddress: z.string().min(1).optional(),
   escrowAddress: z.string().min(1).optional(),
   creatorAddress: z.string().min(1).optional(),
+  nftTemplateVersion: z.enum(["1", "2"]).optional(),
 });
 
 const syncSchema = z.object({
@@ -115,6 +116,7 @@ export async function POST(
     contractAddress: body.data.contractAddress,
     escrowAddress: body.data.escrowAddress,
     creatorAddress,
+    nftTemplateVersion: body.data.nftTemplateVersion,
   });
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
