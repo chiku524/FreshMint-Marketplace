@@ -49,11 +49,22 @@ npm run db:seed   # optional cold-start catalog
 
 | Variable | Purpose | Status |
 |---|---|---|
-| `DATABASE_URL` | Postgres (without it → memory mode) | Accept Neon/Prisma terms in dashboard, then re-run `vercel integration add` |
+| `DATABASE_URL` | Postgres (without it → memory mode) | Prisma Postgres Marketplace store `freshmint-db` (or Neon) |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob uploads | Connect `freshmint-media` store to the project in the UI |
 | `AUTH_SECRET` | Session JWT signing | Set for Production + Preview |
 | `ALLOW_DEMO_AUTH` | Demo personas on preview | Set `true` for Production + Preview |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth on `/sign-in` | Google Cloud OAuth client; see below |
+| `NEXT_PUBLIC_APP_URL` | Canonical public origin for OAuth redirects | `https://fresh-mint-marketplace.vercel.app` (or custom domain) |
 | `NEXT_PUBLIC_EVM_MARKET_ADDRESS` | Optional live Sepolia market | Optional |
+
+### Google OAuth (production)
+
+1. Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client (Web).
+2. Authorized JavaScript origins: `https://fresh-mint-marketplace.vercel.app`
+3. Authorized redirect URI (exact):
+   `https://fresh-mint-marketplace.vercel.app/api/auth/google/callback`
+4. Put the client id/secret in Vercel env for Production (+ Preview if you also whitelist preview URLs).
+5. Runtime persists users via Prisma. On Prisma Postgres, the app uses `@prisma/adapter-ppg` so serverless traffic does not burn the tiny direct TCP/`prisma_migration` connection budget (that previously surfaced as `Google sign-in failed`).
 
 Prisma Postgres install (after accepting terms in the dashboard that the CLI opens):
 
