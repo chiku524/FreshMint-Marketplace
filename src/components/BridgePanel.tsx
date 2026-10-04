@@ -2,7 +2,7 @@
 
 import { sendEvmWalletTx } from "@/lib/onchain/wallet-client";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 
 type NetworkOption = {
   id: string;
@@ -156,27 +156,9 @@ export function BridgePanel() {
     }
   }
 
-  const field: CSSProperties = {
-    width: "100%",
-    marginTop: "0.35rem",
-    padding: "0.55rem 0.65rem",
-    background: "var(--panel-solid)",
-    border: "1px solid var(--line)",
-    color: "var(--ink)",
-  };
-
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "32rem",
-        padding: "1.25rem",
-        border: "1px solid var(--line)",
-        background: "var(--panel)",
-      }}
-    >
-      <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.95rem" }}>
+    <div className="fm-form-stack bridge-shell">
+      <p className="fm-form-note">
         Move native gas (ETH on Ethereum / Base / Arbitrum / Optimism, or SOL)
         across mint-supported networks via Relay. Testnet mode until mainnet
         wallets are funded.
@@ -187,7 +169,7 @@ export function BridgePanel() {
         <select
           value={fromNetwork}
           onChange={(e) => setFrom(e.target.value)}
-          style={field}
+          className="fm-field"
         >
           {networks.map((n) => (
             <option key={n.id} value={n.id}>
@@ -202,7 +184,7 @@ export function BridgePanel() {
         <select
           value={toNetwork}
           onChange={(e) => setTo(e.target.value)}
-          style={field}
+          className="fm-field"
         >
           {networks.map((n) => (
             <option key={n.id} value={n.id}>
@@ -217,7 +199,7 @@ export function BridgePanel() {
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          style={field}
+          className="fm-field"
         />
       </label>
 
@@ -226,7 +208,7 @@ export function BridgePanel() {
         <input
           value={userAddress}
           onChange={(e) => setUserAddress(e.target.value)}
-          style={field}
+          className="fm-field"
           placeholder="0x… or Solana pubkey"
         />
       </label>
@@ -236,27 +218,25 @@ export function BridgePanel() {
         <input
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
-          style={field}
+          className="fm-field"
           placeholder="Defaults to your address"
         />
       </label>
 
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div className="fm-form-actions">
         <button
           type="button"
-          className="badge featured"
+          className="fm-btn fm-btn--primary"
           disabled={busy}
           onClick={() => void onQuote()}
-          style={{ cursor: "pointer", background: "transparent", padding: "0.5rem 0.85rem" }}
         >
           {busy ? "…" : "Get quote"}
         </button>
         <button
           type="button"
-          className="badge emerging"
+          className="fm-btn fm-btn--ghost"
           disabled={busy || !quote}
           onClick={() => void onExecute()}
-          style={{ cursor: "pointer", background: "transparent", padding: "0.5rem 0.85rem" }}
         >
           Execute bridge
         </button>
@@ -271,11 +251,11 @@ export function BridgePanel() {
       ) : null}
 
       {status ? (
-        <p style={{ margin: 0, color: "var(--emergent)" }}>Status: {status}</p>
+        <p className="fm-form-note" style={{ color: "var(--emergent)" }}>
+          Status: {status}
+        </p>
       ) : null}
-      {error ? (
-        <p style={{ margin: 0, color: "var(--danger)" }}>{error}</p>
-      ) : null}
+      {error ? <p className="fm-form-error">{error}</p> : null}
     </div>
   );
 }

@@ -80,11 +80,9 @@ export default async function OpenLanePage({
         saleMode={saleMode}
         endingSoon={endingSoon ? "1" : undefined}
       />
-      <p style={{ color: "var(--ink-muted)", margin: "1rem 0 1.5rem" }}>
-        {ranked.length} works
-      </p>
+      <p className="lane-count">{ranked.length} works</p>
       {ranked.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
+        <p className="fm-empty-copy">
           No works match these filters. Clear filters or soft-launch something new.
         </p>
       ) : (

@@ -27,15 +27,14 @@ export default async function SignInPage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.2rem" }}>
-        Sign in
-      </h1>
-      <p style={{ color: "var(--ink-muted)", margin: "0 0 1.5rem", maxWidth: "48ch" }}>
-        Use Google or email to open your profile, then link EVM, Solana, or Boing
-        wallets from Settings.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Sign in</h1>
+        <p className="page-lead__copy">
+          Use Google or email to open your profile, then link wallets from Settings.
+        </p>
+      </header>
       {user && (params.error || params.switch === "1") ? (
-        <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", maxWidth: "48ch" }}>
+        <p className="fm-form-note" style={{ marginBottom: "1rem" }}>
           Still signed in as {user.displayName}.{" "}
           <Link href={`/api/auth/logout?next=${encodeURIComponent(`/sign-in?next=${encodeURIComponent(nextPath)}`)}`}>
             Sign out
@@ -51,7 +50,7 @@ export default async function SignInPage({
         initialChallenge={params.challenge}
         initialName={params.name}
       />
-      <p style={{ margin: "1.25rem 0 0", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+      <p className="fm-form-note" style={{ marginTop: "1.15rem" }}>
         No account yet?{" "}
         <Link href={`/sign-up?next=${encodeURIComponent(nextPath)}`}>Create a profile</Link>, or{" "}
         <Link href="/">browse without one</Link>.

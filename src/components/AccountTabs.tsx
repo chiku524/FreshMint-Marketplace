@@ -22,7 +22,7 @@ export function AccountTabs() {
           <Link
             key={tab.href}
             href={tab.href}
-            className={`badge${active ? " featured is-active" : ""}`}
+            className={active ? "is-active" : undefined}
             aria-current={active ? "page" : undefined}
           >
             {tab.label}

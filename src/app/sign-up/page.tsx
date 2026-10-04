@@ -19,20 +19,20 @@ export default async function SignUpPage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.2rem" }}>
-        Create a profile
-      </h1>
-      <p style={{ color: "var(--ink-muted)", margin: "0 0 1.5rem", maxWidth: "48ch" }}>
-        Start with Google or email. After you are in, connect wallets from your
-        profile — they stay linked to this account.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Create a profile</h1>
+        <p className="page-lead__copy">
+          Start with Google or email. Connect wallets from your profile after you
+          are in.
+        </p>
+      </header>
       <AccountAuthForm
         mode="sign-up"
         nextPath={nextPath}
         googleEnabled={isGoogleAuthConfigured()}
         initialError={params.error}
       />
-      <p style={{ margin: "1.25rem 0 0", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+      <p className="fm-form-note" style={{ marginTop: "1.15rem" }}>
         <Link href="/sign-in">Already have a profile?</Link>
       </p>
     </div>

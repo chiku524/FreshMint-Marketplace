@@ -104,10 +104,23 @@ export default async function ListingDetailPage({
         ? net.explorerAddress(listing.contractAddress)
         : null;
 
+  const mediaStyle = media
+    ? {
+        backgroundImage: `url(${media})`,
+        backgroundSize: "cover" as const,
+        backgroundPosition: "center" as const,
+      }
+    : {
+        background: `
+          linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
+          linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
+        `,
+      };
+
   return (
     <div className="page-wrap">
       <PageViewTracker listingId={listing.id} />
-      <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+      <p className="page-crumb">
         <Link href="/open">Open Lane</Link>
         {" · "}
         <Link href={`/creators/${listing.creatorId}`}>
@@ -115,38 +128,11 @@ export default async function ListingDetailPage({
         </Link>
       </p>
 
-      <div
-        style={{
-          display: "grid",
-          gap: "2rem",
-          gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)",
-        }}
-        className="listing-detail-grid"
-      >
-        <div
-          className="work-media"
-          style={
-            media
-              ? {
-                  minHeight: "420px",
-                  backgroundImage: `url(${media})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  border: "1px solid var(--line)",
-                }
-              : {
-                  minHeight: "420px",
-                  border: "1px solid var(--line)",
-                  background: `
-                    linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
-                    linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
-                  `,
-                }
-          }
-        />
+      <div className="listing-detail-grid">
+        <div className="work-media listing-detail__media" style={mediaStyle} />
 
         <div>
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <div className="listing-detail__badges">
             {emerging ? <span className="badge emerging">Emerging</span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
@@ -167,10 +153,8 @@ export default async function ListingDetailPage({
             ) : null}
             {drop.state === "ended" ? <span className="badge">Drop ended</span> : null}
           </div>
-          <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-            {listing.title}
-          </h1>
-          <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem" }}>
+          <h1 className="display listing-detail__title">{listing.title}</h1>
+          <p className="listing-detail__byline">
             by{" "}
             <Link href={`/creators/${listing.creatorId}`}>
               {creator?.displayName ?? listing.creatorId}
@@ -185,11 +169,11 @@ export default async function ListingDetailPage({
               </>
             ) : null}
           </p>
-          <p style={{ maxWidth: "48ch", lineHeight: 1.55 }}>
+          <p className="listing-detail__desc">
             {listing.description || "No description yet."}
           </p>
           {minted || listing.tokenId ? (
-            <p style={{ color: "var(--ink-muted)", fontSize: "0.9rem", marginTop: "0.75rem" }}>
+            <p className="listing-detail__chain">
               {listing.tokenId ? (
                 <span>
                   Token {listing.tokenId}
@@ -225,7 +209,7 @@ export default async function ListingDetailPage({
             </p>
           ) : null}
           {listing.styleTags.length > 0 ? (
-            <p style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "1rem" }}>
+            <p className="listing-detail__tags">
               {listing.styleTags.map((t) => (
                 <span key={t} className="badge">
                   {t}
@@ -244,22 +228,14 @@ export default async function ListingDetailPage({
             </dl>
           ) : null}
 
-          <div style={{ marginTop: "1.25rem" }}>
+          <div className="listing-detail__follow">
             <FollowButton
               artistId={listing.creatorId}
               initiallyFollowing={following}
             />
           </div>
           {listing.type === "auction" && saleMode === "timed_window" ? (
-            <p
-              style={{
-                margin: "0.85rem 0 0",
-                color: "var(--ink-muted)",
-                fontSize: "0.9rem",
-                maxWidth: "42ch",
-                lineHeight: 1.5,
-              }}
-            >
+            <p className="listing-detail__note">
               Timed drop window
               {drop.state === "upcoming"
                 ? " (not started)"
@@ -273,7 +249,6 @@ export default async function ListingDetailPage({
             </p>
           ) : null}
 
-          
           {user?.id === listing.creatorId ? (
             <SaleModeEditor
               listingId={listing.id}
@@ -345,26 +320,17 @@ export default async function ListingDetailPage({
             />
           ) : null}
 
-          <dl
-            style={{
-              marginTop: "2rem",
-              display: "grid",
-              gridTemplateColumns: "auto 1fr",
-              gap: "0.35rem 1rem",
-              color: "var(--ink-muted)",
-              fontSize: "0.9rem",
-            }}
-          >
+          <dl className="listing-detail__signals">
             <dt>Saves</dt>
-            <dd style={{ margin: 0 }}>{listing.signals.saves}</dd>
+            <dd>{listing.signals.saves}</dd>
             <dt>Unique viewers</dt>
-            <dd style={{ margin: 0 }}>{listing.signals.uniqueViewers}</dd>
+            <dd>{listing.signals.uniqueViewers}</dd>
             <dt>Page views</dt>
-            <dd style={{ margin: 0 }}>{listing.signals.pageViews}</dd>
+            <dd>{listing.signals.pageViews}</dd>
             <dt>Nominations</dt>
-            <dd style={{ margin: 0 }}>{listing.signals.nominationScore}</dd>
+            <dd>{listing.signals.nominationScore}</dd>
             <dt>Impressions (week)</dt>
-            <dd style={{ margin: 0 }}>{listing.signals.impressionsThisWeek}</dd>
+            <dd>{listing.signals.impressionsThisWeek}</dd>
           </dl>
         </div>
       </div>

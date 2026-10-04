@@ -155,30 +155,21 @@ export function CollectionsExplorer({
     <>
       <div className="collections-head">
         <div>
-          <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-            {title}
-          </h1>
-          <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", margin: 0 }}>
+          <h1 className="display collections-head__title">{title}</h1>
+          <p className="collections-head__copy">
             {blurb}{" "}
             <Link href="/create">Start a collection</Link>.
           </p>
-          <p
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.45rem",
-              margin: "0.85rem 0 0",
-            }}
-          >
+          <p className="collections-lane-tabs">
             <Link
               href="/collections"
-              className={`badge${lane === "top" ? " featured" : ""}`}
+              className={`fm-filter-tab${lane === "top" ? " is-active" : ""}`}
             >
               Top
             </Link>
             <Link
               href="/collections/new"
-              className={`badge${lane === "new" ? " featured" : ""}`}
+              className={`fm-filter-tab${lane === "new" ? " is-active" : ""}`}
             >
               New this week
             </Link>
@@ -202,19 +193,11 @@ export function CollectionsExplorer({
       {children}
       {items.length === 0 ? (
         lane === "top" ? (
-          <section
-            style={{
-              marginTop: "1.25rem",
-              border: "1px solid var(--line)",
-              padding: "1.1rem 1.15rem",
-              background: "var(--panel)",
-              maxWidth: "40rem",
-            }}
-          >
-            <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
+          <section className="fm-empty-state">
+            <h2 className="display fm-empty-state__title">
               No collections at the volume bar yet
             </h2>
-            <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
+            <p className="fm-form-note">
               The Top list only shows collections with at least $
               {COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} in completed
               primary sales (including package sales). Browse{" "}
@@ -224,7 +207,7 @@ export function CollectionsExplorer({
             </p>
           </section>
         ) : (
-          <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
+          <p className="fm-empty-copy" style={{ marginTop: "1rem" }}>
             No new published collections in the last 7 days.{" "}
             <Link href="/collections">Back to Top</Link>.
           </p>
@@ -234,10 +217,10 @@ export function CollectionsExplorer({
       {view === "gallery"
         ? items.map((collection) => (
             <section key={collection.id} className="collections-gallery-block">
-              <h2 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.5rem" }}>
+              <h2 className="display me-section__title">
                 <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
               </h2>
-              <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)" }}>
+              <p className="me-section__lead">
                 {collection.creatorName} · {collection.chain} · {collection.totalItems}{" "}
                 items
                 {formatVolume(collection.volumeUsd)

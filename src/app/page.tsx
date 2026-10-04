@@ -96,8 +96,7 @@ export default async function HomePage() {
             Discover new art before it floods the feed.
           </h1>
           <p className="fm-home-hero__lede anim-rise-delay">
-            Fair discovery for digital art — Emerging artists get a real quota,
-            not a slogan.
+            Fair discovery for digital art. Emerging artists get a real quota.
           </p>
           <div className="fm-home-hero__actions anim-rise-delay">
             <Link href="/open" className="fm-btn fm-btn--primary">

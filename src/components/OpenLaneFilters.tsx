@@ -44,8 +44,8 @@ export function OpenLaneFilters({
   };
 
   return (
-    <div style={{ display: "grid", gap: "0.75rem" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+    <div className="lane-filters">
+      <div className="lane-filters__chips">
         <Link className="badge" href={link({ chain: undefined, network: undefined })}>
           All chains
         </Link>
@@ -122,10 +122,7 @@ export function OpenLaneFilters({
           {endingSoon === "1" ? "Clear ending soon" : "Ending soon"}
         </Link>
       </div>
-      <form
-        action="/open"
-        style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}
-      >
+      <form action="/open" className="lane-filters__search">
         <input type="hidden" name="chain" value={chain ?? ""} />
         <input type="hidden" name="network" value={network ?? ""} />
         <input type="hidden" name="type" value={type ?? ""} />
@@ -138,15 +135,9 @@ export function OpenLaneFilters({
           name="q"
           defaultValue={q ?? ""}
           placeholder="Search titles…"
-          style={{
-            flex: "1 1 12rem",
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            color: "var(--ink)",
-            padding: "0.45rem 0.65rem",
-          }}
+          className="fm-field"
         />
-        <button type="submit" className="badge" style={{ cursor: "pointer", background: "transparent" }}>
+        <button type="submit" className="fm-btn fm-btn--ghost">
           Apply
         </button>
       </form>

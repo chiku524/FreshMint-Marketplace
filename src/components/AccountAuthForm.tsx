@@ -19,15 +19,6 @@ const ERRORS: Record<string, string> = {
     "Sign-in is temporarily unavailable (database busy). Wait a moment and try again.",
 };
 
-const fieldStyle: React.CSSProperties = {
-  width: "100%",
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  color: "var(--ink)",
-  padding: "0.55rem 0.7rem",
-  marginTop: "0.35rem",
-};
-
 export function AccountAuthForm({
   mode,
   nextPath,
@@ -111,46 +102,21 @@ export function AccountAuthForm({
           }}
         />
       ) : null}
-      <div
-        style={{
-          display: "grid",
-          gap: "1rem",
-          maxWidth: "26rem",
-          border: "1px solid var(--line)",
-          padding: "1.25rem",
-          background: "var(--panel)",
-        }}
-      >
+      <div className="fm-form-stack auth-shell">
         {googleEnabled ? (
-          <a
-            href={googleHref}
-            className="badge featured"
-            style={{
-              textAlign: "center",
-              padding: "0.6rem 0.9rem",
-            }}
-          >
+          <a href={googleHref} className="fm-btn fm-btn--primary auth-shell__google">
             Continue with Google
           </a>
         ) : (
-          <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+          <p className="fm-form-note">
             Google sign-in is available once <code>GOOGLE_CLIENT_ID</code> and{" "}
             <code>GOOGLE_CLIENT_SECRET</code> are set.
           </p>
         )}
 
-        <p
-          style={{
-            margin: 0,
-            color: "var(--ink-muted)",
-            fontSize: "0.8rem",
-            textAlign: "center",
-          }}
-        >
-          or use email
-        </p>
+        <p className="fm-form-divider">or use email</p>
 
-        <form onSubmit={(e) => void onSubmit(e)} style={{ display: "grid", gap: "0.85rem" }}>
+        <form onSubmit={(e) => void onSubmit(e)} className="fm-form-stack">
           {mode === "sign-up" ? (
             <label>
               Display name
@@ -159,7 +125,7 @@ export function AccountAuthForm({
                 required
                 maxLength={64}
                 autoComplete="nickname"
-                style={fieldStyle}
+                className="fm-field"
               />
             </label>
           ) : null}
@@ -170,7 +136,7 @@ export function AccountAuthForm({
               type="email"
               required
               autoComplete="email"
-              style={fieldStyle}
+              className="fm-field"
             />
           </label>
           <label>
@@ -182,29 +148,21 @@ export function AccountAuthForm({
               minLength={mode === "sign-up" ? 8 : 1}
               maxLength={128}
               autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-              style={fieldStyle}
+              className="fm-field"
             />
           </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="badge featured"
-            style={{
-              cursor: "pointer",
-              background: "transparent",
-              justifySelf: "start",
-              padding: "0.55rem 0.9rem",
-            }}
-          >
-            {busy
-              ? "Working…"
-              : mode === "sign-up"
-                ? "Create profile"
-                : "Sign in"}
-          </button>
+          <div className="fm-form-actions">
+            <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
+              {busy
+                ? "Working…"
+                : mode === "sign-up"
+                  ? "Create profile"
+                  : "Sign in"}
+            </button>
+          </div>
         </form>
-        {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
-        <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+        {error ? <p className="fm-form-error">{error}</p> : null}
+        <p className="fm-form-note">
           {mode === "sign-up" ? (
             <>
               Already have a profile?{" "}

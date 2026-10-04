@@ -86,39 +86,24 @@ export default async function MeCollectionPage() {
 
   return (
     <>
-      <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem", maxWidth: "52ch" }}>
+      <p className="me-section__lead">
         Works you created, collected, hold in a linked wallet, curated, and
         bridged.
       </p>
 
       {hasBoingWallet ? (
-        <section
-          style={{
-            marginBottom: "1.75rem",
-            border: "1px solid var(--line)",
-            padding: "0.9rem 1rem",
-            background: "var(--panel)",
-          }}
-          data-testid="boing-wallet-balances"
-        >
-          <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.15rem" }}>
-            Boing balance
-          </h2>
-          <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+        <section className="me-notice" data-testid="boing-wallet-balances">
+          <h2 className="display me-section__title">Boing balance</h2>
+          <p className="me-section__lead">
             Live native BOING from linked Boing wallets. NFT scan covers
             FreshMint-known Boing tokens only (not a full chain indexer).
           </p>
           {scanMeta.boingBalances.length === 0 ? (
-            <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-              No usable Boing wallet address linked.
-            </p>
+            <p className="fm-empty-copy">No usable Boing wallet address linked.</p>
           ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.45rem" }}>
+            <ul className="me-list">
               {scanMeta.boingBalances.map((bal) => (
-                <li
-                  key={bal.address}
-                  style={{ fontSize: "0.95rem", fontFamily: "monospace" }}
-                >
+                <li key={bal.address} className="me-list__row" style={{ fontFamily: "monospace" }}>
                   {bal.ok ? (
                     <>
                       <a
@@ -153,28 +138,14 @@ export default async function MeCollectionPage() {
             </ul>
           )}
           {scanMeta.boingBalances.some((b) => !b.ok) ? (
-            <p
-              style={{
-                margin: "0.75rem 0 0",
-                color: "var(--ink-muted)",
-                fontSize: "0.85rem",
-              }}
-              data-testid="boing-scan-warnings"
-            >
+            <p className="fm-form-note" data-testid="boing-scan-warnings">
               {formatBoingBalanceUserMessage(
                 scanMeta.boingBalances.find((b) => !b.ok)?.error,
               )}{" "}
               NFT scan still covers FreshMint-known Boing tokens only.
             </p>
           ) : scanMeta.warnings.length > 0 ? (
-            <p
-              style={{
-                margin: "0.75rem 0 0",
-                color: "var(--ink-muted)",
-                fontSize: "0.85rem",
-              }}
-              data-testid="boing-scan-warnings"
-            >
+            <p className="fm-form-note" data-testid="boing-scan-warnings">
               {scanMeta.warnings.join(" ")}
             </p>
           ) : null}
@@ -182,24 +153,15 @@ export default async function MeCollectionPage() {
       ) : null}
 
       {openCheckouts.length > 0 ? (
-        <section
-          style={{
-            marginBottom: "1.75rem",
-            border: "1px solid var(--line)",
-            padding: "0.9rem 1rem",
-            background: "var(--panel)",
-          }}
-        >
-          <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.15rem" }}>
-            Finish checkout
-          </h2>
-          <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+        <section className="me-notice">
+          <h2 className="display me-section__title">Finish checkout</h2>
+          <p className="me-section__lead">
             An unpaid checkout reserves a 1/1 for 15 minutes. Finish the wallet
             steps or cancel to release it.
           </p>
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.5rem" }}>
+          <ul className="me-list">
             {openCheckouts.map((item) => (
-              <li key={item.purchaseId}>
+              <li key={item.purchaseId} className="me-list__row">
                 <Link href={`/listings/${item.listing.id}`}>{item.listing.title}</Link>
                 {" · "}
                 {item.status === "pending_payment" ? "payment" : "transfer"}
@@ -217,12 +179,12 @@ export default async function MeCollectionPage() {
         </section>
       ) : null}
 
-      <section style={{ marginBottom: "2.75rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+      <section className="me-section">
+        <h2 className="display me-section__title">
           Created ({profile.created.length})
         </h2>
         {profile.created.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             Nothing created yet. <Link href="/create">Soft-launch a work</Link>.
           </p>
         ) : (
@@ -252,26 +214,19 @@ export default async function MeCollectionPage() {
         )}
       </section>
 
-      <section style={{ marginBottom: "2.75rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+      <section className="me-section">
+        <h2 className="display me-section__title">
           Sales ({liveSales.length})
         </h2>
         {liveSales.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             No collector checkouts yet. Soft-launch from{" "}
             <Link href="/create">Create</Link>.
           </p>
         ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.5rem" }}>
+          <ul className="me-list">
             {liveSales.map((sale) => (
-              <li
-                key={sale.purchaseId}
-                style={{
-                  border: "1px solid var(--line)",
-                  padding: "0.75rem 0.9rem",
-                  fontSize: "0.9rem",
-                }}
-              >
+              <li key={sale.purchaseId} className="me-list__row">
                 <Link href={`/listings/${sale.listing.id}`}>{sale.listing.title}</Link>
                 {" · $"}
                 {sale.amountUsd}
@@ -290,12 +245,12 @@ export default async function MeCollectionPage() {
         )}
       </section>
 
-      <section style={{ marginBottom: "2.75rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+      <section className="me-section">
+        <h2 className="display me-section__title">
           Collected ({collected.length})
         </h2>
         {collected.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             No purchases yet. Browse the <Link href="/open">Open Lane</Link>.
           </p>
         ) : (
@@ -381,17 +336,17 @@ export default async function MeCollectionPage() {
         )}
       </section>
 
-      <section style={{ marginBottom: "2.75rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+      <section className="me-section">
+        <h2 className="display me-section__title">
           In wallet ({inWallet.length})
         </h2>
         {profile.wallets.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             Link a wallet in <Link href="/me/settings">Settings</Link> to pull
             on-chain NFTs into this collection.
           </p>
         ) : inWallet.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             {hasBoingWallet
               ? "No other FreshMint-known Boing NFTs found in linked wallets yet (or RPC was unreachable)."
               : "No other NFTs found in linked wallets yet."}
@@ -405,54 +360,39 @@ export default async function MeCollectionPage() {
         )}
       </section>
 
-      <section style={{ marginBottom: "2.75rem" }}>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+      <section className="me-section">
+        <h2 className="display me-section__title">
           Shelves ({profile.shelves.length})
         </h2>
         {profile.shelves.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             No shelves yet. Curate from <Link href="/studio">Studio</Link>.
           </p>
         ) : (
-          <div style={{ display: "grid", gap: "0.75rem" }}>
+          <ul className="me-list">
             {profile.shelves.map((shelf) => (
-              <div
-                key={shelf.id}
-                style={{
-                  border: "1px solid var(--line)",
-                  padding: "0.9rem 1rem",
-                  background: "var(--panel)",
-                }}
-              >
-                <div className="display" style={{ fontSize: "1.15rem" }}>
+              <li key={shelf.id} className="me-list__row">
+                <div className="display" style={{ fontSize: "1.05rem" }}>
                   {shelf.name}
                 </div>
-                <p
-                  style={{
-                    margin: "0.25rem 0 0",
-                    color: "var(--ink-muted)",
-                    fontSize: "0.9rem",
-                  }}
-                >
+                <p className="fm-form-note" style={{ marginTop: "0.25rem" }}>
                   {shelf.listingIds.length} works · {shelf.followerCount} followers ·{" "}
                   <Link href="/shelves">View shelves</Link>
                 </p>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </section>
 
-      <section>
-        <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-          Recent bridges
-        </h2>
+      <section className="me-section">
+        <h2 className="display me-section__title">Recent bridges</h2>
         {profile.bridges.length === 0 ? (
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="fm-empty-copy">
             No bridge transfers yet. <Link href="/bridge">Move funds</Link>.
           </p>
         ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.5rem" }}>
+          <ul className="me-list">
             {profile.bridges.map((b) => {
               const from = isNetworkId(b.fromNetwork)
                 ? getNetwork(b.fromNetwork).label
@@ -461,15 +401,7 @@ export default async function MeCollectionPage() {
                 ? getNetwork(b.toNetwork).label
                 : b.toNetwork;
               return (
-                <li
-                  key={b.id}
-                  style={{
-                    border: "1px solid var(--line)",
-                    padding: "0.75rem 0.9rem",
-                    color: "var(--ink-muted)",
-                    fontSize: "0.9rem",
-                  }}
-                >
+                <li key={b.id} className="me-list__row" style={{ color: "var(--ink-muted)" }}>
                   {b.amount} · {from} → {to} · {b.status} ·{" "}
                   {new Date(b.createdAt).toLocaleString()}
                 </li>

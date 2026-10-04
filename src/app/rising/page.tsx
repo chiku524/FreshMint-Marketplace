@@ -18,21 +18,21 @@ export default async function RisingPage() {
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Rising
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.75rem" }}>
-        Fairness-aware discovery with a hard Emerging quota (
-        {Math.round(budgets.risingEmergingReserved)} of {budgets.risingTotal}{" "}
-        daily slots reserved, {budgets.risingExplore} explore). Current Emerging
-        share:{" "}
-        <strong style={{ color: "var(--emergent)" }}>
-          {(share * 100).toFixed(0)}%
-        </strong>
-        .
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Rising</h1>
+        <p className="page-lead__copy">
+          Fairness-aware discovery with a hard Emerging quota (
+          {Math.round(budgets.risingEmergingReserved)} of {budgets.risingTotal}{" "}
+          daily slots reserved, {budgets.risingExplore} explore). Current Emerging
+          share:{" "}
+          <strong style={{ color: "var(--emergent)" }}>
+            {(share * 100).toFixed(0)}%
+          </strong>
+          .
+        </p>
+      </header>
       {rising.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
+        <p className="fm-empty-copy">
           Rising is empty right now — publish a minted work and it enters
           Rising automatically when quality gates pass. Your first work skips
           the new-wallet wait.
