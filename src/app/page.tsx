@@ -5,7 +5,6 @@ import { HomeCollectionCard } from "@/components/HomeCollectionCard";
 import { HomeCreatorCard } from "@/components/HomeCreatorCard";
 import { HomeScrollRail } from "@/components/HomeScrollRail";
 import { HomeSectionHeader } from "@/components/HomeSectionHeader";
-import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { BrandMark } from "@/components/MintLeaf";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { TasteSeed } from "@/components/TasteSeed";
@@ -113,10 +112,6 @@ export default async function HomePage() {
           <FeaturedOfTheWeek />
         </div>
       </section>
-
-      <div className="fm-home-note">
-        <HowItWorksNote kind="home" />
-      </div>
 
       {discovery.collections.items.length > 0 ? (
         <section className="site-section">

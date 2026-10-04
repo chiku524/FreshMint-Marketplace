@@ -1,5 +1,4 @@
 import { FollowButton } from "@/components/FollowButton";
-import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { FeaturedBoostButton } from "@/components/FeaturedBoostButton";
 import { BidPanel } from "@/components/BidPanel";
 import { ListingActions } from "@/components/ListingActions";
@@ -251,7 +250,6 @@ export default async function ListingDetailPage({
               initiallyFollowing={following}
             />
           </div>
-          <HowItWorksNote kind="buy" />
           {listing.type === "auction" && saleMode === "timed_window" ? (
             <p
               style={{

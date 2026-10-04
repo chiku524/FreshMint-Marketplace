@@ -535,22 +535,6 @@ a {
   color: var(--ink);
 }
 
-.how-it-works-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.35rem 1rem;
-  max-width: 56ch;
-  margin: 0;
-  padding: 0.55rem 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  color: var(--ink-muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-
 /* Shared public CTAs — same palette, cleaner chrome */
 .fm-btn {
   display: inline-flex;
@@ -656,32 +640,6 @@ a {
 .fm-taste-seed__tag:disabled {
   opacity: 0.65;
   cursor: wait;
-}
-
-.how-it-works-note__actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-  white-space: nowrap;
-}
-
-.how-it-works-note a {
-  color: var(--accent-soft);
-}
-
-.how-it-works-note__dismiss {
-  appearance: none;
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--ink-muted);
-  font: inherit;
-  cursor: pointer;
-}
-
-.how-it-works-note__dismiss:hover,
-.how-it-works-note__dismiss:focus-visible {
-  color: var(--ink);
 }
 
 .docs-guide-page > header {
@@ -953,15 +911,6 @@ html.fm-intro-pending .fm-intro-cover {
 
 .site-section + .site-section {
   border-top: 1px solid var(--line);
-}
-
-.fm-home-note {
-  padding: 0.35rem var(--page-x) 0;
-}
-
-.fm-home-note:empty,
-.fm-home-note:not(:has(*)) {
-  display: none;
 }
 
 /* Home hero: copy left · featured-of-the-week right */

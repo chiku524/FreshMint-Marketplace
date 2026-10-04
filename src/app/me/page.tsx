@@ -1,4 +1,3 @@
-import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
@@ -91,7 +90,6 @@ export default async function MeCollectionPage() {
         Works you created, collected, hold in a linked wallet, curated, and
         bridged.
       </p>
-      <HowItWorksNote kind="collect" />
 
       {hasBoingWallet ? (
         <section

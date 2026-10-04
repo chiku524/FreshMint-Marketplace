@@ -1,5 +1,4 @@
 import { BridgePanel } from "@/components/BridgePanel";
-import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { chainMode, listBridgeNetworks } from "@/lib/chains/registry";
 
 export const metadata = {
@@ -20,7 +19,6 @@ export default function BridgePage() {
         {networks.map((n) => n.label).join(", ")}. Mode:{" "}
         <span className="badge">{chainMode()}</span>
       </p>
-      <HowItWorksNote kind="funds" />
       <BridgePanel />
     </div>
   );
