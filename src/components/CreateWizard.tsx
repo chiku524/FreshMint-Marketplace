@@ -316,15 +316,6 @@ export function CreateWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMine closes over network
   }, [network]);
 
-  useEffect(() => {
-    if (!collectionId) return;
-    const selectedCollection = collections.find((c) => c.id === collectionId);
-    if (!selectedCollection) {
-      // Selection belongs to another network (or is undeployed) — clear it.
-      setCollectionId("");
-    }
-  }, [collections, collectionId]);
-
   // Keep suggested slug in sync with title until the creator edits the slug field.
   useEffect(() => {
     if (collectionId || slugTouched) return;
@@ -332,17 +323,9 @@ export function CreateWizard() {
   }, [newTitle, collectionId, slugTouched]);
 
   // Debounced uniqueness + format feedback for new-collection names (global).
+  // When editing/resuming an existing collection, exclude its own id so the
+  // owner's current title is not reported as "already taken".
   useEffect(() => {
-    if (collectionId) {
-      setTitleStatus({
-        checking: false,
-        available: null,
-        issue: null,
-        message: null,
-        normalized: null,
-      });
-      return;
-    }
     const format = validateCollectionTitleFormat(newTitle);
     if (!format.ok) {
       setTitleStatus({
@@ -368,8 +351,10 @@ export function CreateWizard() {
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
+          const params = new URLSearchParams({ title: format.title });
+          if (collectionId) params.set("excludeCollectionId", collectionId);
           const res = await fetch(
-            `/api/collections/name-check?title=${encodeURIComponent(format.title)}`,
+            `/api/collections/name-check?${params.toString()}`,
           );
           const data = (await res.json()) as {
             available?: boolean;
@@ -405,23 +390,15 @@ export function CreateWizard() {
 
   // Debounced uniqueness + format feedback for new-collection URLs.
   useEffect(() => {
-    if (collectionId) {
-      setSlugStatus({
-        checking: false,
-        available: null,
-        issue: null,
-        message: null,
-        normalized: null,
-      });
-      return;
-    }
     const format = validateCollectionSlugFormat(newSlug);
     if (!format.ok) {
       setSlugStatus({
         checking: false,
         available: false,
         issue: format.issue,
-        message: collectionSlugIssueMessage(format.issue),
+        message: newSlug.trim()
+          ? collectionSlugIssueMessage(format.issue)
+          : null,
         normalized: null,
       });
       return;
@@ -438,8 +415,10 @@ export function CreateWizard() {
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
+          const params = new URLSearchParams({ slug: format.slug });
+          if (collectionId) params.set("excludeCollectionId", collectionId);
           const res = await fetch(
-            `/api/collections/slug-check?slug=${encodeURIComponent(format.slug)}`,
+            `/api/collections/slug-check?${params.toString()}`,
           );
           const data = (await res.json()) as {
             available?: boolean;
@@ -746,7 +725,26 @@ export function CreateWizard() {
       setDeployNote("Collection contract ready (simulated or already deployed).");
     }
 
+    const created = data.collection as CollectionOption | undefined;
     setCollectionId(id);
+    // Pin the just-created row locally so later steps keep the same collectionId
+    // even if the deployed mine list briefly omits it during refresh.
+    setCollections((prev) => {
+      if (prev.some((c) => c.id === id)) return prev;
+      return [
+        ...prev,
+        {
+          id,
+          title: created?.title || titleFormat.title,
+          slug: created?.slug || slugFormat.slug,
+          chain: created?.chain || walletChain,
+          network: created?.network || network,
+          mediaBytes: created?.mediaBytes ?? 0,
+          contractAddress: created?.contractAddress ?? null,
+          deployStatus: created?.deployStatus ?? "confirmed",
+        },
+      ];
+    });
     window.dispatchEvent(new Event("fm-collections-changed"));
     loadMine();
     return id;

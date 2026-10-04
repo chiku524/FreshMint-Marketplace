@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("title") ?? "";
+  const excludeCollectionId =
+    req.nextUrl.searchParams.get("excludeCollectionId")?.trim() || undefined;
   const format = validateCollectionTitleFormat(raw);
   if (!format.ok) {
     return NextResponse.json({
@@ -21,7 +23,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const available = await isCollectionTitleAvailable(format.title);
+  const available = await isCollectionTitleAvailable(format.title, {
+    excludeCollectionId,
+  });
   if (!available) {
     return NextResponse.json({
       ok: false,

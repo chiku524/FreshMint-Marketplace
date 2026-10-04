@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("slug") ?? "";
+  const excludeCollectionId =
+    req.nextUrl.searchParams.get("excludeCollectionId")?.trim() || undefined;
   const format = validateCollectionSlugFormat(raw);
   if (!format.ok) {
     return NextResponse.json({
@@ -20,7 +22,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const available = await isCollectionSlugAvailable(format.slug);
+  const available = await isCollectionSlugAvailable(format.slug, {
+    excludeCollectionId,
+  });
   if (!available) {
     return NextResponse.json({
       ok: false,

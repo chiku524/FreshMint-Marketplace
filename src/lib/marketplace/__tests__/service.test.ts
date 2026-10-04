@@ -17,6 +17,8 @@ import {
   createListingForUser,
   getDiscoveryEngine,
   isCollectionDeployReady,
+  isCollectionSlugAvailable,
+  isCollectionTitleAvailable,
   listCollectionsForUser,
   updateCollectionDrop,
   followArtist,
@@ -190,6 +192,52 @@ describe("marketplace service (memory mode)", () => {
     });
     expect(dupWhitespace.ok).toBe(false);
     if (!dupWhitespace.ok) expect(dupWhitespace.errors).toContain("title_taken");
+  });
+
+  it("treats the current collection's own title and slug as available when excluded", async () => {
+    const first = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Owner Resume Set",
+      slug: "owner-resume-set",
+      network: "base",
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    await expect(
+      isCollectionTitleAvailable("Owner Resume Set"),
+    ).resolves.toBe(false);
+    await expect(
+      isCollectionTitleAvailable("Owner Resume Set", {
+        excludeCollectionId: first.collection.id,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      isCollectionTitleAvailable("owner resume set", {
+        excludeCollectionId: first.collection.id,
+      }),
+    ).resolves.toBe(true);
+
+    await expect(isCollectionSlugAvailable("owner-resume-set")).resolves.toBe(
+      false,
+    );
+    await expect(
+      isCollectionSlugAvailable("owner-resume-set", {
+        excludeCollectionId: first.collection.id,
+      }),
+    ).resolves.toBe(true);
+
+    // Other collections still collide — exclude must not weaken global uniqueness.
+    await expect(
+      isCollectionTitleAvailable("Owner Resume Set", {
+        excludeCollectionId: "col-someone-else",
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      isCollectionSlugAvailable("owner-resume-set", {
+        excludeCollectionId: "col-someone-else",
+      }),
+    ).resolves.toBe(false);
   });
 
   it("creates a collection and attaches a scheduled drop", async () => {
