@@ -241,6 +241,16 @@ model Collection {
   dropEndsAt      DateTime?
   dropPriceUsd    Float?
   mediaBytes      Int     @default(0)
+  /// Square logo / avatar for OpenSea-like collection header
+  imageUrl        String?
+  /// Wide banner / cover for collection header
+  bannerUrl       String?
+  /// Public about blurb shown on the collection page
+  description     String  @default("")
+  websiteUrl      String?
+  twitterUrl      String?
+  discordUrl      String?
+  instagramUrl    String?
   /// On-chain collection contract (EVM address / Solana / Boing id)
   contractAddress String?
   deployTxHash    String?

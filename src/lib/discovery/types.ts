@@ -145,6 +145,16 @@ export interface Collection {
   dropEndsAt?: number | null;
   dropPriceUsd?: number | null;
   mediaBytes?: number;
+  /** Square logo / avatar for the collection header. */
+  imageUrl?: string | null;
+  /** Wide banner / cover for the collection header. */
+  bannerUrl?: string | null;
+  /** Public about blurb on the collection page. */
+  description?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
   contractAddress?: string | null;
   deployTxHash?: string | null;
   deployStatus?: "none" | "pending_wallet" | "confirmed" | "failed" | string;

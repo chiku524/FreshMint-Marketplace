@@ -484,6 +484,7 @@ export async function prepareCollectionPackagePurchase(input: {
           await notifyCreatorPackageSold({
             creatorId: col.creatorId,
             collectionId: input.collectionId,
+            collectionSlug: col.slug,
             collectionTitle: col.title,
             packagePurchaseId,
             amountUsd,
@@ -562,6 +563,7 @@ export async function prepareCollectionPackagePurchase(input: {
         await notifyCreatorPackageSold({
           creatorId: col.creatorId,
           collectionId: input.collectionId,
+          collectionSlug: col.slug,
           collectionTitle: col.title,
           packagePurchaseId: created.pkg.id,
           amountUsd,

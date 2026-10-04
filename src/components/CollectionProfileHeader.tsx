@@ -1,4 +1,5 @@
 import { CreatorAvatar } from "@/components/CreatorAvatar";
+import { collectionSocialLinks } from "@/lib/marketplace/collection-profile";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -19,6 +20,11 @@ export type CollectionProfileHeaderProps = {
   creatorId: string;
   creatorName: string;
   creatorAvatarUrl?: string | null;
+  /** Collection logo / avatar (preferred over hero fallback). */
+  imageUrl?: string | null;
+  /** Collection banner / cover (preferred over hero fallback). */
+  bannerUrl?: string | null;
+  /** Fallback media when no dedicated banner/image is set. */
   coverUrl?: string | null;
   chain: string;
   itemCount: number;
@@ -27,6 +33,10 @@ export type CollectionProfileHeaderProps = {
   badges?: ReactNode;
   actions?: ReactNode;
   description?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
 };
 
 /**
@@ -39,6 +49,8 @@ export function CollectionProfileHeader({
   creatorId,
   creatorName,
   creatorAvatarUrl,
+  imageUrl,
+  bannerUrl,
   coverUrl,
   chain,
   itemCount,
@@ -47,11 +59,23 @@ export function CollectionProfileHeader({
   badges,
   actions,
   description,
+  websiteUrl,
+  twitterUrl,
+  discordUrl,
+  instagramUrl,
 }: CollectionProfileHeaderProps) {
   const hue = hueFromId(id);
-  const bannerStyle = coverUrl
+  const bannerSrc = bannerUrl || coverUrl || null;
+  const avatarSrc = imageUrl || coverUrl || null;
+  const socials = collectionSocialLinks({
+    websiteUrl,
+    twitterUrl,
+    discordUrl,
+    instagramUrl,
+  });
+  const bannerStyle = bannerSrc
     ? {
-        backgroundImage: `linear-gradient(180deg, transparent 40%, var(--media-scrim-soft)), url(${coverUrl})`,
+        backgroundImage: `linear-gradient(180deg, transparent 40%, var(--media-scrim-soft)), url(${bannerSrc})`,
         backgroundSize: "cover" as const,
         backgroundPosition: "center" as const,
       }
@@ -67,12 +91,12 @@ export function CollectionProfileHeader({
       <div className="collection-profile__banner" style={bannerStyle} />
       <div className="collection-profile__body">
         <div className="collection-profile__avatar-wrap">
-          {coverUrl ? (
+          {avatarSrc ? (
             <span
               className="collection-profile__avatar collection-profile__avatar--media"
-              style={{ backgroundImage: `url(${coverUrl})` }}
+              style={{ backgroundImage: `url(${avatarSrc})` }}
               role="img"
-              aria-label=""
+              aria-label={`${title} logo`}
             />
           ) : (
             <CreatorAvatar
@@ -98,6 +122,22 @@ export function CollectionProfileHeader({
           ) : null}
           {description ? (
             <p className="collection-profile__desc">{description}</p>
+          ) : null}
+          {socials.length ? (
+            <ul className="collection-profile__socials" aria-label="Collection links">
+              {socials.map((link) => (
+                <li key={link.key}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="collection-profile__social"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
 

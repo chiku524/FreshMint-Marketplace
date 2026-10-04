@@ -46,6 +46,11 @@ export async function GET(req: NextRequest) {
   });
 }
 
+const optionalUrl = z
+  .union([z.string().max(2048), z.null()])
+  .optional()
+  .transform((v) => (v === "" ? null : v));
+
 const createSchema = z
   .object({
     title: z.string().min(1).max(120),
@@ -55,6 +60,13 @@ const createSchema = z
       .enum(["ethereum", "base", "arbitrum", "optimism", "solana", "boing"])
       .optional(),
     creatorAddress: z.string().min(1).max(128).optional(),
+    description: z.string().max(2000).optional(),
+    imageUrl: optionalUrl,
+    bannerUrl: optionalUrl,
+    websiteUrl: optionalUrl,
+    twitterUrl: optionalUrl,
+    discordUrl: optionalUrl,
+    instagramUrl: optionalUrl,
   })
   .refine((v) => Boolean(v.network || v.chain), {
     message: "network_required",
@@ -93,6 +105,13 @@ export async function POST(req: NextRequest) {
     network,
     chain: vmFromNetwork(network),
     creatorAddress,
+    description: body.data.description,
+    imageUrl: body.data.imageUrl,
+    bannerUrl: body.data.bannerUrl,
+    websiteUrl: body.data.websiteUrl,
+    twitterUrl: body.data.twitterUrl,
+    discordUrl: body.data.discordUrl,
+    instagramUrl: body.data.instagramUrl,
   });
   if (!result.ok) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });

@@ -455,6 +455,13 @@ export async function createCollectionForUser(input: {
   chain?: Chain;
   network?: NetworkId | string;
   creatorAddress?: string | null;
+  description?: string;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
 }) {
   const { validateCollectionTitleFormat } = await import(
     "@/lib/marketplace/collection-title"
@@ -474,6 +481,31 @@ export async function createCollectionForUser(input: {
     return { ok: false as const, errors: [`invalid_slug_${slugCheck.issue}`] };
   }
   const slug = slugCheck.slug;
+
+  const { validateCollectionProfileFields } = await import(
+    "@/lib/marketplace/collection-profile"
+  );
+  const profileCheck = validateCollectionProfileFields({
+    description: input.description ?? "",
+    imageUrl: input.imageUrl,
+    bannerUrl: input.bannerUrl,
+    websiteUrl: input.websiteUrl,
+    twitterUrl: input.twitterUrl,
+    discordUrl: input.discordUrl,
+    instagramUrl: input.instagramUrl,
+  });
+  if (!profileCheck.ok) {
+    return { ok: false as const, errors: profileCheck.issues };
+  }
+  const profile = {
+    description: profileCheck.data.description ?? "",
+    imageUrl: profileCheck.data.imageUrl ?? null,
+    bannerUrl: profileCheck.data.bannerUrl ?? null,
+    websiteUrl: profileCheck.data.websiteUrl ?? null,
+    twitterUrl: profileCheck.data.twitterUrl ?? null,
+    discordUrl: profileCheck.data.discordUrl ?? null,
+    instagramUrl: profileCheck.data.instagramUrl ?? null,
+  };
 
   const network = resolveNetwork(input.network, input.chain);
   const chain = vmFromNetwork(network);
@@ -512,6 +544,7 @@ export async function createCollectionForUser(input: {
       dropEndsAt: null,
       dropPriceUsd: null,
       mediaBytes: 0,
+      ...profile,
       contractAddress: null,
       deployTxHash: null,
       deployStatus: "pending_wallet",
@@ -531,6 +564,7 @@ export async function createCollectionForUser(input: {
           chain,
           network,
           deployStatus: "pending_wallet",
+          ...profile,
         },
       });
       collection = toCollection(created);
@@ -979,6 +1013,70 @@ export async function confirmCollectionMintBatch(input: {
   }
 
   return { ok: true as const, txHash: input.txHash };
+}
+
+export async function updateCollectionProfile(input: {
+  collectionId: string;
+  creatorId: string;
+  description?: string;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, errors: ["collection_not_found"] };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+
+  const { validateCollectionProfileFields } = await import(
+    "@/lib/marketplace/collection-profile"
+  );
+  const profileCheck = validateCollectionProfileFields({
+    description: input.description,
+    imageUrl: input.imageUrl,
+    bannerUrl: input.bannerUrl,
+    websiteUrl: input.websiteUrl,
+    twitterUrl: input.twitterUrl,
+    discordUrl: input.discordUrl,
+    instagramUrl: input.instagramUrl,
+  });
+  if (!profileCheck.ok) {
+    return { ok: false as const, errors: profileCheck.issues };
+  }
+  if (Object.keys(profileCheck.data).length === 0) {
+    return { ok: false as const, errors: ["empty_patch"] };
+  }
+
+  const next: Collection = {
+    ...existing,
+    ...profileCheck.data,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(input.collectionId, next);
+    return { ok: true as const, collection: next, errors: [] as string[] };
+  }
+
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: profileCheck.data,
+  });
+  const mapped = toCollection(updated);
+  engine.state.collections.set(input.collectionId, mapped);
+  return {
+    ok: true as const,
+    collection: mapped,
+    errors: [] as string[],
+  };
 }
 
 export async function updateCollectionDrop(input: {

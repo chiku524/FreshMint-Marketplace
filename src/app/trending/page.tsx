@@ -1,5 +1,6 @@
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { rankTrendingListings } from "@/lib/marketplace/trending";
 import { trendingCollectionsFromRanked } from "@/lib/marketplace/trending-collections";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -45,7 +46,7 @@ export default async function TrendingPage() {
             {collectionStrip.map((item) => (
               <Link
                 key={item.collection.id}
-                href={`/collections/${item.collection.slug || item.collection.id}`}
+                href={collectionHref(item.collection)}
                 className="badge"
                 style={{ textDecoration: "none" }}
               >

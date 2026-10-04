@@ -1,6 +1,7 @@
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { searchCatalog } from "@/lib/marketplace/search";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
@@ -99,7 +100,7 @@ export default async function SearchPage({
                 {collections.map((h) =>
                   h.kind === "collection" ? (
                     <li key={h.collection.id}>
-                      <Link href={`/collections/${h.collection.slug || h.collection.id}`} className="badge">
+                      <Link href={collectionHref(h.collection)} className="badge">
                         {h.collection.title}
                       </Link>
                     </li>

@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -139,7 +140,7 @@ export default async function CreatorProfilePage({
             {collections.map((collection) => (
               <Link
                 key={collection.id}
-                href={`/collections/${collection.slug?.trim() || collection.id}`}
+                href={collectionHref(collection)}
                 className="badge"
               >
                 {collection.title} · {collection.totalItems}

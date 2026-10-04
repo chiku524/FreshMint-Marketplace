@@ -42,9 +42,11 @@ function vmForNetwork(network: string): Chain {
 
 export function CollectionPackagePanel({
   collectionId,
+  collectionSlug,
   isOwner,
 }: {
   collectionId: string;
+  collectionSlug?: string | null;
   isOwner: boolean;
 }) {
   const router = useRouter();
@@ -370,9 +372,12 @@ export function CollectionPackagePanel({
                 );
               }
               if (primary.kind === "sign_in") {
+                const nextPath = `/collections/${
+                  collectionSlug?.trim() || collectionId
+                }`;
                 return (
                   <Link
-                    href={`/sign-in?next=/collections/${collectionId}`}
+                    href={`/sign-in?next=${encodeURIComponent(nextPath)}`}
                     className="badge featured"
                   >
                     {primary.label}

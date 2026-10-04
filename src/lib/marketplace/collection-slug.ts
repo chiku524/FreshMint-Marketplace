@@ -89,3 +89,47 @@ export function collectionHref(collection: {
   const slug = collection.slug?.trim();
   return `/collections/${slug || collection.id}`;
 }
+
+/**
+ * Pick a unique URL-safe slug from a title.
+ * Avoids reserved words and any strings already in `taken` (existing slugs).
+ */
+export function allocateUniqueCollectionSlug(
+  title: string,
+  taken: ReadonlySet<string>,
+  opts?: { fallbackSeed?: string },
+): string {
+  let base = suggestCollectionSlug(title);
+  if (
+    !base ||
+    base.length < COLLECTION_SLUG_MIN ||
+    RESERVED_COLLECTION_SLUGS.has(base)
+  ) {
+    const seed = opts?.fallbackSeed?.trim() || "collection";
+    base = normalizeCollectionSlug(seed) || "collection";
+    if (base.length < COLLECTION_SLUG_MIN) {
+      base = `col-${base}`.slice(0, COLLECTION_SLUG_MAX);
+    }
+    if (RESERVED_COLLECTION_SLUGS.has(base)) {
+      base = `col-${base}`.slice(0, COLLECTION_SLUG_MAX);
+    }
+  }
+
+  const isFree = (candidate: string) =>
+    Boolean(candidate) &&
+    candidate.length >= COLLECTION_SLUG_MIN &&
+    candidate.length <= COLLECTION_SLUG_MAX &&
+    SLUG_RE.test(candidate) &&
+    !RESERVED_COLLECTION_SLUGS.has(candidate) &&
+    !taken.has(candidate);
+
+  if (isFree(base)) return base;
+
+  for (let n = 2; n < 10_000; n += 1) {
+    const suffix = `-${n}`;
+    const truncated = base.slice(0, Math.max(1, COLLECTION_SLUG_MAX - suffix.length));
+    const candidate = `${truncated}${suffix}`.replace(/-+$/g, "");
+    if (isFree(candidate)) return candidate;
+  }
+  throw new Error("unable_to_allocate_collection_slug");
+}

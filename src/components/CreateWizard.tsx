@@ -202,6 +202,18 @@ export function CreateWizard() {
     message: null,
     normalized: null,
   });
+  const [collectionDescription, setCollectionDescription] = useState("");
+  const [collectionImageUrl, setCollectionImageUrl] = useState<string | null>(
+    null,
+  );
+  const [collectionBannerUrl, setCollectionBannerUrl] = useState<string | null>(
+    null,
+  );
+  const [collectionWebsiteUrl, setCollectionWebsiteUrl] = useState("");
+  const [collectionTwitterUrl, setCollectionTwitterUrl] = useState("");
+  const [collectionDiscordUrl, setCollectionDiscordUrl] = useState("");
+  const [collectionInstagramUrl, setCollectionInstagramUrl] = useState("");
+  const [profileUploadBusy, setProfileUploadBusy] = useState(false);
   const [network, setNetwork] = useState("ethereum");
 
   const [dropKind, setDropKind] = useState<DropKind>("limited");
@@ -687,6 +699,13 @@ export function CreateWizard() {
         slug: slugFormat.slug,
         network,
         creatorAddress: creatorAddress || undefined,
+        description: collectionDescription || undefined,
+        imageUrl: collectionImageUrl,
+        bannerUrl: collectionBannerUrl,
+        websiteUrl: collectionWebsiteUrl || null,
+        twitterUrl: collectionTwitterUrl || null,
+        discordUrl: collectionDiscordUrl || null,
+        instagramUrl: collectionInstagramUrl || null,
       }),
     });
     const data = await res.json();
@@ -1700,6 +1719,182 @@ export function CreateWizard() {
                     "Lowercase letters, numbers, and hyphens. Must be unique."}
                 </p>
               </label>
+            ) : null}
+            {!collectionId ? (
+              <fieldset
+                className="create-wizard__profile-fields"
+                style={{
+                  margin: 0,
+                  padding: 0,
+                  border: "none",
+                  display: "grid",
+                  gap: "0.75rem",
+                }}
+              >
+                <legend
+                  style={{
+                    padding: 0,
+                    color: "var(--ink-muted)",
+                    fontSize: "0.88rem",
+                  }}
+                >
+                  Collection profile (optional)
+                </legend>
+                <label>
+                  Description
+                  <textarea
+                    value={collectionDescription}
+                    onChange={(e) => setCollectionDescription(e.target.value)}
+                    maxLength={2000}
+                    rows={2}
+                    placeholder="About this collection"
+                    style={{ ...fieldStyle, resize: "vertical" }}
+                  />
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                  }}
+                >
+                  <label className="badge" style={{ cursor: "pointer" }}>
+                    {profileUploadBusy ? "Uploading…" : "Upload logo"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      hidden
+                      disabled={profileUploadBusy}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        setProfileUploadBusy(true);
+                        setError(null);
+                        try {
+                          const fd = new FormData();
+                          fd.set("file", file);
+                          const upload = await fetch("/api/media/upload", {
+                            method: "POST",
+                            credentials: "include",
+                            body: fd,
+                          });
+                          const data = (await upload.json()) as {
+                            mediaUrl?: string;
+                            error?: string;
+                          };
+                          if (!upload.ok || !data.mediaUrl) {
+                            throw new Error(data.error || "upload_failed");
+                          }
+                          setCollectionImageUrl(data.mediaUrl);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : "upload_failed",
+                          );
+                        } finally {
+                          setProfileUploadBusy(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="badge" style={{ cursor: "pointer" }}>
+                    Upload banner
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      hidden
+                      disabled={profileUploadBusy}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        setProfileUploadBusy(true);
+                        setError(null);
+                        try {
+                          const fd = new FormData();
+                          fd.set("file", file);
+                          const upload = await fetch("/api/media/upload", {
+                            method: "POST",
+                            credentials: "include",
+                            body: fd,
+                          });
+                          const data = (await upload.json()) as {
+                            mediaUrl?: string;
+                            error?: string;
+                          };
+                          if (!upload.ok || !data.mediaUrl) {
+                            throw new Error(data.error || "upload_failed");
+                          }
+                          setCollectionBannerUrl(data.mediaUrl);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : "upload_failed",
+                          );
+                        } finally {
+                          setProfileUploadBusy(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  {collectionImageUrl ? (
+                    <span className="badge emerging">Logo set</span>
+                  ) : null}
+                  {collectionBannerUrl ? (
+                    <span className="badge emerging">Banner set</span>
+                  ) : null}
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "0.65rem",
+                  }}
+                >
+                  <label>
+                    Website
+                    <input
+                      value={collectionWebsiteUrl}
+                      onChange={(e) => setCollectionWebsiteUrl(e.target.value)}
+                      placeholder="https://"
+                      style={fieldStyle}
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    X / Twitter
+                    <input
+                      value={collectionTwitterUrl}
+                      onChange={(e) => setCollectionTwitterUrl(e.target.value)}
+                      placeholder="https://x.com/…"
+                      style={fieldStyle}
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    Discord
+                    <input
+                      value={collectionDiscordUrl}
+                      onChange={(e) => setCollectionDiscordUrl(e.target.value)}
+                      placeholder="https://discord.gg/…"
+                      style={fieldStyle}
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    Instagram
+                    <input
+                      value={collectionInstagramUrl}
+                      onChange={(e) =>
+                        setCollectionInstagramUrl(e.target.value)
+                      }
+                      placeholder="https://instagram.com/…"
+                      style={fieldStyle}
+                      inputMode="url"
+                    />
+                  </label>
+                </div>
+              </fieldset>
             ) : null}
             <label>
               Mint network

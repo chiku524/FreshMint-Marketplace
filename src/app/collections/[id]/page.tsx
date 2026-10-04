@@ -1,5 +1,6 @@
 import { CollectionDetailTabs } from "@/components/CollectionDetailTabs";
 import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
+import { CollectionProfileEditor } from "@/components/CollectionProfileEditor";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { WorkCard } from "@/components/WorkCard";
@@ -49,6 +50,7 @@ export default async function CollectionDetailPage({
   const volumeUsd = volumes.get(collection.id) ?? 0;
   const creatorName = creator?.displayName ?? collection.creatorId;
   const aboutBlurb =
+    collection.description?.trim() ||
     hero?.description?.trim() ||
     `Creator-owned set on ${network}. Collectors pay crypto and receive the NFT at purchase.`;
 
@@ -66,12 +68,18 @@ export default async function CollectionDetailPage({
         creatorId={collection.creatorId}
         creatorName={creatorName}
         creatorAvatarUrl={creator?.avatarUrl}
+        imageUrl={collection.imageUrl}
+        bannerUrl={collection.bannerUrl}
         coverUrl={coverUrl}
         chain={network}
         itemCount={collection.totalItems || pieces.length}
         floorUsd={floorUsd}
         volumeUsd={volumeUsd}
         description={aboutBlurb}
+        websiteUrl={collection.websiteUrl}
+        twitterUrl={collection.twitterUrl}
+        discordUrl={collection.discordUrl}
+        instagramUrl={collection.instagramUrl}
         badges={
           <>
             {collection.dropKind && collection.dropKind !== "none" ? (
@@ -98,8 +106,19 @@ export default async function CollectionDetailPage({
 
       {isOwner ? (
         <div className="collection-detail__owner">
+          <CollectionProfileEditor
+            collectionId={collection.id}
+            description={collection.description ?? ""}
+            imageUrl={collection.imageUrl}
+            bannerUrl={collection.bannerUrl}
+            websiteUrl={collection.websiteUrl}
+            twitterUrl={collection.twitterUrl}
+            discordUrl={collection.discordUrl}
+            instagramUrl={collection.instagramUrl}
+          />
           <CollectionPackagePanel
             collectionId={collection.id}
+            collectionSlug={collection.slug}
             isOwner={isOwner}
           />
           {canUpdateFeeRecipients && collection.contractAddress ? (

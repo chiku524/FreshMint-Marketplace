@@ -1,7 +1,15 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { updateCollectionDrop } from "@/lib/marketplace/service";
+import {
+  updateCollectionDrop,
+  updateCollectionProfile,
+} from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+
+const optionalUrl = z
+  .union([z.string().max(2048), z.null()])
+  .optional()
+  .transform((v) => (v === "" ? null : v));
 
 const dropSchema = z.object({
   dropKind: z.enum(["limited", "open"]),
@@ -9,6 +17,28 @@ const dropSchema = z.object({
   dropEndsAt: z.string().min(1),
   dropPriceUsd: z.number().nonnegative().nullable().optional(),
 });
+
+const profileSchema = z
+  .object({
+    description: z.string().max(2000).optional(),
+    imageUrl: optionalUrl,
+    bannerUrl: optionalUrl,
+    websiteUrl: optionalUrl,
+    twitterUrl: optionalUrl,
+    discordUrl: optionalUrl,
+    instagramUrl: optionalUrl,
+  })
+  .refine(
+    (body) =>
+      body.description !== undefined ||
+      body.imageUrl !== undefined ||
+      body.bannerUrl !== undefined ||
+      body.websiteUrl !== undefined ||
+      body.twitterUrl !== undefined ||
+      body.discordUrl !== undefined ||
+      body.instagramUrl !== undefined,
+    { message: "empty_patch" },
+  );
 
 export async function PATCH(
   req: NextRequest,
@@ -20,21 +50,45 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const body = dropSchema.safeParse(await req.json());
-  if (!body.success) {
+  const json = await req.json();
+
+  const dropBody = dropSchema.safeParse(json);
+  if (dropBody.success) {
+    const result = await updateCollectionDrop({
+      collectionId: id,
+      creatorId: user.id,
+      dropKind: dropBody.data.dropKind,
+      dropStartsAt: dropBody.data.dropStartsAt,
+      dropEndsAt: dropBody.data.dropEndsAt,
+      dropPriceUsd: dropBody.data.dropPriceUsd,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { ok: false, errors: result.errors },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ ok: true, collection: result.collection });
+  }
+
+  const profileBody = profileSchema.safeParse(json);
+  if (!profileBody.success) {
     return NextResponse.json(
-      { error: "invalid_body", details: body.error.flatten() },
+      { error: "invalid_body", details: profileBody.error.flatten() },
       { status: 400 },
     );
   }
 
-  const result = await updateCollectionDrop({
+  const result = await updateCollectionProfile({
     collectionId: id,
     creatorId: user.id,
-    dropKind: body.data.dropKind,
-    dropStartsAt: body.data.dropStartsAt,
-    dropEndsAt: body.data.dropEndsAt,
-    dropPriceUsd: body.data.dropPriceUsd,
+    description: profileBody.data.description,
+    imageUrl: profileBody.data.imageUrl,
+    bannerUrl: profileBody.data.bannerUrl,
+    websiteUrl: profileBody.data.websiteUrl,
+    twitterUrl: profileBody.data.twitterUrl,
+    discordUrl: profileBody.data.discordUrl,
+    instagramUrl: profileBody.data.instagramUrl,
   });
   if (!result.ok) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });

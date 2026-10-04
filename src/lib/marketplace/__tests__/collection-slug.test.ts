@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allocateUniqueCollectionSlug,
   collectionHref,
   collectionSlugIssueMessage,
   normalizeCollectionSlug,
@@ -44,5 +45,16 @@ describe("collection-slug", () => {
 
   it("has readable issue messages", () => {
     expect(collectionSlugIssueMessage("taken")).toMatch(/taken/i);
+  });
+
+  it("allocates unique slugs from titles without overwriting taken ones", () => {
+    const taken = new Set(["dawn-set", "baked-nation"]);
+    expect(allocateUniqueCollectionSlug("Dawn Set", taken)).toBe("dawn-set-2");
+    expect(allocateUniqueCollectionSlug("Baked Nation (2)", taken)).toBe(
+      "baked-nation-2",
+    );
+    expect(allocateUniqueCollectionSlug("New", taken, { fallbackSeed: "col-abc" })).toBe(
+      "col-abc",
+    );
   });
 });

@@ -240,18 +240,23 @@ export async function notifyCreatorItemSold(input: {
 export async function notifyCreatorPackageSold(input: {
   creatorId: string;
   collectionId: string;
+  collectionSlug?: string | null;
   collectionTitle?: string;
   packagePurchaseId: string;
   amountUsd: number;
   listingCount: number;
   now?: number;
 }) {
+  const { collectionHref } = await import("@/lib/marketplace/collection-slug");
   return createNotification({
     userId: input.creatorId,
     type: "package_sold",
     title: "Package sold",
     body: `Package of ${input.listingCount} works from “${input.collectionTitle ?? "collection"}” sold for $${input.amountUsd}.`,
-    href: `/collections/${input.collectionId}`,
+    href: collectionHref({
+      id: input.collectionId,
+      slug: input.collectionSlug,
+    }),
     dedupeKey: notificationDedupeKey("package_sold", input.packagePurchaseId),
     payload: {
       collectionId: input.collectionId,

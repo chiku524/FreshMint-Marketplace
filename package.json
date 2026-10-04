@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
+    "db:backfill-slugs": "node scripts/backfill-collection-slugs.mjs",
     "wallets:create": "node scripts/create-platform-wallets.mjs",
     "wallets:deploy-safe": "node scripts/deploy-treasury-safe.mjs",
     "wallets:deploy-squads": "node scripts/deploy-treasury-squads.mjs",
