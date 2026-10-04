@@ -2,8 +2,14 @@
 
 import { CreateLivePreview } from "@/components/CreateLivePreview";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import { PublishConfetti } from "@/components/PublishConfetti";
 import { TraitEditor } from "@/components/TraitEditor";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { WizardShell } from "@/components/WizardShell";
+import {
+  mapPoolSettled,
+  retryWithBackoff,
+} from "@/lib/async/pool";
 import type { NftTrait } from "@/lib/discovery/types";
 import {
   COLLECTION_MEDIA_CAP_BYTES,
@@ -13,6 +19,7 @@ import {
   parseDropMetadataCsv,
   parseTraits,
 } from "@/lib/marketplace/drops";
+import { isExplorableTxHash } from "@/lib/onchain/explorer";
 import {
   maybeSendWalletTx,
   requestBuyerAddress,
@@ -28,6 +35,13 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+
+/** Parallel media uploads — high enough to cut serial wait, low enough for Blob/API. */
+const UPLOAD_CONCURRENCY = 4;
+/** Listing drafts are lightweight JSON posts. */
+const LISTING_CONCURRENCY = 6;
+/** Soft-launch stage calls after mint. */
+const STAGE_CONCURRENCY = 6;
 
 function collectionNetworkOf(c: CollectionOption): string {
   return (c.network || c.chain || "").toLowerCase();
@@ -95,6 +109,26 @@ function titleFromFile(name: string): string {
   return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 120);
 }
 
+function uploadErrorMessage(code: string | undefined, fallback = "upload_failed"): string {
+  if (code === "collection_quota") {
+    return "This collection is at the 10 GB art cap";
+  }
+  if (code === "file_too_large") return "Each file can be up to 100 MB";
+  if (code === "unsupported_type") return "Unsupported file type";
+  if (code === "empty_file") return "Empty file skipped";
+  return code || fallback;
+}
+
+function makeHttpError(
+  message: string,
+  status: number,
+): Error & { status: number; retryable: boolean } {
+  return Object.assign(new Error(message), {
+    status,
+    retryable: status === 429 || status >= 500,
+  });
+}
+
 function stepDefs(intent: Intent | null) {
   const base = [
     { id: "intent", label: "Type" },
@@ -146,6 +180,10 @@ export function CreateWizard() {
     current: number;
     total: number;
   } | null>(null);
+  const [listProgress, setListProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [deployNote, setDeployNote] = useState<string | null>(null);
   const [published, setPublished] = useState<{
     listingIds: string[];
@@ -162,6 +200,7 @@ export function CreateWizard() {
     heroMediaUrl: string;
     satelliteMediaUrls: string[];
     styleTags: string;
+    mintTxHashes: string[];
   } | null>(null);
 
   const steps = useMemo(() => stepDefs(intent), [intent]);
@@ -476,6 +515,7 @@ export function CreateWizard() {
   async function uploadFiles(files: File[]) {
     setBusy(true);
     setError(null);
+    setOk(null);
     setUploadProgress(null);
     try {
       if (!files.length) throw new Error("No files selected");
@@ -492,52 +532,107 @@ export function CreateWizard() {
         );
       }
 
-      setUploadProgress({ current: 0, total: capped.length });
-      let runningBytes = usedBytes;
-
-      for (let i = 0; i < capped.length; i++) {
-        const file = capped[i]!;
-        if (runningBytes + file.size > COLLECTION_MEDIA_CAP_BYTES) {
-          throw new Error(
-            `Stopped at ${i} of ${capped.length} — this collection is at the 10 GB art cap`,
-          );
+      // Greedy client-side cap so we don't hammer the API past quota.
+      let budget = COLLECTION_MEDIA_CAP_BYTES - usedBytes;
+      const queued: File[] = [];
+      let skippedQuota = 0;
+      for (const file of capped) {
+        if (file.size > budget) {
+          skippedQuota += 1;
+          continue;
         }
-        const fd = new FormData();
-        fd.set("file", file);
-        fd.set("collectionId", id);
-        const res = await fetch("/api/media/upload", {
-          method: "POST",
-          credentials: "include",
-          body: fd,
-        });
-        const data = await res.json();
-        if (res.status === 401) throw new Error("sign_in");
-        if (!res.ok) {
-          throw new Error(
-            data.error === "collection_quota"
-              ? "This collection is at the 10 GB art cap"
-              : data.error === "file_too_large"
-                ? "Each file can be up to 100 MB"
-                : (data.error ?? "upload_failed"),
-          );
-        }
-        const piece: Piece = {
-          key: `${data.mediaHash}-${file.name}-${i}`,
-          title: titleFromFile(file.name),
-          description: "",
-          fileName: file.name,
-          mediaUrl: data.mediaUrl,
-          mediaHash: data.mediaHash,
-          size: Number(data.size ?? file.size),
-          traits: [],
-          maxSupply: dropKind === "limited" ? "1" : "",
-        };
-        runningBytes += piece.size;
-        setPieces((current) =>
-          batchUpload ? [...current, piece] : [piece],
-        );
-        setUploadProgress({ current: i + 1, total: capped.length });
+        budget -= file.size;
+        queued.push(file);
       }
+      if (!queued.length) {
+        throw new Error(
+          skippedQuota
+            ? "This collection is at the 10 GB art cap"
+            : "No files selected",
+        );
+      }
+
+      setUploadProgress({ current: 0, total: queued.length });
+      let completed = 0;
+      const settled = await mapPoolSettled(
+        queued,
+        UPLOAD_CONCURRENCY,
+        async (file, index) => {
+          const piece = await retryWithBackoff(
+            async () => {
+              const fd = new FormData();
+              fd.set("file", file);
+              fd.set("collectionId", id);
+              const res = await fetch("/api/media/upload", {
+                method: "POST",
+                credentials: "include",
+                body: fd,
+              });
+              let data: { error?: string; mediaUrl?: string; mediaHash?: string; size?: number } =
+                {};
+              try {
+                data = await res.json();
+              } catch {
+                data = {};
+              }
+              if (res.status === 401) {
+                throw makeHttpError("sign_in", 401);
+              }
+              if (!res.ok) {
+                throw makeHttpError(
+                  uploadErrorMessage(data.error),
+                  res.status,
+                );
+              }
+              if (!data.mediaUrl || !data.mediaHash) {
+                throw makeHttpError("upload_failed", 502);
+              }
+              return {
+                key: `${data.mediaHash}-${file.name}-${index}`,
+                title: titleFromFile(file.name),
+                description: "",
+                fileName: file.name,
+                mediaUrl: data.mediaUrl,
+                mediaHash: data.mediaHash,
+                size: Number(data.size ?? file.size),
+                traits: [] as NftTrait[],
+                maxSupply: dropKind === "limited" ? "1" : "",
+              } satisfies Piece;
+            },
+            { retries: 3, baseDelayMs: 320, maxDelayMs: 3_500 },
+          );
+          completed += 1;
+          setUploadProgress({ current: completed, total: queued.length });
+          return piece;
+        },
+      );
+
+      const okPieces = settled
+        .filter((s): s is { ok: true; value: Piece; index: number } => s.ok)
+        .sort((a, b) => a.index - b.index)
+        .map((s) => s.value);
+      const failed = settled.filter((s) => !s.ok);
+
+      if (okPieces.length) {
+        setPieces((current) =>
+          batchUpload ? [...current, ...okPieces] : [okPieces[0]!],
+        );
+      }
+
+      if (failed.length) {
+        const sample = failed
+          .slice(0, 3)
+          .map((f) => ("error" in f ? f.error.message : "upload_failed"))
+          .join("; ");
+        const msg = `Uploaded ${okPieces.length} of ${queued.length} — ${failed.length} failed${sample ? ` (${sample})` : ""}. Retry the failed files.`;
+        if (!okPieces.length) throw new Error(msg);
+        setError(msg);
+      } else if (skippedQuota) {
+        setOk(
+          `Uploaded ${okPieces.length}. ${skippedQuota} file${skippedQuota === 1 ? "" : "s"} skipped — collection is at the 10 GB art cap.`,
+        );
+      }
+
       loadMine();
     } catch (e) {
       setError(e instanceof Error ? e.message : "upload_failed");
@@ -707,104 +802,151 @@ export function CreateWizard() {
         }
       }
 
-      const listingIds: string[] = [];
-      for (const [index, item] of pieces.entries()) {
-        const supply =
-          intent === "drop" && dropKind === "limited" && item.maxSupply
-            ? Number(item.maxSupply)
-            : intent === "drop" && dropKind === "open" && item.maxSupply
+      setListProgress({ current: 0, total: pieces.length });
+      let listingsDone = 0;
+      const listingSettled = await mapPoolSettled(
+        pieces,
+        LISTING_CONCURRENCY,
+        async (item, index) => {
+          const supply =
+            intent === "drop" && dropKind === "limited" && item.maxSupply
               ? Number(item.maxSupply)
-              : null;
-        let type: "single" | "collection" | "open_edition" | "auction" = "single";
-        if (intent === "auction") type = "auction";
-        else if (intent === "drop") {
-          type =
-            dropKind === "open" || (supply != null && supply > 1)
-              ? "open_edition"
-              : "collection";
-        }
+              : intent === "drop" && dropKind === "open" && item.maxSupply
+                ? Number(item.maxSupply)
+                : null;
+          let type: "single" | "collection" | "open_edition" | "auction" =
+            "single";
+          if (intent === "auction") type = "auction";
+          else if (intent === "drop") {
+            type =
+              dropKind === "open" || (supply != null && supply > 1)
+                ? "open_edition"
+                : "collection";
+          }
 
-        const res = await fetch("/api/listings", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: item.title || `Piece ${index + 1}`,
-            description:
-              item.description ||
-              (intent === "drop"
-                ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
-                : intent === "auction"
-                  ? "Timed drop"
-                  : ""),
-            type,
-            network,
-            priceUsd: price,
-            medium: medium.trim() || "digital",
-            styleTags: tags,
-            mediaHash: item.mediaHash,
-            mediaUrl: item.mediaUrl,
-            collectionId: id,
-            isCollectionHero: index === 0,
-            traits: parseTraits(item.traits),
-            maxSupply: supply && supply > 0 ? supply : null,
-            oeStartsAt: intent === "drop" ? start : null,
-            oeEndsAt: intent === "drop" ? end : null,
-            auctionStartsAt: intent === "auction" ? start : null,
-            auctionEndsAt: intent === "auction" ? end : null,
-            saleMode:
-              intent === "auction"
-                ? saleMode
-                : intent === "single"
-                  ? "fixed"
-                  : "fixed",
-            startingBidUsd:
-              intent === "auction" && saleMode === "english"
-                ? Number(startingBidUsd) || Number(price) || null
-                : null,
-            reserveUsd:
-              intent === "auction" && saleMode === "english" && reserveUsd
-                ? Number(reserveUsd)
-                : null,
-            publishSoftLaunch: false,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(
-            (data.errors && data.errors.join(", ")) || data.error || "listing_failed",
+          const listingId = await retryWithBackoff(
+            async () => {
+              const res = await fetch("/api/listings", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  title: item.title || `Piece ${index + 1}`,
+                  description:
+                    item.description ||
+                    (intent === "drop"
+                      ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
+                      : intent === "auction"
+                        ? "Timed drop"
+                        : ""),
+                  type,
+                  network,
+                  priceUsd: price,
+                  medium: medium.trim() || "digital",
+                  styleTags: tags,
+                  mediaHash: item.mediaHash,
+                  mediaUrl: item.mediaUrl,
+                  collectionId: id,
+                  isCollectionHero: index === 0,
+                  traits: parseTraits(item.traits),
+                  maxSupply: supply && supply > 0 ? supply : null,
+                  oeStartsAt: intent === "drop" ? start : null,
+                  oeEndsAt: intent === "drop" ? end : null,
+                  auctionStartsAt: intent === "auction" ? start : null,
+                  auctionEndsAt: intent === "auction" ? end : null,
+                  saleMode:
+                    intent === "auction"
+                      ? saleMode
+                      : intent === "single"
+                        ? "fixed"
+                        : "fixed",
+                  startingBidUsd:
+                    intent === "auction" && saleMode === "english"
+                      ? Number(startingBidUsd) || Number(price) || null
+                      : null,
+                  reserveUsd:
+                    intent === "auction" && saleMode === "english" && reserveUsd
+                      ? Number(reserveUsd)
+                      : null,
+                  publishSoftLaunch: false,
+                }),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                throw makeHttpError(
+                  (data.errors && data.errors.join(", ")) ||
+                    data.error ||
+                    "listing_failed",
+                  res.status,
+                );
+              }
+              const lid = String(data.listing?.id ?? data.id ?? "");
+              if (!lid) throw makeHttpError("listing_failed", 502);
+              return lid;
+            },
+            { retries: 3, baseDelayMs: 280, maxDelayMs: 3_000 },
           );
-        }
-        const listingId = String(data.listing?.id ?? data.id ?? "");
-        if (listingId) listingIds.push(listingId);
+          listingsDone += 1;
+          setListProgress({ current: listingsDone, total: pieces.length });
+          return { index, listingId };
+        },
+      );
+
+      const listingOk = listingSettled.filter(
+        (s): s is { ok: true; value: { index: number; listingId: string }; index: number } =>
+          s.ok,
+      );
+      const listingFail = listingSettled.filter((s) => !s.ok);
+      if (listingFail.length) {
+        const sample = listingFail
+          .slice(0, 2)
+          .map((f) => ("error" in f ? f.error.message : "listing_failed"))
+          .join("; ");
+        throw new Error(
+          `Created ${listingOk.length} of ${pieces.length} listings — ${listingFail.length} failed${sample ? ` (${sample})` : ""}. Fix and retry mint; successful drafts were kept.`,
+        );
       }
+      const listingIds = listingOk
+        .sort((a, b) => a.value.index - b.value.index)
+        .map((s) => s.value.listingId);
+      setListProgress(null);
 
       // Mint into the collection contract (creator pays gas).
+      // Wallet-signed batches stay serial; confirms retry on transient errors.
       const creatorAddress = await requestBuyerAddress(
         network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
       );
-      const mintPrep = await fetch(`/api/collections/${id}/mint`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "prepare",
-          listingIds,
-          creatorAddress: creatorAddress || undefined,
-        }),
-      });
-      const mintPrepData = await mintPrep.json();
-      if (!mintPrep.ok) {
-        throw new Error(mintPrepData.error || "mint_prepare_failed");
-      }
-      const batches = (mintPrepData.batches ?? []) as Array<{
-        listingIds: string[];
-        provisionalTokenIds: string[];
-        walletTx?: unknown;
-        contractAddress?: string;
-        txHash?: string;
-        status?: string;
-      }>;
+      const mintPrep = await retryWithBackoff(
+        async () => {
+          const res = await fetch(`/api/collections/${id}/mint`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "prepare",
+              listingIds,
+              creatorAddress: creatorAddress || undefined,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw makeHttpError(data.error || "mint_prepare_failed", res.status);
+          }
+          return data as {
+            batches?: Array<{
+              listingIds: string[];
+              provisionalTokenIds: string[];
+              walletTx?: unknown;
+              contractAddress?: string;
+              txHash?: string;
+              status?: string;
+            }>;
+          };
+        },
+        { retries: 2, baseDelayMs: 400, maxDelayMs: 3_000 },
+      );
+      const batches = mintPrep.batches ?? [];
+      const mintTxHashes: string[] = [];
       if (batches.length) {
         setMintProgress({ current: 0, total: batches.length });
         for (let b = 0; b < batches.length; b++) {
@@ -824,53 +966,82 @@ export function CreateWizard() {
             }
             if (!txHash) {
               throw new Error(
-                "Wallet required to mint pieces into your collection (you pay gas)",
+                `Wallet required to mint batch ${b + 1} of ${batches.length} (you pay gas). Earlier batches were confirmed — retry to finish the rest.`,
               );
             }
           } else if (!txHash) {
             txHash = `simulated-mint:${id}:${b}:${Date.now()}`;
           }
-          const confirm = await fetch(`/api/collections/${id}/mint`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "confirm",
-              txHash,
-              listingIds: batch.listingIds,
-              tokenIds: batch.provisionalTokenIds,
-              contractAddress: batch.contractAddress,
-            }),
-          });
-          const confirmData = await confirm.json();
-          if (!confirm.ok) {
-            throw new Error(confirmData.error || "mint_confirm_failed");
-          }
+          await retryWithBackoff(
+            async () => {
+              const confirm = await fetch(`/api/collections/${id}/mint`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "confirm",
+                  txHash,
+                  listingIds: batch.listingIds,
+                  tokenIds: batch.provisionalTokenIds,
+                  contractAddress: batch.contractAddress,
+                }),
+              });
+              const confirmData = await confirm.json();
+              if (!confirm.ok) {
+                throw makeHttpError(
+                  confirmData.error || "mint_confirm_failed",
+                  confirm.status,
+                );
+              }
+            },
+            { retries: 3, baseDelayMs: 400, maxDelayMs: 4_000 },
+          );
+          mintTxHashes.push(txHash);
           setMintProgress({ current: b + 1, total: batches.length });
         }
       }
 
       // Soft-launch only after mint confirms — keeps Open Lane buyable.
-      for (const listingId of listingIds) {
-        const stageRes = await fetch(`/api/listings/${listingId}/stage`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target: "soft_launch" }),
-        });
-        const stageData = await stageRes.json();
-        if (!stageRes.ok) {
-          const errs = Array.isArray(stageData.errors)
-            ? stageData.errors.join(", ")
-            : stageData.error;
-          throw new Error(
-            errs === "listing_not_minted" ||
-              (Array.isArray(stageData.errors) &&
-                stageData.errors.includes("listing_not_minted"))
-              ? "Mint must finish before soft-launch. Retry publish mint, then try again."
-              : errs || "soft_launch_failed",
+      const stageSettled = await mapPoolSettled(
+        listingIds,
+        STAGE_CONCURRENCY,
+        async (listingId) => {
+          await retryWithBackoff(
+            async () => {
+              const stageRes = await fetch(`/api/listings/${listingId}/stage`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ target: "soft_launch" }),
+              });
+              const stageData = await stageRes.json();
+              if (!stageRes.ok) {
+                const errs = Array.isArray(stageData.errors)
+                  ? stageData.errors.join(", ")
+                  : stageData.error;
+                const message =
+                  errs === "listing_not_minted" ||
+                  (Array.isArray(stageData.errors) &&
+                    stageData.errors.includes("listing_not_minted"))
+                    ? "Mint must finish before soft-launch. Retry publish mint, then try again."
+                    : errs || "soft_launch_failed";
+                throw makeHttpError(message, stageRes.status);
+              }
+            },
+            { retries: 2, baseDelayMs: 300, maxDelayMs: 2_500 },
           );
-        }
+          return listingId;
+        },
+      );
+      const stageFail = stageSettled.filter((s) => !s.ok);
+      if (stageFail.length) {
+        const sample = stageFail
+          .slice(0, 2)
+          .map((f) => ("error" in f ? f.error.message : "soft_launch_failed"))
+          .join("; ");
+        throw new Error(
+          `Minted, but soft-launch failed for ${stageFail.length} of ${listingIds.length}${sample ? ` (${sample})` : ""}. Open the collection and retry staging for those pieces.`,
+        );
       }
 
       const label =
@@ -902,9 +1073,11 @@ export function CreateWizard() {
           .map((p) => p.mediaUrl)
           .filter(Boolean),
         styleTags,
+        mintTxHashes,
       });
       setPieces([]);
       setMintProgress(null);
+      setListProgress(null);
       router.refresh();
       window.dispatchEvent(new Event("fm-collections-changed"));
     } catch (err) {
@@ -912,6 +1085,7 @@ export function CreateWizard() {
     } finally {
       setBusy(false);
       setMintProgress(null);
+      setListProgress(null);
     }
   }
 
@@ -954,35 +1128,60 @@ export function CreateWizard() {
 
   if (published) {
     const firstId = published.listingIds[0];
+    const explorerHashes = published.mintTxHashes.filter(isExplorableTxHash);
+    const collectionHref = `/collections/${published.collectionId}`;
     return (
       <WizardShell preview={livePreview}>
+        <PublishConfetti active />
         <div className="create-wizard">
-          <div className="create-wizard__panel create-wizard__panel--bare">
+          <div className="create-wizard__panel create-wizard__panel--bare create-wizard__panel--success">
             <h2 className="display create-wizard__title">Published on-chain</h2>
             <p className="create-wizard__lead">
               {published.label} is minted and live. Your first work auto-enters
               Rising so collectors can find it without a Featured pin. Later works
               wait out the new-wallet cooldown and weekly cap.
             </p>
-            <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "1rem 0 0" }}>
+            <div className="create-wizard__success-links" aria-label="Published links">
+              <Link href={collectionHref} className="badge featured">
+                View collection
+              </Link>
               {firstId ? (
-                <Link href={`/listings/${firstId}`} className="badge featured">
+                <Link href={`/listings/${firstId}`} className="badge">
                   Open listing
                 </Link>
               ) : null}
               <Link href="/rising" className="badge emerging">
                 Rising
               </Link>
-              <Link href="/open" className="badge">
-                Open Lane
-              </Link>
-              <Link href={`/collections/${published.collectionId}`} className="badge">
-                Collection
-              </Link>
               <Link href="/me" className="badge">
                 Your works
               </Link>
-            </p>
+            </div>
+            {explorerHashes.length ? (
+              <div className="create-wizard__tx-links">
+                <p className="create-wizard__hint">
+                  On-chain mint
+                  {explorerHashes.length === 1 ? "" : " batches"} ·{" "}
+                  {published.network}
+                </p>
+                <ul>
+                  {explorerHashes.map((hash, i) => (
+                    <li key={`${hash}-${i}`}>
+                      <TxExplorerLink
+                        hash={hash}
+                        network={published.network}
+                        label={
+                          explorerHashes.length > 1
+                            ? `Batch ${i + 1} · ${hash.slice(0, 10)}…`
+                            : undefined
+                        }
+                        className="create-wizard__tx-link"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="create-wizard__nav">
               <button
                 type="button"
@@ -1638,8 +1837,13 @@ export function CreateWizard() {
             {deployNote}
           </p>
         ) : null}
+        {listProgress ? (
+          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }} aria-live="polite">
+            Creating listings {listProgress.current} of {listProgress.total}…
+          </p>
+        ) : null}
         {mintProgress ? (
-          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }}>
+          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }} aria-live="polite">
             Minting on-chain batch {mintProgress.current} of {mintProgress.total}
             … (you pay gas)
           </p>
@@ -1690,7 +1894,9 @@ export function CreateWizard() {
               {busy
                 ? mintProgress
                   ? `Minting ${mintProgress.current}/${mintProgress.total}…`
-                  : "Minting & publishing…"
+                  : listProgress
+                    ? `Listings ${listProgress.current}/${listProgress.total}…`
+                    : "Minting & publishing…"
                 : "Mint & publish (required to sell)"}
             </button>
           )}
