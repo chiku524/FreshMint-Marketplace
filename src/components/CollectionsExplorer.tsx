@@ -113,7 +113,7 @@ function ViewIcon({ name }: { name: CollectionsViewId }) {
 export function CollectionsExplorer({
   items,
   soldIds,
-  initialView = "gallery",
+  initialView = "grid",
   lane = "top",
   children,
 }: {
@@ -265,25 +265,64 @@ export function CollectionsExplorer({
 
       {view === "grid" ? (
         <div className="collections-grid">
-          {items.map((collection) => (
-            <Link
-              key={collection.id}
-              href={`/collections/${collection.id}`}
-              className="collections-card"
-            >
-              <div className="collections-card__cover" style={coverStyle(collection)} />
-              <div className="collections-card__body">
-                <h2 className="display">{collection.title}</h2>
-                <p>
-                  {collection.creatorName} · {collection.chain} ·{" "}
-                  {collection.totalItems} items
-                  {formatVolume(collection.volumeUsd)
-                    ? ` · ${formatVolume(collection.volumeUsd)}`
-                    : ""}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {items.map((collection) => {
+            const hero =
+              collection.listings.find(
+                (listing) => listing.id === collection.heroListingId,
+              ) ?? collection.listings[0];
+            const coverUrl = hero?.mediaUrl ?? null;
+            return (
+              <Link
+                key={collection.id}
+                href={`/collections/${collection.id}`}
+                className="collections-card collections-card--profile"
+              >
+                <div
+                  className="collections-card__banner"
+                  style={coverStyle(collection)}
+                />
+                <div className="collections-card__body">
+                  <span
+                    className={
+                      coverUrl
+                        ? "collections-card__avatar collections-card__avatar--media"
+                        : "collections-card__avatar"
+                    }
+                    style={
+                      coverUrl
+                        ? { backgroundImage: `url(${coverUrl})` }
+                        : {
+                            background: `linear-gradient(145deg, hsla(${hueFromId(collection.id)}, 55%, 48%, 0.9), hsla(${(hueFromId(collection.id) + 40) % 360}, 40%, 28%, 0.95))`,
+                          }
+                    }
+                    aria-hidden
+                  />
+                  <h2 className="display">{collection.title}</h2>
+                  <p className="collections-card__byline">
+                    {collection.creatorName}
+                  </p>
+                  <dl className="collections-card__stats">
+                    <div>
+                      <dt>Items</dt>
+                      <dd>{collection.totalItems}</dd>
+                    </div>
+                    <div>
+                      <dt>Volume</dt>
+                      <dd>
+                        {collection.volumeUsd != null && collection.volumeUsd > 0
+                          ? `$${Math.round(collection.volumeUsd).toLocaleString()}`
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Chain</dt>
+                      <dd>{collection.chain}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       ) : null}
 

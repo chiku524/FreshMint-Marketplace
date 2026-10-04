@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandMark } from "@/components/MintLeaf";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export type CreateLivePreviewProps = {
@@ -27,7 +28,7 @@ function intentLabel(
   }
   if (intent === "auction") return "Timed drop";
   if (intent === "single") return "1/1 listing";
-  return "Choose a path";
+  return "New collection";
 }
 
 function networkLabel(network: string): string {
@@ -58,8 +59,8 @@ function hueFromTitle(title: string): number {
 }
 
 /**
- * Animated replica of how the collection / piece will read on FreshMint.
- * Updates live as wizard fields change.
+ * Animated live preview of the OpenSea-like collection profile
+ * collectors will see — updates as wizard fields change.
  */
 export function CreateLivePreview({
   collectionTitle,
@@ -76,18 +77,23 @@ export function CreateLivePreview({
   stepLabel,
 }: CreateLivePreviewProps) {
   const title = collectionTitle.trim() || "Untitled collection";
-  const piece = heroTitle.trim() || (pieceCount ? "Untitled piece" : "Artwork appears here");
+  const piece =
+    heroTitle.trim() || (pieceCount ? "Untitled piece" : "Your first work");
   const blurb =
     heroDescription.trim() ||
     (intent
-      ? "Add a short description — collectors see it beside the work."
-      : "Name the set, pick a network, then upload art. This stage mirrors the shelf.");
+      ? "Add a short description — it appears under the collection masthead."
+      : "Name the set and upload art. This stage mirrors the collection page.");
   const tags = styleTags
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean)
     .slice(0, 3);
   const hue = hueFromTitle(title);
+  const floor =
+    priceUsd && Number(priceUsd) > 0
+      ? `$${Number(priceUsd).toLocaleString()}`
+      : "—";
   const [pulse, setPulse] = useState(0);
 
   useEffect(() => {
@@ -103,11 +109,11 @@ export function CreateLivePreview({
     pieceCount,
   ]);
 
-  const coverStyle = heroMediaUrl
+  const bannerStyle = heroMediaUrl
     ? {
-        backgroundImage: `linear-gradient(180deg, transparent 32%, rgba(9,9,11,0.82)), url(${heroMediaUrl})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
+        backgroundImage: `linear-gradient(180deg, transparent 42%, rgba(9,9,11,0.55)), url(${heroMediaUrl})`,
+        backgroundSize: "cover" as const,
+        backgroundPosition: "center" as const,
       }
     : {
         background: `
@@ -115,6 +121,8 @@ export function CreateLivePreview({
           linear-gradient(320deg, hsla(${(hue + 48) % 360}, 28%, 28%, 0.35), var(--bg-deep))
         `,
       };
+
+  const thumbUrls = [heroMediaUrl, ...satelliteMediaUrls].filter(Boolean);
 
   return (
     <div className="create-preview" data-pulse={pulse % 2}>
@@ -124,73 +132,104 @@ export function CreateLivePreview({
         <span className="create-preview__orb create-preview__orb--c" />
       </div>
 
-      <p className="create-preview__eyebrow">{stepLabel}</p>
+      <div className="create-preview__top">
+        <Link href="/" className="create-preview__exit">
+          ← Marketplace
+        </Link>
+        <p className="create-preview__eyebrow">{stepLabel}</p>
+      </div>
 
-      <div className="create-preview__stage">
+      <div className="create-preview__stage create-preview__stage--profile">
         <div
           key={`${title}:${heroMediaUrl || "empty"}`}
-          className="create-preview__cover"
-          style={coverStyle}
+          className="create-preview__profile"
         >
-          {!heroMediaUrl ? (
-            <div className="create-preview__placeholder">
-              <span className="create-preview__placeholder-mark" aria-hidden="true" />
-              <span>Live preview</span>
-            </div>
-          ) : null}
-          <div className="create-preview__cover-body">
-            <div
-              key={title}
-              className="create-preview__collection display"
-            >
-              {title}
-            </div>
-            <div className="create-preview__meta">
-              {intentLabel(intent, dropKind)}
-              {" · "}
-              {networkLabel(network)}
-              {pieceCount > 0
-                ? ` · ${pieceCount} piece${pieceCount === 1 ? "" : "s"}`
-                : null}
-            </div>
-          </div>
-        </div>
-
-        <div key={piece} className="create-preview__piece">
-          <p className="create-preview__piece-title display">{piece}</p>
-          <p className="create-preview__piece-blurb">{blurb}</p>
-          <div className="create-preview__chips">
-            {priceUsd && Number(priceUsd) > 0 ? (
-              <span className="create-preview__chip create-preview__chip--gold">
-                ${Number(priceUsd).toLocaleString()}
-              </span>
+          <div className="create-preview__banner" style={bannerStyle}>
+            {!heroMediaUrl ? (
+              <div className="create-preview__placeholder">
+                <span
+                  className="create-preview__placeholder-mark"
+                  aria-hidden="true"
+                />
+                <span>Collection cover</span>
+              </div>
             ) : null}
-            {tags.map((tag) => (
-              <span key={tag} className="create-preview__chip">
-                {tag}
-              </span>
-            ))}
+          </div>
+
+          <div className="create-preview__profile-body">
+            <div
+              key={heroMediaUrl || "avatar"}
+              className={
+                heroMediaUrl
+                  ? "create-preview__avatar create-preview__avatar--media"
+                  : "create-preview__avatar"
+              }
+              style={
+                heroMediaUrl
+                  ? { backgroundImage: `url(${heroMediaUrl})` }
+                  : undefined
+              }
+              aria-hidden="true"
+            />
+
+            <div key={title} className="create-preview__identity">
+              <p className="create-preview__collection display">{title}</p>
+              <p className="create-preview__meta">
+                {intentLabel(intent, dropKind)}
+                {" · "}
+                {networkLabel(network)}
+              </p>
+            </div>
+
+            <dl className="create-preview__stats">
+              <div>
+                <dt>Items</dt>
+                <dd>{pieceCount || "—"}</dd>
+              </div>
+              <div>
+                <dt>Floor</dt>
+                <dd>{floor}</dd>
+              </div>
+              <div>
+                <dt>Volume</dt>
+                <dd>—</dd>
+              </div>
+            </dl>
+
+            <div key={piece} className="create-preview__piece">
+              <p className="create-preview__piece-title display">{piece}</p>
+              <p className="create-preview__piece-blurb">{blurb}</p>
+              {tags.length ? (
+                <div className="create-preview__chips">
+                  {tags.map((tag) => (
+                    <span key={tag} className="create-preview__chip">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            {thumbUrls.length > 0 ? (
+              <ul className="create-preview__item-strip" aria-hidden="true">
+                {thumbUrls.slice(0, 4).map((url, i) => (
+                  <li
+                    key={`${url}-${i}`}
+                    className="create-preview__item-thumb"
+                    style={{
+                      backgroundImage: `url(${url})`,
+                      animationDelay: `${0.1 * i}s`,
+                    }}
+                  />
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
-
-        {satelliteMediaUrls.length > 0 ? (
-          <ul className="create-preview__satellites" aria-hidden="true">
-            {satelliteMediaUrls.slice(0, 3).map((url, i) => (
-              <li
-                key={`${url}-${i}`}
-                className="create-preview__sat"
-                style={{
-                  backgroundImage: `url(${url})`,
-                  animationDelay: `${0.12 * i}s`,
-                }}
-              />
-            ))}
-          </ul>
-        ) : null}
       </div>
 
       <div className="create-preview__brand">
-        <BrandMark size={36} showWordmark />
+        <BrandMark size={32} showWordmark />
       </div>
     </div>
   );

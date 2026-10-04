@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 /**
@@ -18,7 +19,15 @@ export function WizardShell({
       <aside className="create-split__preview" aria-label="Live collection preview">
         {preview}
       </aside>
-      <div className="create-split__form">{children}</div>
+      <div className="create-split__form">
+        <div className="create-split__form-bar">
+          <Link href="/" className="create-split__home">
+            FreshMint
+          </Link>
+          <span className="create-split__form-label">Create</span>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
