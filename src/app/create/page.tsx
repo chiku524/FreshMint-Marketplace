@@ -4,15 +4,15 @@ import { Suspense } from "react";
 
 export default function CreatePage() {
   return (
-    <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Create
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "58ch", marginBottom: "0.85rem" }}>
-        Walk through a short wizard to schedule a drop, mint a 1/1, or
-        open an auction. Publish mints on-chain first; collectors pay crypto
-        and receive the NFT at purchase.
-      </p>
+    <div className="page-wrap create-page">
+      <header className="create-page__intro">
+        <p className="create-page__eyebrow">Studio</p>
+        <h1 className="display create-page__title">Create</h1>
+        <p className="create-page__lede">
+          Schedule a drop, mint a 1/1, or open a timed sale. The left stage shows
+          how collectors will meet the set as you fill each field.
+        </p>
+      </header>
       <HowItWorksNote kind="create" />
       <Suspense
         fallback={
