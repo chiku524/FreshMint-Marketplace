@@ -115,16 +115,104 @@ export interface BoingWalletTx {
   tx: Record<string, unknown>;
 }
 
-async function boingRpc<T>(method: string, params: unknown[] = []): Promise<T> {
-  const res = await fetch(rpcUrlFor("boing"), {
+/**
+ * Public `testnet-rpc.boing.network` sits behind Cloudflare. Undici/Node
+ * `fetch` with no User-Agent is treated as a bot and gets HTTP 403 + HTML
+ * challenge (`cf-mitigated: challenge`). Boing's own docs say integrators
+ * should send a SDK-style UA; their explorer also failovers to Fly origins.
+ */
+export const BOING_RPC_USER_AGENT = "FreshMintMarketplace/boing-rpc";
+
+/** Hosted Fly nodes used by Boing explorer when the public CF gateway blocks. */
+export const BOING_TESTNET_RPC_FALLBACKS = [
+  "https://boing-testnet-1.fly.dev/",
+  "https://boing-testnet-2.fly.dev/",
+] as const;
+
+function normalizeBoingRpcUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+}
+
+/** Primary `BOING_RPC_URL` / default, then env fallbacks, then Fly testnet origins. */
+export function resolveBoingRpcEndpoints(): string[] {
+  const primary = normalizeBoingRpcUrl(rpcUrlFor("boing"));
+  const fromEnv = (process.env.BOING_RPC_FALLBACK_URLS ?? "")
+    .split(",")
+    .map((s) => normalizeBoingRpcUrl(s))
+    .filter(Boolean);
+  const useDefaultFlyFallbacks =
+    process.env.NEXT_PUBLIC_CHAIN_MODE !== "mainnet" &&
+    process.env.BOING_RPC_DISABLE_DEFAULT_FALLBACKS !== "1";
+  const defaults = useDefaultFlyFallbacks ? [...BOING_TESTNET_RPC_FALLBACKS] : [];
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const url of [primary, ...fromEnv, ...defaults]) {
+    if (!url) continue;
+    const key = url.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(url);
+  }
+  return out;
+}
+
+export function isBoingRpcEdgeBlocked(
+  status: number,
+  bodyText: string,
+  contentType: string | null,
+): boolean {
+  if (status !== 403 && status !== 503) return false;
+  if (contentType?.includes("text/html")) return true;
+  return /cloudflare|just a moment|cf-mitigated|challenge-platform/i.test(
+    bodyText,
+  );
+}
+
+/** User-facing copy for profile / settings — never dump raw `boing_rpc_http_403`. */
+export function formatBoingBalanceUserMessage(error: string | undefined): string {
+  const code = (error ?? "").toLowerCase();
+  if (
+    code.includes("403") ||
+    code.includes("cloudflare") ||
+    code.includes("edge_blocked") ||
+    code.includes("non_json")
+  ) {
+    return "Live balance unavailable — Boing’s public RPC edge blocked this server. Open the explorer for this wallet, or set BOING_RPC_URL to a reachable node.";
+  }
+  if (code.includes("invalid_boing_account")) {
+    return "This linked address is not a valid Boing account id.";
+  }
+  if (code.includes("timeout") || code.includes("abort")) {
+    return "Boing RPC timed out. Try again in a moment.";
+  }
+  return "Live BOING balance unavailable right now. Try again shortly, or check the explorer.";
+}
+
+async function boingRpcAtUrl<T>(
+  url: string,
+  method: string,
+  params: unknown[],
+): Promise<T> {
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      // Required: empty UA → Cloudflare 403 on public testnet-rpc.boing.network.
+      "User-Agent": BOING_RPC_USER_AGENT,
+    },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     signal: AbortSignal.timeout(8000),
   });
   const text = await res.text();
+  const contentType = res.headers.get("content-type");
   if (!res.ok) {
-    // Cloudflare / gateway HTML challenges often return non-JSON bodies.
+    if (isBoingRpcEdgeBlocked(res.status, text, contentType)) {
+      throw new Error("boing_rpc_edge_blocked");
+    }
     throw new Error(`boing_rpc_http_${res.status}`);
   }
   let body: { result?: T; error?: { message?: string; code?: number } };
@@ -134,12 +222,39 @@ async function boingRpc<T>(method: string, params: unknown[] = []): Promise<T> {
       error?: { message?: string; code?: number };
     };
   } catch {
+    if (isBoingRpcEdgeBlocked(res.status || 403, text, contentType)) {
+      throw new Error("boing_rpc_edge_blocked");
+    }
     throw new Error("boing_rpc_non_json");
   }
   if (body.error) {
     throw new Error(body.error.message ?? `boing_rpc_${method}`);
   }
   return body.result as T;
+}
+
+async function boingRpc<T>(method: string, params: unknown[] = []): Promise<T> {
+  const endpoints = resolveBoingRpcEndpoints();
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < endpoints.length; i++) {
+    const url = endpoints[i]!;
+    const isLast = i === endpoints.length - 1;
+    try {
+      return await boingRpcAtUrl<T>(url, method, params);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      lastError = err;
+      const retryable =
+        err.message === "boing_rpc_edge_blocked" ||
+        err.message === "boing_rpc_non_json" ||
+        /^boing_rpc_http_/.test(err.message) ||
+        /timeout|abort|fetch failed|network/i.test(err.message);
+      if (!retryable || isLast) break;
+    }
+  }
+
+  throw lastError ?? new Error("boing_rpc_unavailable");
 }
 
 export async function getBoingAccount(accountId: string): Promise<{

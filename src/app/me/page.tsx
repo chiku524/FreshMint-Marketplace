@@ -7,6 +7,7 @@ import { WithdrawCollectedButton } from "@/components/WithdrawCollectedButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
+import { formatBoingBalanceUserMessage } from "@/lib/onchain/boing";
 import { diagnoseRisingEligibility } from "@/lib/discovery";
 import { creatorLifecycleHint, purchaseIsOpenCheckout } from "@/lib/marketplace/lifecycle";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
@@ -136,15 +137,38 @@ export default async function MeCollectionPage() {
                     </>
                   ) : (
                     <>
-                      {shortBoingAddress(bal.address)} · balance unavailable
-                      {bal.error ? ` (${bal.error})` : ""}
+                      <a
+                        href={getNetwork("boing").explorerAddress(bal.address)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {shortBoingAddress(bal.address)}
+                      </a>
+                      {" · "}
+                      <span style={{ color: "var(--ink-muted)" }}>
+                        balance not loaded
+                      </span>
                     </>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          {scanMeta.warnings.length > 0 ? (
+          {scanMeta.boingBalances.some((b) => !b.ok) ? (
+            <p
+              style={{
+                margin: "0.75rem 0 0",
+                color: "var(--ink-muted)",
+                fontSize: "0.85rem",
+              }}
+              data-testid="boing-scan-warnings"
+            >
+              {formatBoingBalanceUserMessage(
+                scanMeta.boingBalances.find((b) => !b.ok)?.error,
+              )}{" "}
+              NFT scan still covers FreshMint-known Boing tokens only.
+            </p>
+          ) : scanMeta.warnings.length > 0 ? (
             <p
               style={{
                 margin: "0.75rem 0 0",

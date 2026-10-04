@@ -7,6 +7,7 @@ import {
   getUserAssetProfile,
   profileFromSession,
 } from "@/lib/marketplace/profile";
+import { formatBoingBalanceUserMessage } from "@/lib/onchain/boing";
 import { fetchBoingBalancesForWallets } from "@/lib/wallet/inventory";
 import { redirect } from "next/navigation";
 
@@ -99,7 +100,10 @@ export default async function MeSettingsPage() {
                       </a>
                     </>
                   ) : bal && !bal.ok ? (
-                    <> · balance unavailable</>
+                    <>
+                      {" · "}
+                      <span style={{ opacity: 0.85 }}>balance not loaded</span>
+                    </>
                   ) : null}
                   {w.chain === "boing" ? (
                     <span
@@ -107,9 +111,15 @@ export default async function MeSettingsPage() {
                         display: "block",
                         fontSize: "0.75rem",
                         opacity: 0.8,
+                        fontFamily: "inherit",
+                        maxWidth: "48ch",
+                        whiteSpace: "normal",
                       }}
                     >
                       {shortAddr(w.address)} · FreshMint NFT scan is catalog-scoped
+                      {bal && !bal.ok
+                        ? ` · ${formatBoingBalanceUserMessage(bal.error)}`
+                        : ""}
                     </span>
                   ) : null}
                 </li>

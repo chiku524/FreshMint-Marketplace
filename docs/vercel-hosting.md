@@ -56,6 +56,7 @@ npm run db:seed   # optional cold-start catalog
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth on `/sign-in` | Google Cloud OAuth client; see below |
 | `NEXT_PUBLIC_APP_URL` | Canonical public origin for OAuth redirects | `https://fresh-mint-marketplace.vercel.app` (or custom domain) |
 | `NEXT_PUBLIC_EVM_MARKET_ADDRESS` | Optional live Sepolia market | Optional |
+| `BOING_RPC_URL` | Boing JSON-RPC for live `/me` balances + NFT ownership | Optional; defaults to public CF gateway with Fly fallbacks. Prefer `https://boing-testnet-1.fly.dev/` if profile shows edge-blocked balances |
 
 ### Google OAuth (production)
 
