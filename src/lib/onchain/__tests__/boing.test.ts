@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getNetwork,
   listBridgeNetworks,
@@ -6,13 +6,17 @@ import {
   resolveNetwork,
 } from "@/lib/chains/registry";
 import {
+  BOING_TESTNET_RPC_FALLBACKS,
   buildBoingMintIntent,
   buildBoingPurchaseIntent,
   encodeBoingOwnerOf,
   encodeBoingTransferNft,
   extractBoingTxHash,
+  formatBoingBalanceUserMessage,
+  getBoingNativeBalance,
   isBoingMempoolAccepted,
   isBoingNativeAccountIdHex,
+  isBoingRpcEdgeBlocked,
   isProvisionalBoingCollectionAddress,
   normalizeBoingAccountId,
   normalizeBoingTokenIdWord,
@@ -21,6 +25,7 @@ import {
   referenceNftOwnerStorageKey,
   REF_NFT_OWNER_STORAGE_XOR_HEX,
   resolveBoingNftCollectionBytecode,
+  resolveBoingRpcEndpoints,
   SELECTOR_OWNER_OF,
   SELECTOR_TRANSFER_NFT,
 } from "@/lib/onchain/boing";
@@ -39,6 +44,71 @@ describe("boing network registry", () => {
     expect(resolveNetwork("ethereum", "solana")).toBe("solana");
     expect(resolveNetwork("ethereum", "boing")).toBe("boing");
     expect(resolveNetwork("base", "evm")).toBe("base");
+  });
+});
+
+describe("boing RPC edge + fallbacks", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.BOING_RPC_URL;
+    delete process.env.BOING_RPC_FALLBACK_URLS;
+    delete process.env.BOING_RPC_DISABLE_DEFAULT_FALLBACKS;
+  });
+
+  it("detects Cloudflare HTML challenges", () => {
+    expect(
+      isBoingRpcEdgeBlocked(
+        403,
+        "<html>Just a moment...</html>",
+        "text/html; charset=UTF-8",
+      ),
+    ).toBe(true);
+    expect(isBoingRpcEdgeBlocked(200, '{"ok":true}', "application/json")).toBe(
+      false,
+    );
+  });
+
+  it("includes Fly testnet fallbacks after the primary URL", () => {
+    process.env.BOING_RPC_URL = "https://testnet-rpc.boing.network/";
+    const urls = resolveBoingRpcEndpoints();
+    expect(urls[0]).toBe("https://testnet-rpc.boing.network/");
+    expect(urls).toEqual(
+      expect.arrayContaining([...BOING_TESTNET_RPC_FALLBACKS]),
+    );
+  });
+
+  it("formats gated balance errors without raw status codes", () => {
+    const msg = formatBoingBalanceUserMessage("boing_rpc_http_403");
+    expect(msg.toLowerCase()).toContain("explorer");
+    expect(msg).not.toMatch(/boing_rpc_http_403/);
+  });
+
+  it("falls back to the next RPC when the primary edge is blocked", async () => {
+    process.env.BOING_RPC_URL = "https://primary.example/";
+    process.env.BOING_RPC_FALLBACK_URLS = "https://fallback.example/";
+    process.env.BOING_RPC_DISABLE_DEFAULT_FALLBACKS = "1";
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("primary.example")) {
+        return new Response("<html>Just a moment...</html>", {
+          status: 403,
+          headers: { "Content-Type": "text/html" },
+        });
+      }
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { balance: "42" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getBoingNativeBalance(ACCOUNT);
+    expect(result).toEqual({ balance: "42", ok: true });
+    expect(fetchMock.mock.calls.length).toBe(2);
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)
+      ?.headers as Record<string, string>;
+    expect(headers["User-Agent"]).toMatch(/FreshMintMarketplace/);
   });
 });
 

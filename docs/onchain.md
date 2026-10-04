@@ -15,7 +15,9 @@ FreshMint settles art on the same networks it can fund via the bridge.
 
 Set `NEXT_PUBLIC_CHAIN_MODE=testnet` (default) or `mainnet`.
 
-**Boing is a native L1**, not an EVM chain. Do not add it via MetaMask `wallet_addEthereumChain`. Use [Boing Express](https://boing.express) (`window.boing`) and 32-byte account ids (`0x` + 64 hex). Public RPC: `https://testnet-rpc.boing.network/`. Explorer: `https://boing.observer`. Boing is **not** on Relay — `/bridge` excludes it.
+**Boing is a native L1**, not an EVM chain. Do not add it via MetaMask `wallet_addEthereumChain`. Use [Boing Express](https://boing.express) (`window.boing`) and 32-byte account ids (`0x` + 64 hex). Public RPC: `https://testnet-rpc.boing.network/` (Cloudflare Worker). Explorer: `https://boing.observer`. Boing is **not** on Relay — `/bridge` excludes it.
+
+Server-side reads (`boing_getBalance`, NFT owner checks) send `User-Agent: FreshMintMarketplace/boing-rpc` and automatically fall back to Fly origins (`boing-testnet-1.fly.dev`, `boing-testnet-2.fly.dev`) when the public edge returns Cloudflare HTTP 403. On Vercel, set `BOING_RPC_URL` to a reachable node (often a Fly URL) if the public gateway still blocks your region.
 
 ## Collection deploy + mint at publish
 

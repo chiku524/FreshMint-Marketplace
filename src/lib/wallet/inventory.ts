@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import { chainMode, getNetwork, rpcUrlFor, type NetworkId } from "@/lib/chains/registry";
 import type { Chain, Listing } from "@/lib/discovery/types";
 import {
+  formatBoingBalanceUserMessage,
   getBoingNativeBalance,
   getBoingNftOwner,
   isBoingNativeAccountIdHex,
@@ -746,9 +747,7 @@ export async function fetchLinkedWalletNfts(
       deps.meta.boingBalances = await fetchBoingBalancesForWallets(usable);
       for (const bal of deps.meta.boingBalances) {
         if (!bal.ok) {
-          deps.meta.warnings.push(
-            `BOING balance unavailable for ${bal.address.slice(0, 10)}… (${bal.error ?? "rpc"}).`,
-          );
+          deps.meta.warnings.push(formatBoingBalanceUserMessage(bal.error));
         }
       }
     }
@@ -763,9 +762,7 @@ export async function fetchLinkedWalletNfts(
     deps.meta.boingBalances = await fetchBoingBalancesForWallets(usable);
     for (const bal of deps.meta.boingBalances) {
       if (!bal.ok) {
-        deps.meta.warnings.push(
-          `BOING balance unavailable for ${bal.address.slice(0, 10)}… (${bal.error ?? "rpc"}).`,
-        );
+        deps.meta.warnings.push(formatBoingBalanceUserMessage(bal.error));
       }
     }
   }
