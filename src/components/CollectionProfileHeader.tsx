@@ -51,7 +51,7 @@ export function CollectionProfileHeader({
   const hue = hueFromId(id);
   const bannerStyle = coverUrl
     ? {
-        backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(9,9,11,0.55)), url(${coverUrl})`,
+        backgroundImage: `linear-gradient(180deg, transparent 40%, var(--media-scrim-soft)), url(${coverUrl})`,
         backgroundSize: "cover" as const,
         backgroundPosition: "center" as const,
       }

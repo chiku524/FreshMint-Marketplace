@@ -50,7 +50,7 @@ export function EnglishAuctionHomeCard({
   const hue = hueFromId(listing.id);
   const mediaStyle = listing.mediaUrl
     ? {
-        backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(9,9,11,0.75)), url(${listing.mediaUrl})`,
+        backgroundImage: `linear-gradient(180deg, transparent 40%, var(--media-scrim-strong)), url(${listing.mediaUrl})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }

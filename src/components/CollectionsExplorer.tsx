@@ -50,7 +50,7 @@ function coverStyle(item: CollectionBrowseItem) {
   const hue = hueFromId(item.id);
   if (hero?.mediaUrl) {
     return {
-      backgroundImage: `linear-gradient(180deg, transparent 36%, rgba(9,9,11,0.72)), url(${hero.mediaUrl})`,
+      backgroundImage: `linear-gradient(180deg, transparent 36%, var(--media-scrim)), url(${hero.mediaUrl})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
