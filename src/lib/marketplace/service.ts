@@ -408,6 +408,46 @@ export async function isCollectionSlugAvailable(
   return false;
 }
 
+export async function isCollectionTitleAvailable(
+  title: string,
+  opts?: { excludeCollectionId?: string },
+): Promise<boolean> {
+  const { normalizeCollectionTitle } = await import(
+    "@/lib/marketplace/collection-title"
+  );
+  const normalized = normalizeCollectionTitle(title);
+  if (!normalized) return false;
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const taken = [...getMemoryEngine().state.collections.values()].some(
+      (c) =>
+        normalizeCollectionTitle(c.title) === normalized &&
+        (!opts?.excludeCollectionId || c.id !== opts.excludeCollectionId),
+    );
+    return !taken;
+  }
+
+  const existing = await prisma.collection.findUnique({
+    where: { titleNormalized: normalized },
+  });
+  if (!existing) return true;
+  if (opts?.excludeCollectionId && existing.id === opts.excludeCollectionId) {
+    return true;
+  }
+  return false;
+}
+
+function uniqueConstraintTargets(err: unknown): string[] {
+  if (!err || typeof err !== "object" || !("meta" in err)) return [];
+  const meta = (err as { meta?: { target?: unknown } }).meta;
+  if (!meta || !Array.isArray(meta.target)) return [];
+  return meta.target.map(String);
+}
+
 export async function createCollectionForUser(input: {
   creatorId: string;
   title: string;
@@ -416,10 +456,15 @@ export async function createCollectionForUser(input: {
   network?: NetworkId | string;
   creatorAddress?: string | null;
 }) {
-  const title = input.title.trim();
-  if (title.length < 1 || title.length > 120) {
-    return { ok: false as const, errors: ["invalid_title"] };
+  const { validateCollectionTitleFormat } = await import(
+    "@/lib/marketplace/collection-title"
+  );
+  const titleCheck = validateCollectionTitleFormat(input.title);
+  if (!titleCheck.ok) {
+    return { ok: false as const, errors: [`invalid_title_${titleCheck.issue}`] };
   }
+  const title = titleCheck.title;
+  const titleNormalized = titleCheck.normalized;
 
   const { validateCollectionSlugFormat } = await import(
     "@/lib/marketplace/collection-slug"
@@ -437,6 +482,11 @@ export async function createCollectionForUser(input: {
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
+
+  const titleAvailable = await isCollectionTitleAvailable(title);
+  if (!titleAvailable) {
+    return { ok: false as const, errors: ["title_taken"] };
+  }
 
   const available = await isCollectionSlugAvailable(slug);
   if (!available) {
@@ -475,6 +525,7 @@ export async function createCollectionForUser(input: {
       const created = await prisma.collection.create({
         data: {
           title,
+          titleNormalized,
           slug,
           creatorId: input.creatorId,
           chain,
@@ -489,7 +540,15 @@ export async function createCollectionForUser(input: {
           ? String((err as { code?: string }).code)
           : "";
       if (code === "P2002") {
-        return { ok: false as const, errors: ["slug_taken"] };
+        const targets = uniqueConstraintTargets(err);
+        if (targets.some((t) => t.toLowerCase().includes("titlenormalized"))) {
+          return { ok: false as const, errors: ["title_taken"] };
+        }
+        if (targets.some((t) => t.toLowerCase().includes("slug"))) {
+          return { ok: false as const, errors: ["slug_taken"] };
+        }
+        // Ambiguous unique violation — prefer title when both were checked.
+        return { ok: false as const, errors: ["title_taken"] };
       }
       throw err;
     }

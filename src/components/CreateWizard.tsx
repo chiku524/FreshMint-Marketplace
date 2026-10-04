@@ -28,6 +28,11 @@ import {
   validateCollectionSlugFormat,
   type CollectionSlugIssue,
 } from "@/lib/marketplace/collection-slug";
+import {
+  collectionTitleIssueMessage,
+  validateCollectionTitleFormat,
+  type CollectionTitleIssue,
+} from "@/lib/marketplace/collection-title";
 import { isExplorableTxHash } from "@/lib/onchain/explorer";
 import {
   maybeSendWalletTx,
@@ -171,6 +176,19 @@ export function CreateWizard() {
   const [newTitle, setNewTitle] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
+  const [titleStatus, setTitleStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    issue: CollectionTitleIssue | null;
+    message: string | null;
+    normalized: string | null;
+  }>({
+    checking: false,
+    available: null,
+    issue: null,
+    message: null,
+    normalized: null,
+  });
   const [slugStatus, setSlugStatus] = useState<{
     checking: boolean;
     available: boolean | null;
@@ -314,6 +332,78 @@ export function CreateWizard() {
     if (collectionId || slugTouched) return;
     setNewSlug(suggestCollectionSlug(newTitle));
   }, [newTitle, collectionId, slugTouched]);
+
+  // Debounced uniqueness + format feedback for new-collection names (global).
+  useEffect(() => {
+    if (collectionId) {
+      setTitleStatus({
+        checking: false,
+        available: null,
+        issue: null,
+        message: null,
+        normalized: null,
+      });
+      return;
+    }
+    const format = validateCollectionTitleFormat(newTitle);
+    if (!format.ok) {
+      setTitleStatus({
+        checking: false,
+        available: false,
+        issue: format.issue,
+        message: newTitle.trim()
+          ? collectionTitleIssueMessage(format.issue)
+          : null,
+        normalized: null,
+      });
+      return;
+    }
+    let cancelled = false;
+    setTitleStatus((prev) => ({
+      ...prev,
+      checking: true,
+      available: null,
+      issue: null,
+      message: "Checking name availability…",
+      normalized: format.normalized,
+    }));
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/collections/name-check?title=${encodeURIComponent(format.title)}`,
+          );
+          const data = (await res.json()) as {
+            available?: boolean;
+            issue?: CollectionTitleIssue | null;
+            message?: string | null;
+            normalized?: string | null;
+          };
+          if (cancelled) return;
+          setTitleStatus({
+            checking: false,
+            available: Boolean(data.available),
+            issue: data.issue ?? null,
+            message: data.message ?? null,
+            normalized: data.normalized ?? format.normalized,
+          });
+        } catch {
+          if (cancelled) return;
+          setTitleStatus({
+            checking: false,
+            available: null,
+            issue: null,
+            message: "Could not verify name — try again",
+            normalized: format.normalized,
+          });
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [newTitle, collectionId]);
 
   // Debounced uniqueness + format feedback for new-collection URLs.
   useEffect(() => {
@@ -565,8 +655,16 @@ export function CreateWizard() {
         "This collection is not deployed on-chain yet — create a new one or finish deploy",
       );
     }
-    const title = newTitle.trim();
-    if (!title) throw new Error("Choose an existing collection or name a new one");
+    const titleFormat = validateCollectionTitleFormat(newTitle);
+    if (!titleFormat.ok) {
+      throw new Error(collectionTitleIssueMessage(titleFormat.issue));
+    }
+    if (titleStatus.available === false) {
+      throw new Error(
+        titleStatus.message ||
+          collectionTitleIssueMessage(titleStatus.issue || "taken"),
+      );
+    }
 
     const slugFormat = validateCollectionSlugFormat(newSlug);
     if (!slugFormat.ok) {
@@ -585,7 +683,7 @@ export function CreateWizard() {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title,
+        title: titleFormat.title,
         slug: slugFormat.slug,
         network,
         creatorAddress: creatorAddress || undefined,
@@ -595,6 +693,19 @@ export function CreateWizard() {
     if (res.status === 401) throw new Error("sign_in");
     if (!res.ok) {
       const errs = Array.isArray(data.errors) ? data.errors : [];
+      if (errs.includes("title_taken")) {
+        throw new Error(collectionTitleIssueMessage("taken"));
+      }
+      const titleErr = errs.find(
+        (e: string) => typeof e === "string" && e.startsWith("invalid_title_"),
+      );
+      if (titleErr) {
+        const issue = String(titleErr).replace(
+          "invalid_title_",
+          "",
+        ) as CollectionTitleIssue;
+        throw new Error(collectionTitleIssueMessage(issue));
+      }
       if (errs.includes("slug_taken")) {
         throw new Error(collectionSlugIssueMessage("taken"));
       }
@@ -825,6 +936,22 @@ export function CreateWizard() {
         return;
       }
       if (!collectionId) {
+        const titleFormat = validateCollectionTitleFormat(newTitle);
+        if (!titleFormat.ok) {
+          setError(collectionTitleIssueMessage(titleFormat.issue));
+          return;
+        }
+        if (titleStatus.checking) {
+          setError("Still checking name availability…");
+          return;
+        }
+        if (titleStatus.available === false) {
+          setError(
+            titleStatus.message ||
+              collectionTitleIssueMessage(titleStatus.issue || "taken"),
+          );
+          return;
+        }
         const slugFormat = validateCollectionSlugFormat(newSlug);
         if (!slugFormat.ok) {
           setError(collectionSlugIssueMessage(slugFormat.issue));
@@ -1495,7 +1622,28 @@ export function CreateWizard() {
                   maxLength={120}
                   style={fieldStyle}
                   disabled={Boolean(collectionId)}
+                  aria-describedby="create-collection-title-status"
                 />
+                {!collectionId ? (
+                  <p
+                    id="create-collection-title-status"
+                    className="create-wizard__hint"
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      marginTop: "0.4rem",
+                      color:
+                        titleStatus.available === true
+                          ? "var(--emergent)"
+                          : titleStatus.available === false
+                            ? "var(--danger)"
+                            : "var(--ink-muted)",
+                    }}
+                  >
+                    {titleStatus.message ||
+                      "Must be unique across all networks (case-insensitive)."}
+                  </p>
+                ) : null}
               </label>
             </div>
             {!collectionId ? (

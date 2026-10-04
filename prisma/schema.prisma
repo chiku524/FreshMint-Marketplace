@@ -224,6 +224,8 @@ model BridgeTransfer {
 model Collection {
   id              String  @id @default(cuid())
   title           String
+  /// lower(trim + collapse whitespace of title) — global case-insensitive uniqueness.
+  titleNormalized String  @unique
   /// Public URL segment for /collections/<slug>; unique when set. Legacy rows may be null (id URLs still work).
   slug            String? @unique
   creatorId       String

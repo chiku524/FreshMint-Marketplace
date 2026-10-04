@@ -163,6 +163,35 @@ describe("marketplace service (memory mode)", () => {
     );
   });
 
+  it("rejects duplicate collection titles case-insensitively across networks", async () => {
+    const first = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Global Name Set",
+      slug: "global-name-set",
+      network: "solana",
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const dupCase = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "global name set",
+      slug: "global-name-set-base",
+      network: "base",
+    });
+    expect(dupCase.ok).toBe(false);
+    if (!dupCase.ok) expect(dupCase.errors).toContain("title_taken");
+
+    const dupWhitespace = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "  Global   Name  Set ",
+      slug: "global-name-set-eth",
+      network: "ethereum",
+    });
+    expect(dupWhitespace.ok).toBe(false);
+    if (!dupWhitespace.ok) expect(dupWhitespace.errors).toContain("title_taken");
+  });
+
   it("creates a collection and attaches a scheduled drop", async () => {
     const collection = await createCollectionForUser({
       creatorId: "artist-fresh",
