@@ -877,12 +877,23 @@ describe("marketplace service (memory mode)", () => {
       contractAddress: created.collection.contractAddress,
     });
     expect(minted.ok).toBe(true);
+    if (minted.ok) {
+      expect(minted.softLaunched).toContain(piece.listing.id);
+    }
 
     const engine = await getDiscoveryEngine();
     const listing = engine.state.listings.get(piece.listing.id);
     expect(listing?.tokenId).toBeTruthy();
     expect(listing?.mintTxHash).toBeTruthy();
     expect(listing?.contractAddress).toBeTruthy();
+    // Mint confirm must publish immediately (Open Lane / buy path).
+    expect(listing?.stage).not.toBe("draft");
+    expect(
+      listing?.stage === "soft_launch" ||
+        listing?.stage === "rising_eligible" ||
+        listing?.stage === "featured_eligible" ||
+        listing?.stage === "featured",
+    ).toBe(true);
 
     const bought = await cryptoBuy({
       listingId: piece.listing.id,

@@ -2,6 +2,7 @@ import { CollectionDetailTabs } from "@/components/CollectionDetailTabs";
 import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { CollectionProfileEditor } from "@/components/CollectionProfileEditor";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
+import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
@@ -39,12 +40,19 @@ export default async function CollectionDetailPage({
     collection.deployStatus === "confirmed" &&
     Boolean(collection.contractAddress) &&
     !String(collection.contractAddress).startsWith("pending:");
-  const pieces = [...engine.state.listings.values()]
+  const allPieces = [...engine.state.listings.values()]
     .filter((l) => l.collectionId === collection.id && !l.delisted)
     .sort((a, b) => b.createdAt - a.createdAt);
+  // Owners see drafts (for Finish publishing); collectors only see soft-launched+.
+  const pieces = isOwner
+    ? allPieces
+    : allPieces.filter((l) => l.stage !== "draft");
 
   const hero =
-    pieces.find((l) => l.id === collection.heroListingId) ?? pieces[0];
+    pieces.find((l) => l.id === collection.heroListingId) ??
+    pieces[0] ??
+    allPieces.find((l) => l.id === collection.heroListingId) ??
+    allPieces[0];
   const coverUrl = hero?.mediaUrl ?? null;
   const floorUsd = deriveCollectionFloorUsd(pieces);
   const volumeUsd = volumes.get(collection.id) ?? 0;
@@ -106,6 +114,19 @@ export default async function CollectionDetailPage({
 
       {isOwner ? (
         <div className="collection-detail__owner">
+          <CollectionPublishPanel
+            collectionId={collection.id}
+            network={network}
+            drafts={pieces
+              .filter((l) => l.stage === "draft")
+              .map((l) => ({
+                id: l.id,
+                title: l.title,
+                minted: Boolean(
+                  l.tokenId && l.contractAddress && l.mintTxHash,
+                ),
+              }))}
+          />
           <CollectionProfileEditor
             collectionId={collection.id}
             description={collection.description ?? ""}

@@ -290,6 +290,11 @@ describe("Listing stages", () => {
     const auto = engine.transitionListing(draft.id, "soft_launch");
     expect(auto.ok).toBe(true);
     expect(auto.listing?.stage).toBe("rising_eligible");
+
+    // Idempotent: clients may re-request soft_launch after auto-Rising.
+    const again = engine.transitionListing(draft.id, "soft_launch");
+    expect(again.ok).toBe(true);
+    expect(again.listing?.stage).toBe("rising_eligible");
   });
 });
 

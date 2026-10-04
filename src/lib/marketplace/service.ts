@@ -986,6 +986,8 @@ export async function confirmCollectionMintBatch(input: {
   const mode = await ensureDatabaseReady();
   const memory = mode === "memory" || isMemoryMode();
 
+  const mintedDraftIds: string[] = [];
+
   for (let i = 0; i < input.listingIds.length; i++) {
     const listingId = input.listingIds[i]!;
     const listing = engine.state.listings.get(listingId);
@@ -1010,9 +1012,96 @@ export async function confirmCollectionMintBatch(input: {
       });
       engine.state.listings.set(listingId, next);
     }
+    if (next.stage === "draft") mintedDraftIds.push(listingId);
   }
 
-  return { ok: true as const, txHash: input.txHash };
+  // Publish each minted piece immediately so a mid-wizard failure cannot
+  // leave buyable inventory stuck as private drafts (profile-only).
+  const softLaunched: string[] = [];
+  const softLaunchErrors: Array<{ listingId: string; errors: string[] }> = [];
+  for (const listingId of mintedDraftIds) {
+    const staged = engine.transitionListing(listingId, "soft_launch");
+    if (!staged.ok || !staged.listing) {
+      softLaunchErrors.push({
+        listingId,
+        errors: staged.errors,
+      });
+      continue;
+    }
+    softLaunched.push(listingId);
+    if (!memory) {
+      await prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          stage: staged.listing.stage,
+          softLaunchedAt: staged.listing.softLaunchedAt
+            ? new Date(staged.listing.softLaunchedAt)
+            : null,
+          risingEligibleAt: staged.listing.risingEligibleAt
+            ? new Date(staged.listing.risingEligibleAt)
+            : null,
+          featuredAt: staged.listing.featuredAt
+            ? new Date(staged.listing.featuredAt)
+            : null,
+        },
+      });
+      const creator = engine.state.creators.get(staged.listing.creatorId);
+      if (creator) {
+        await persistCreatorStats(staged.listing.creatorId, {
+          risingEntriesThisWeek: creator.risingEntriesThisWeek,
+          openLaneListingsToday: creator.openLaneListingsToday,
+          firstListingAt: creator.firstListingAt
+            ? new Date(creator.firstListingAt)
+            : null,
+        });
+      }
+    }
+  }
+
+  return {
+    ok: true as const,
+    txHash: input.txHash,
+    softLaunched,
+    softLaunchErrors,
+  };
+}
+
+/** Soft-launch every minted draft in a collection (owner recovery path). */
+export async function softLaunchMintedDraftsInCollection(input: {
+  collectionId: string;
+  creatorId: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const drafts = [...engine.state.listings.values()].filter(
+    (l) =>
+      l.collectionId === input.collectionId &&
+      l.stage === "draft" &&
+      !l.delisted &&
+      Boolean(l.tokenId && l.contractAddress && l.mintTxHash),
+  );
+
+  const softLaunched: string[] = [];
+  const errors: Array<{ listingId: string; errors: string[] }> = [];
+  for (const listing of drafts) {
+    const staged = await transitionListingStage(listing.id, "soft_launch", {
+      skipPublishRateLimit: true,
+    });
+    if (staged.ok) softLaunched.push(listing.id);
+    else errors.push({ listingId: listing.id, errors: staged.errors });
+  }
+
+  return {
+    ok: true as const,
+    softLaunched,
+    remainingDrafts: drafts.length - softLaunched.length,
+    errors,
+  };
 }
 
 export async function updateCollectionProfile(input: {
@@ -1276,9 +1365,16 @@ async function syncCollectionMembership(input: {
 export async function transitionListingStage(
   listingId: string,
   target: LaunchStage,
+  options?: {
+    /**
+     * Skip the new-creator daily soft-launch cap.
+     * Used when mint just confirmed — gas was already paid to publish.
+     */
+    skipPublishRateLimit?: boolean;
+  },
 ) {
   const engine = await getDiscoveryEngine();
-  if (target === "soft_launch") {
+  if (target === "soft_launch" && !options?.skipPublishRateLimit) {
     const current = engine.state.listings.get(listingId);
     const creator = current
       ? engine.state.creators.get(current.creatorId)

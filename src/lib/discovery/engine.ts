@@ -31,7 +31,12 @@ import {
   selectLiveAuctionStrip,
 } from "./quotas";
 import { scoreListing } from "./scoring";
-import { advanceStage, collectionFeedSurface, isFirstRisingLook } from "./staging";
+import {
+  advanceStage,
+  collectionFeedSurface,
+  isFirstRisingLook,
+  stageIndex,
+} from "./staging";
 import type { ViewerTaste } from "./taste";
 import type {
   Appeal,
@@ -267,6 +272,15 @@ export class DiscoveryEngine {
     refreshCreatorPeriodCounters(creator, this.state.listings.values(), now);
 
     if (listing.stage === target) {
+      return { ok: true, errors: [] as string[], listing };
+    }
+
+    // Soft-launch is idempotent once the work is already public — mint confirm
+    // auto-publishes, and clients may retry soft-launch after Rising promotion.
+    if (
+      target === "soft_launch" &&
+      stageIndex(listing.stage) > stageIndex("soft_launch")
+    ) {
       return { ok: true, errors: [] as string[], listing };
     }
 

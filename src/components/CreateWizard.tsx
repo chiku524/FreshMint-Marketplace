@@ -1273,7 +1273,8 @@ export function CreateWizard() {
         }
       }
 
-      // Soft-launch only after mint confirms — keeps Open Lane buyable.
+      // Mint confirm soft-launches server-side. Re-stage any leftover drafts
+      // (idempotent when already Rising / soft-launched).
       const stageSettled = await mapPoolSettled(
         listingIds,
         STAGE_CONCURRENCY,
@@ -1295,7 +1296,7 @@ export function CreateWizard() {
                   errs === "listing_not_minted" ||
                   (Array.isArray(stageData.errors) &&
                     stageData.errors.includes("listing_not_minted"))
-                    ? "Mint must finish before soft-launch. Retry publish mint, then try again."
+                    ? "Mint must finish before soft-launch. Open the collection and use Publish remaining."
                     : errs || "soft_launch_failed";
                 throw makeHttpError(message, stageRes.status);
               }
@@ -1312,7 +1313,7 @@ export function CreateWizard() {
           .map((f) => ("error" in f ? f.error.message : "soft_launch_failed"))
           .join("; ");
         throw new Error(
-          `Minted, but soft-launch failed for ${stageFail.length} of ${listingIds.length}${sample ? ` (${sample})` : ""}. Open the collection and retry staging for those pieces.`,
+          `Some pieces minted and went live, but ${stageFail.length} of ${listingIds.length} still need publish${sample ? ` (${sample})` : ""}. Open the collection and use Publish remaining.`,
         );
       }
 
