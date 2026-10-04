@@ -1,5 +1,4 @@
 import { CollectionsExplorer } from "@/components/CollectionsExplorer";
-import { HowItWorksNote } from "@/components/HowItWorksNote";
 import {
   COLLECTIONS_VIEW_COOKIE,
   parseCollectionsView,
@@ -30,9 +29,7 @@ export default async function CollectionsPage() {
         soldIds={[...soldIds]}
         initialView={parseCollectionsView(viewCookie)}
         lane="top"
-      >
-        <HowItWorksNote kind="create" />
-      </CollectionsExplorer>
+      />
     </div>
   );
 }

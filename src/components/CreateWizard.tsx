@@ -1,7 +1,9 @@
 "use client";
 
-import { TraitEditor } from "@/components/TraitEditor";
+import { CreateLivePreview } from "@/components/CreateLivePreview";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import { TraitEditor } from "@/components/TraitEditor";
+import { WizardShell } from "@/components/WizardShell";
 import type { NftTrait } from "@/lib/discovery/types";
 import {
   COLLECTION_MEDIA_CAP_BYTES,
@@ -149,6 +151,17 @@ export function CreateWizard() {
     listingIds: string[];
     collectionId: string;
     label: string;
+    collectionTitle: string;
+    network: string;
+    intent: Intent;
+    dropKind: DropKind;
+    priceUsd: string;
+    pieceCount: number;
+    heroTitle: string;
+    heroDescription: string;
+    heroMediaUrl: string;
+    satelliteMediaUrls: string[];
+    styleTags: string;
   } | null>(null);
 
   const steps = useMemo(() => stepDefs(intent), [intent]);
@@ -866,11 +879,29 @@ export function CreateWizard() {
           : intent === "auction"
             ? "timed drop"
             : "1/1 listing";
+      const publishedHero = pieces[0];
       setOk(null);
       setPublished({
         listingIds,
         collectionId: id,
         label,
+        collectionTitle:
+          collections.find((c) => c.id === id)?.title ||
+          newTitle.trim() ||
+          "Untitled collection",
+        network,
+        intent,
+        dropKind,
+        priceUsd,
+        pieceCount: pieces.length,
+        heroTitle: publishedHero?.title ?? "",
+        heroDescription: publishedHero?.description ?? "",
+        heroMediaUrl: publishedHero?.mediaUrl ?? "",
+        satelliteMediaUrls: pieces
+          .slice(1, 4)
+          .map((p) => p.mediaUrl)
+          .filter(Boolean),
+        styleTags,
       });
       setPieces([]);
       setMintProgress(null);
@@ -884,58 +915,110 @@ export function CreateWizard() {
     }
   }
 
+  const livePreview = published ? (
+    <CreateLivePreview
+      collectionTitle={published.collectionTitle}
+      network={published.network}
+      intent={published.intent}
+      dropKind={published.dropKind}
+      priceUsd={published.priceUsd}
+      pieceCount={published.pieceCount}
+      heroTitle={published.heroTitle}
+      heroDescription={published.heroDescription}
+      heroMediaUrl={published.heroMediaUrl}
+      satelliteMediaUrls={published.satelliteMediaUrls}
+      styleTags={published.styleTags}
+      stepLabel="Published · live on FreshMint"
+    />
+  ) : (
+    <CreateLivePreview
+      collectionTitle={
+        selected?.title || newTitle.trim() || "Untitled collection"
+      }
+      network={network}
+      intent={intent}
+      dropKind={dropKind}
+      priceUsd={priceUsd}
+      pieceCount={pieces.length}
+      heroTitle={pieces[0]?.title ?? ""}
+      heroDescription={pieces[0]?.description ?? ""}
+      heroMediaUrl={pieces[0]?.mediaUrl ?? ""}
+      satelliteMediaUrls={pieces
+        .slice(1, 4)
+        .map((p) => p.mediaUrl)
+        .filter(Boolean)}
+      styleTags={styleTags}
+      stepLabel={`Create · ${stepIndex + 1} of ${steps.length} · ${step.label}`}
+    />
+  );
+
   if (published) {
     const firstId = published.listingIds[0];
     return (
-      <div className="create-wizard">
-        <div className="create-wizard__panel">
-          <h2 className="display create-wizard__title">Published on-chain</h2>
-          <p className="create-wizard__lead">
-            {published.label} is minted and live. Your first work auto-enters
-            Rising so collectors can find it without a Featured pin. Later works
-            wait out the new-wallet cooldown and weekly cap.
-          </p>
-          <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "1rem 0 0" }}>
-            {firstId ? (
-              <Link href={`/listings/${firstId}`} className="badge featured">
-                Open listing
+      <WizardShell preview={livePreview}>
+        <div className="create-wizard">
+          <div className="create-wizard__panel create-wizard__panel--bare">
+            <h2 className="display create-wizard__title">Published on-chain</h2>
+            <p className="create-wizard__lead">
+              {published.label} is minted and live. Your first work auto-enters
+              Rising so collectors can find it without a Featured pin. Later works
+              wait out the new-wallet cooldown and weekly cap.
+            </p>
+            <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "1rem 0 0" }}>
+              {firstId ? (
+                <Link href={`/listings/${firstId}`} className="badge featured">
+                  Open listing
+                </Link>
+              ) : null}
+              <Link href="/rising" className="badge emerging">
+                Rising
               </Link>
-            ) : null}
-            <Link href="/rising" className="badge emerging">
-              Rising
-            </Link>
-            <Link href="/open" className="badge">
-              Open Lane
-            </Link>
-            <Link href={`/collections/${published.collectionId}`} className="badge">
-              Collection
-            </Link>
-            <Link href="/me" className="badge">
-              Your works
-            </Link>
-          </p>
-          <div className="create-wizard__nav">
-            <button
-              type="button"
-              className="badge featured"
-              style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => {
-                setPublished(null);
-                setStepIndex(0);
-                setIntent(null);
-                setOk(null);
-              }}
-            >
-              Create another
-            </button>
+              <Link href="/open" className="badge">
+                Open Lane
+              </Link>
+              <Link href={`/collections/${published.collectionId}`} className="badge">
+                Collection
+              </Link>
+              <Link href="/me" className="badge">
+                Your works
+              </Link>
+            </p>
+            <div className="create-wizard__nav">
+              <button
+                type="button"
+                className="badge featured"
+                style={{ cursor: "pointer", background: "transparent" }}
+                onClick={() => {
+                  setPublished(null);
+                  setStepIndex(0);
+                  setIntent(null);
+                  setOk(null);
+                }}
+              >
+                Create another
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </WizardShell>
     );
   }
 
   return (
+    <WizardShell preview={livePreview}>
     <div className="create-wizard">
+      <div className="create-wizard__progress" aria-hidden="true">
+        {steps.map((s, index) => (
+          <span
+            key={s.id}
+            className={
+              index <= stepIndex
+                ? "create-wizard__progress-seg is-on"
+                : "create-wizard__progress-seg"
+            }
+          />
+        ))}
+      </div>
       <ol className="create-wizard__steps" aria-label="Creation steps">
         {steps.map((s, index) => (
           <li
@@ -954,7 +1037,7 @@ export function CreateWizard() {
         ))}
       </ol>
 
-      <div className="create-wizard__panel">
+      <div className="create-wizard__panel create-wizard__panel--bare create-wizard__panel--rise" key={step.id}>
         {step.id === "intent" ? (
           <>
             <h2 className="display create-wizard__title">What are you creating?</h2>
@@ -1216,8 +1299,8 @@ export function CreateWizard() {
             <h2 className="display create-wizard__title">Upload artwork</h2>
             <p className="create-wizard__lead">
               {batchUpload
-                ? "Select many files at once (Shift or Ctrl/Cmd click). Up to 100 MB each, 10 GB per collection — no previews, just a running count."
-                : "Upload one file for this listing."}
+                ? "Select many files at once (Shift or Ctrl/Cmd click). Up to 100 MB each, 10 GB per collection. The live preview updates as files land."
+                : "Upload one file for this listing — the live preview updates as soon as it is ready."}
             </p>
             <label>
               {batchUpload ? "Artwork files" : "Artwork file"}
@@ -1614,5 +1697,6 @@ export function CreateWizard() {
         </div>
       </div>
     </div>
+    </WizardShell>
   );
 }

@@ -13,5 +13,5 @@ export function parseCollectionsView(
 ): CollectionsViewId {
   return value === "gallery" || value === "grid" || value === "list"
     ? value
-    : "gallery";
+    : "grid";
 }
