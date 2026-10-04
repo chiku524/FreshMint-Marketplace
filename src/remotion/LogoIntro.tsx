@@ -7,10 +7,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { FreshMintMark } from "./FreshMintMark";
-
-const display =
-  'var(--font-syne), "Syne", ui-sans-serif, system-ui, sans-serif';
-const serif = 'var(--font-literata), "Literata", ui-serif, Georgia, serif';
+import { body as serif, display } from "./fonts";
 
 export const LogoIntro: React.FC = () => {
   const frame = useCurrentFrame();
@@ -91,7 +88,7 @@ export const LogoIntro: React.FC = () => {
           style={{
             marginTop: 36,
             fontFamily: display,
-            fontWeight: 800,
+            fontWeight: 400,
             fontSize: 92,
             letterSpacing: "-0.035em",
             lineHeight: 1,
@@ -161,7 +158,7 @@ export const LogoIntro: React.FC = () => {
           style={{
             marginTop: 18,
             fontFamily: display,
-            fontWeight: 600,
+            fontWeight: 400,
             fontSize: 15,
             letterSpacing: "0.22em",
             textTransform: "uppercase",

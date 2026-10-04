@@ -1,12 +1,6 @@
-import { loadFont as loadLiterata } from "@remotion/google-fonts/Literata";
-import { loadFont as loadSyne } from "@remotion/google-fonts/Syne";
+import "./contra.css";
 
-export const { fontFamily: syne } = loadSyne("normal", {
-  weights: ["500", "600", "700", "800"],
-  subsets: ["latin"],
-});
-
-export const { fontFamily: literata } = loadLiterata("normal", {
-  weights: ["400", "500"],
-  subsets: ["latin"],
-});
+/** Self-hosted Contra — matches marketplace `--font-contra` tokens. */
+export const contra = "Contra, Georgia, ui-serif, serif";
+export const display = contra;
+export const body = contra;

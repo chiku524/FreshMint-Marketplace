@@ -25,8 +25,9 @@
   --mint-leaf-lo: #2f8a5e;
   --mint-stem: #3d6b52;
   --mint-vein: #0e2418;
-  --font-display: var(--font-syne);
-  --font-body: var(--font-literata);
+  /* Contra (Apostrophic Labs) — primary marketplace face for display + body */
+  --font-display: var(--font-contra);
+  --font-body: var(--font-contra);
 
   /* Theme surfaces (dark = current look) */
   --surface-header: rgba(9, 9, 11, 0.68);
@@ -223,8 +224,10 @@ body {
 body {
   margin: 0;
   color: var(--ink);
-  font-family: var(--font-body), Georgia, serif;
+  font-family: var(--font-body), Georgia, ui-serif, serif;
   background: var(--bg-deep);
+  /* Contra ships Regular + Italic only — avoid browser faux-bold */
+  font-synthesis: none;
 }
 
 /* Engraved field: stone · hatch · grain · veins, on gallery charcoal */
@@ -507,7 +510,7 @@ a {
   overflow: hidden;
   padding: 0 0.95rem;
   color: var(--ink-muted);
-  font-family: var(--font-display), system-ui, sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -642,7 +645,7 @@ a {
   padding: 0.62rem 1.05rem;
   border: 1px solid var(--line);
   border-radius: 0.4rem;
-  font-family: var(--font-display), system-ui, sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -791,7 +794,7 @@ a {
 
 .docs-toc__index {
   color: var(--accent-soft);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   padding-top: 0.12rem;
@@ -803,7 +806,7 @@ a {
 }
 
 .docs-toc__label {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.95rem;
   letter-spacing: -0.02em;
 }
@@ -932,7 +935,7 @@ a {
   background: color-mix(in srgb, var(--bg-deep) 45%, transparent);
   border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -1053,7 +1056,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .fm-home-hero__title {
   margin: 0 0 0.7rem;
-  font-family: var(--font-display), system-ui, sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: clamp(1.35rem, 2.9vw, 1.85rem);
   font-weight: 560;
   letter-spacing: -0.03em;
@@ -1297,8 +1300,9 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .display {
-  font-family: var(--font-display), system-ui, sans-serif;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
+  letter-spacing: -0.02em;
+  font-weight: 400;
 }
 
 /* Puzzle mosaic: unit cells fill the rail; featured = 2×2, compact = 1×1 */
@@ -1711,7 +1715,7 @@ html.fm-intro-pending .fm-intro-cover {
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.8rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1869,7 +1873,7 @@ html.fm-intro-pending .fm-intro-cover {
   border-right: 1px solid var(--line);
   background: transparent;
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.78rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1987,7 +1991,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collections-card__stats dd {
   margin: 0.15rem 0 0;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.88rem;
 }
 
@@ -2114,7 +2118,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collection-profile__stats dd {
   margin: 0.2rem 0 0;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 1.15rem;
 }
 
@@ -2237,7 +2241,7 @@ html.fm-intro-pending .fm-intro-cover {
   margin-bottom: -1px;
   background: transparent;
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.82rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2452,7 +2456,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .create-split__home {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--ink);
@@ -2461,7 +2465,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-split__form-label {
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2613,7 +2617,7 @@ html.fm-intro-pending .fm-intro-cover {
 .create-preview__eyebrow {
   margin: 0;
   color: color-mix(in srgb, var(--ink) 62%, transparent);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.68rem;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -2677,7 +2681,7 @@ html.fm-intro-pending .fm-intro-cover {
   gap: 0.45rem;
   justify-items: center;
   color: color-mix(in srgb, var(--ink) 45%, transparent);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2753,7 +2757,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-preview__stats dd {
   margin: 0.15rem 0 0;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.95rem;
 }
 
@@ -2795,7 +2799,7 @@ html.fm-intro-pending .fm-intro-cover {
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
 }
 
 .create-preview__chip--gold {
@@ -2879,7 +2883,7 @@ html.fm-intro-pending .fm-intro-cover {
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--line);
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3029,7 +3033,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-wizard__upload-count {
   margin: 0;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 1.05rem;
   color: var(--ink);
 }
@@ -3078,7 +3082,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .create-wizard__tx-link {
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.92rem;
   text-decoration: underline;
   text-underline-offset: 0.15em;
@@ -3146,7 +3150,7 @@ html.fm-intro-pending .fm-intro-cover {
   border-right: 1px solid var(--line);
   background: transparent;
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.78rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3238,7 +3242,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .nft-traits dd {
   margin: 0.2rem 0 0;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
 }
 
 @media (max-width: 560px) {
@@ -3312,7 +3316,7 @@ html.fm-intro-pending .fm-intro-cover {
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--ink) 3%, transparent);
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -3504,7 +3508,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .nft-flow__node-title {
   color: var(--ink);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.86rem;
   letter-spacing: -0.02em;
 }
@@ -3577,13 +3581,13 @@ html.fm-intro-pending .fm-intro-cover {
   flex-shrink: 0;
   width: 1.35rem;
   color: var(--accent-soft);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.85rem;
 }
 
 .nft-flow__rail-step strong {
   display: block;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-weight: 700;
 }
 
@@ -3721,7 +3725,7 @@ html.fm-intro-pending .fm-intro-cover {
 .disc-engine__formula {
   margin: 0 0 1rem;
   color: var(--ink-muted);
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.92rem;
   letter-spacing: -0.02em;
 }
@@ -3933,7 +3937,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .fm-home-section-viewall {
   color: var(--ink-muted);
-  font-family: var(--font-display), system-ui, sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -4062,7 +4066,7 @@ html.fm-intro-pending .fm-intro-cover {
   background: transparent;
   color: var(--ink-muted);
   text-decoration: none;
-  font-family: var(--font-display), sans-serif;
+  font-family: var(--font-display), Georgia, ui-serif, serif;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;

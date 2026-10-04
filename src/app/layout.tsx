@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Literata, Syne } from "next/font/google";
+import localFont from "next/font/local";
 import Link from "next/link";
 import Script from "next/script";
 import { BrandMark } from "@/components/MintLeaf";
@@ -13,16 +13,23 @@ import { getSessionUser, publicSession } from "@/lib/auth/session";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
-const syne = Syne({
-  variable: "--font-syne",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-});
-
-const literata = Literata({
-  variable: "--font-literata",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+/** Apostrophic Labs Contra — freeware; “Contraa” maps to this face. */
+const contra = localFont({
+  src: [
+    {
+      path: "../fonts/contra/contra.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../fonts/contra/contra-italic.ttf",
+      weight: "400",
+      style: "italic",
+    },
+  ],
+  variable: "--font-contra",
+  display: "swap",
+  fallback: ["Georgia", "ui-serif", "serif"],
 });
 
 export const dynamic = "force-dynamic";
@@ -41,11 +48,7 @@ export default async function RootLayout({
   const session = await getSessionUser();
   const initialUser = session ? publicSession(session) : null;
   return (
-    <html
-      lang="en"
-      className={`${syne.variable} ${literata.variable} h-full`}
-      suppressHydrationWarning
-    >
+    <html lang="en" className={`${contra.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full">
         <Script id="fm-theme-boot" strategy="beforeInteractive">
           {THEME_BOOT_SCRIPT}

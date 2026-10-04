@@ -1,0 +1,15 @@
+@font-face {
+  font-family: "Contra";
+  src: url("../fonts/contra/contra.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Contra";
+  src: url("../fonts/contra/contra-italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
