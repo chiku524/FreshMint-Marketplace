@@ -15,6 +15,8 @@ const ERRORS: Record<string, string> = {
   google_invalid: "Google sign-in expired. Try again.",
   google_failed: "Google sign-in failed. Try again.",
   google_already_linked: "That Google account is already linked to another profile.",
+  auth_unavailable:
+    "Sign-in is temporarily unavailable (database busy). Wait a moment and try again.",
 };
 
 const fieldStyle: React.CSSProperties = {

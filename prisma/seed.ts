@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { createPrismaAdapter } from "../src/lib/prisma-adapter";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -8,14 +8,7 @@ if (!connectionString) {
 }
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({
-    connectionString,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("prisma.io")
-        ? { rejectUnauthorized: false }
-        : undefined,
-  }),
+  adapter: createPrismaAdapter(connectionString),
 });
 const day = 24 * 60 * 60 * 1000;
 const now = Date.now();
