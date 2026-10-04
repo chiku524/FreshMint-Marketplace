@@ -3,6 +3,7 @@
 import { FmImage } from "@/components/FmImage";
 
 import type { RankedListing, Listing, Collection } from "@/lib/discovery/types";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import Link from "next/link";
 import {
@@ -151,7 +152,7 @@ export function WorkCard({
   showActions?: boolean;
   creatorName?: string;
   creatorAvatarUrl?: string | null;
-  collection?: Pick<Collection, "id" | "title"> | null;
+  collection?: Pick<Collection, "id" | "title" | "slug"> | null;
   trackImpression?: boolean;
   footer?: ReactNode;
   sold?: boolean;
@@ -211,7 +212,7 @@ export function WorkCard({
           {collection ? (
             <>
               {creatorName ? " · " : null}
-              <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+              <Link href={collectionHref(collection)}>{collection.title}</Link>
             </>
           ) : null}
           {emerging ? " · Emerging" : ""}
@@ -355,7 +356,7 @@ export function RankedWorkCard({
   showActions?: boolean;
   creatorName?: string;
   creatorAvatarUrl?: string | null;
-  collection?: Pick<Collection, "id" | "title"> | null;
+  collection?: Pick<Collection, "id" | "title" | "slug"> | null;
 }) {
   return (
     <WorkCard

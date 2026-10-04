@@ -45,7 +45,7 @@ export default async function TrendingPage() {
             {collectionStrip.map((item) => (
               <Link
                 key={item.collection.id}
-                href={`/collections/${item.collection.id}`}
+                href={`/collections/${item.collection.slug || item.collection.id}`}
                 className="badge"
                 style={{ textDecoration: "none" }}
               >

@@ -454,11 +454,25 @@ export class DiscoveryEngine {
     });
   }
 
-  getCollectionSurface(collectionId: string) {
-    const collection = this.state.collections.get(collectionId);
+  /** Resolve by primary id or public slug (legacy id URLs stay valid). */
+  getCollectionByIdOrSlug(idOrSlug: string) {
+    const byId = this.state.collections.get(idOrSlug);
+    if (byId) return byId;
+    const needle = idOrSlug.trim().toLowerCase();
+    if (!needle) return null;
+    for (const collection of this.state.collections.values()) {
+      if (collection.slug && collection.slug.toLowerCase() === needle) {
+        return collection;
+      }
+    }
+    return null;
+  }
+
+  getCollectionSurface(collectionIdOrSlug: string) {
+    const collection = this.getCollectionByIdOrSlug(collectionIdOrSlug);
     if (!collection) return null;
     const items = [...this.state.listings.values()].filter(
-      (l) => l.collectionId === collectionId,
+      (l) => l.collectionId === collection.id,
     );
     const creator = this.state.creators.get(collection.creatorId);
     const hasTraction =

@@ -383,9 +383,35 @@ export async function createListingForUser(input: {
   return { ok: true as const, listing: toListing(created), errors: [] as string[] };
 }
 
+export async function isCollectionSlugAvailable(
+  slug: string,
+  opts?: { excludeCollectionId?: string },
+): Promise<boolean> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const taken = [...getMemoryEngine().state.collections.values()].some(
+      (c) =>
+        c.slug === slug &&
+        (!opts?.excludeCollectionId || c.id !== opts.excludeCollectionId),
+    );
+    return !taken;
+  }
+
+  const existing = await prisma.collection.findUnique({ where: { slug } });
+  if (!existing) return true;
+  if (opts?.excludeCollectionId && existing.id === opts.excludeCollectionId) {
+    return true;
+  }
+  return false;
+}
+
 export async function createCollectionForUser(input: {
   creatorId: string;
   title: string;
+  slug: string;
   chain?: Chain;
   network?: NetworkId | string;
   creatorAddress?: string | null;
@@ -394,6 +420,16 @@ export async function createCollectionForUser(input: {
   if (title.length < 1 || title.length > 120) {
     return { ok: false as const, errors: ["invalid_title"] };
   }
+
+  const { validateCollectionSlugFormat } = await import(
+    "@/lib/marketplace/collection-slug"
+  );
+  const slugCheck = validateCollectionSlugFormat(input.slug);
+  if (!slugCheck.ok) {
+    return { ok: false as const, errors: [`invalid_slug_${slugCheck.issue}`] };
+  }
+  const slug = slugCheck.slug;
+
   const network = resolveNetwork(input.network, input.chain);
   const chain = vmFromNetwork(network);
   const creatorAddress = input.creatorAddress?.trim() || "";
@@ -402,6 +438,11 @@ export async function createCollectionForUser(input: {
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
 
+  const available = await isCollectionSlugAvailable(slug);
+  if (!available) {
+    return { ok: false as const, errors: ["slug_taken"] };
+  }
+
   let collection: Collection;
 
   if (mode === "memory" || isMemoryMode()) {
@@ -409,6 +450,7 @@ export async function createCollectionForUser(input: {
       // Include entropy — two creates in the same millisecond must not collide.
       id: `col-mem-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
       title,
+      slug,
       creatorId: input.creatorId,
       chain,
       network,
@@ -429,16 +471,28 @@ export async function createCollectionForUser(input: {
     const mem = getMemoryEngine();
     mem.state.collections.set(collection.id, collection);
   } else {
-    const created = await prisma.collection.create({
-      data: {
-        title,
-        creatorId: input.creatorId,
-        chain,
-        network,
-        deployStatus: "pending_wallet",
-      },
-    });
-    collection = toCollection(created);
+    try {
+      const created = await prisma.collection.create({
+        data: {
+          title,
+          slug,
+          creatorId: input.creatorId,
+          chain,
+          network,
+          deployStatus: "pending_wallet",
+        },
+      });
+      collection = toCollection(created);
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code?: string }).code)
+          : "";
+      if (code === "P2002") {
+        return { ok: false as const, errors: ["slug_taken"] };
+      }
+      throw err;
+    }
   }
 
   const { buildCollectionDeployIntent } = await import("@/lib/onchain/collection");

@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
 const createSchema = z
   .object({
     title: z.string().min(1).max(120),
+    slug: z.string().min(1).max(64),
     chain: z.enum(["evm", "solana", "boing"]).optional(),
     network: z
       .enum(["ethereum", "base", "arbitrum", "optimism", "solana", "boing"])
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
   const result = await createCollectionForUser({
     creatorId: user.id,
     title: body.data.title,
+    slug: body.data.slug,
     network,
     chain: vmFromNetwork(network),
     creatorAddress,

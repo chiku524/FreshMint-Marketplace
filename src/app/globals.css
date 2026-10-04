@@ -2142,8 +2142,35 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collection-items-grid {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(13.75rem, 1fr));
+}
+
+/* Uniform OpenSea-like squares — compact tiles use absolute media, so
+   the grid must supply a stable aspect box (rails do this via --rail-*). */
+.collection-items-grid > .work-tile {
+  aspect-ratio: 1;
+  height: auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.collection-items-grid > .work-tile--featured {
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.collection-items-grid .work-tile__media-link,
+.collection-items-grid .work-media {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 640px) {
+  .collection-items-grid {
+    gap: 0.65rem;
+    grid-template-columns: repeat(auto-fill, minmax(9.75rem, 1fr));
+  }
 }
 
 .collection-detail__empty {

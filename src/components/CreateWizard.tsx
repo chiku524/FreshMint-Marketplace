@@ -19,6 +19,15 @@ import {
   parseDropMetadataCsv,
   parseTraits,
 } from "@/lib/marketplace/drops";
+import {
+  collectionHref as collectionPath,
+  collectionSlugIssueMessage,
+  normalizeCollectionSlug,
+  sanitizeCollectionSlugInput,
+  suggestCollectionSlug,
+  validateCollectionSlugFormat,
+  type CollectionSlugIssue,
+} from "@/lib/marketplace/collection-slug";
 import { isExplorableTxHash } from "@/lib/onchain/explorer";
 import {
   maybeSendWalletTx,
@@ -59,6 +68,7 @@ type DropKind = "limited" | "open";
 type CollectionOption = {
   id: string;
   title: string;
+  slug?: string | null;
   chain: string;
   network?: string;
   mediaBytes?: number;
@@ -159,6 +169,21 @@ export function CreateWizard() {
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [collectionId, setCollectionId] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [slugStatus, setSlugStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    issue: CollectionSlugIssue | null;
+    message: string | null;
+    normalized: string | null;
+  }>({
+    checking: false,
+    available: null,
+    issue: null,
+    message: null,
+    normalized: null,
+  });
   const [network, setNetwork] = useState("ethereum");
 
   const [dropKind, setDropKind] = useState<DropKind>("limited");
@@ -188,6 +213,7 @@ export function CreateWizard() {
   const [published, setPublished] = useState<{
     listingIds: string[];
     collectionId: string;
+    collectionSlug: string | null;
     label: string;
     collectionTitle: string;
     network: string;
@@ -282,6 +308,82 @@ export function CreateWizard() {
       setCollectionId("");
     }
   }, [collections, collectionId]);
+
+  // Keep suggested slug in sync with title until the creator edits the slug field.
+  useEffect(() => {
+    if (collectionId || slugTouched) return;
+    setNewSlug(suggestCollectionSlug(newTitle));
+  }, [newTitle, collectionId, slugTouched]);
+
+  // Debounced uniqueness + format feedback for new-collection URLs.
+  useEffect(() => {
+    if (collectionId) {
+      setSlugStatus({
+        checking: false,
+        available: null,
+        issue: null,
+        message: null,
+        normalized: null,
+      });
+      return;
+    }
+    const format = validateCollectionSlugFormat(newSlug);
+    if (!format.ok) {
+      setSlugStatus({
+        checking: false,
+        available: false,
+        issue: format.issue,
+        message: collectionSlugIssueMessage(format.issue),
+        normalized: null,
+      });
+      return;
+    }
+    let cancelled = false;
+    setSlugStatus((prev) => ({
+      ...prev,
+      checking: true,
+      available: null,
+      issue: null,
+      message: "Checking availability…",
+      normalized: format.slug,
+    }));
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/collections/slug-check?slug=${encodeURIComponent(format.slug)}`,
+          );
+          const data = (await res.json()) as {
+            available?: boolean;
+            issue?: CollectionSlugIssue | null;
+            message?: string | null;
+            slug?: string | null;
+          };
+          if (cancelled) return;
+          setSlugStatus({
+            checking: false,
+            available: Boolean(data.available),
+            issue: data.issue ?? null,
+            message: data.message ?? null,
+            normalized: data.slug ?? format.slug,
+          });
+        } catch {
+          if (cancelled) return;
+          setSlugStatus({
+            checking: false,
+            available: null,
+            issue: null,
+            message: "Could not verify slug — try again",
+            normalized: format.slug,
+          });
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [newSlug, collectionId]);
 
   const networkCollections = useMemo(
     () =>
@@ -466,6 +568,16 @@ export function CreateWizard() {
     const title = newTitle.trim();
     if (!title) throw new Error("Choose an existing collection or name a new one");
 
+    const slugFormat = validateCollectionSlugFormat(newSlug);
+    if (!slugFormat.ok) {
+      throw new Error(collectionSlugIssueMessage(slugFormat.issue));
+    }
+    if (slugStatus.available === false) {
+      throw new Error(
+        slugStatus.message || collectionSlugIssueMessage(slugStatus.issue || "taken"),
+      );
+    }
+
     const creatorAddress = await requestBuyerAddress(walletChain);
 
     const res = await fetch("/api/collections", {
@@ -474,6 +586,7 @@ export function CreateWizard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
+        slug: slugFormat.slug,
         network,
         creatorAddress: creatorAddress || undefined,
       }),
@@ -481,8 +594,19 @@ export function CreateWizard() {
     const data = await res.json();
     if (res.status === 401) throw new Error("sign_in");
     if (!res.ok) {
+      const errs = Array.isArray(data.errors) ? data.errors : [];
+      if (errs.includes("slug_taken")) {
+        throw new Error(collectionSlugIssueMessage("taken"));
+      }
+      const slugErr = errs.find(
+        (e: string) => typeof e === "string" && e.startsWith("invalid_slug_"),
+      );
+      if (slugErr) {
+        const issue = String(slugErr).replace("invalid_slug_", "") as CollectionSlugIssue;
+        throw new Error(collectionSlugIssueMessage(issue));
+      }
       throw new Error(
-        (data.errors && data.errors.join(", ")) || data.error || "collection_failed",
+        (errs.length && errs.join(", ")) || data.error || "collection_failed",
       );
     }
     const id = String(data.collection.id);
@@ -699,6 +823,24 @@ export function CreateWizard() {
       if (!collectionId && !newTitle.trim()) {
         setError("Choose or name a collection");
         return;
+      }
+      if (!collectionId) {
+        const slugFormat = validateCollectionSlugFormat(newSlug);
+        if (!slugFormat.ok) {
+          setError(collectionSlugIssueMessage(slugFormat.issue));
+          return;
+        }
+        if (slugStatus.checking) {
+          setError("Still checking URL availability…");
+          return;
+        }
+        if (slugStatus.available === false) {
+          setError(
+            slugStatus.message ||
+              collectionSlugIssueMessage(slugStatus.issue || "taken"),
+          );
+          return;
+        }
       }
       setBusy(true);
       try {
@@ -1052,12 +1194,18 @@ export function CreateWizard() {
             : "1/1 listing";
       const publishedHero = pieces[0];
       setOk(null);
+      const publishedCollection = collections.find((c) => c.id === id);
       setPublished({
         listingIds,
         collectionId: id,
+        collectionSlug:
+          publishedCollection?.slug ||
+          slugStatus.normalized ||
+          normalizeCollectionSlug(newSlug) ||
+          null,
         label,
         collectionTitle:
-          collections.find((c) => c.id === id)?.title ||
+          publishedCollection?.title ||
           newTitle.trim() ||
           "Untitled collection",
         network,
@@ -1129,7 +1277,10 @@ export function CreateWizard() {
   if (published) {
     const firstId = published.listingIds[0];
     const explorerHashes = published.mintTxHashes.filter(isExplorableTxHash);
-    const collectionHref = `/collections/${published.collectionId}`;
+    const collectionHref = collectionPath({
+      id: published.collectionId,
+      slug: published.collectionSlug,
+    });
     return (
       <WizardShell preview={livePreview}>
         <PublishConfetti active />
@@ -1343,9 +1494,65 @@ export function CreateWizard() {
                   placeholder="Dawn Set"
                   maxLength={120}
                   style={fieldStyle}
+                  disabled={Boolean(collectionId)}
                 />
               </label>
             </div>
+            {!collectionId ? (
+              <label>
+                Collection URL
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    marginTop: "0.35rem",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "var(--ink-muted)",
+                      fontSize: "0.88rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    /collections/
+                  </span>
+                  <input
+                    value={newSlug}
+                    onChange={(e) => {
+                      setSlugTouched(true);
+                      setCollectionId("");
+                      setNewSlug(sanitizeCollectionSlugInput(e.target.value));
+                    }}
+                    placeholder="dawn-set"
+                    maxLength={48}
+                    autoComplete="off"
+                    spellCheck={false}
+                    style={{ ...fieldStyle, marginTop: 0 }}
+                    aria-describedby="create-collection-slug-status"
+                  />
+                </div>
+                <p
+                  id="create-collection-slug-status"
+                  className="create-wizard__hint"
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    marginTop: "0.4rem",
+                    color:
+                      slugStatus.available === true
+                        ? "var(--emergent)"
+                        : slugStatus.available === false
+                          ? "var(--danger)"
+                          : "var(--ink-muted)",
+                  }}
+                >
+                  {slugStatus.message ||
+                    "Lowercase letters, numbers, and hyphens. Must be unique."}
+                </p>
+              </label>
+            ) : null}
             <label>
               Mint network
               <select

@@ -99,7 +99,7 @@ export default async function SearchPage({
                 {collections.map((h) =>
                   h.kind === "collection" ? (
                     <li key={h.collection.id}>
-                      <Link href={`/collections/${h.collection.id}`} className="badge">
+                      <Link href={`/collections/${h.collection.slug || h.collection.id}`} className="badge">
                         {h.collection.title}
                       </Link>
                     </li>

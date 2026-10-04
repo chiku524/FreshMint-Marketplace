@@ -205,6 +205,7 @@ async function main() {
     data: {
       id: "col-static-garden",
       title: "Static Garden",
+      slug: "static-garden",
       creatorId: glitch.id,
       chain: "solana",
       totalItems: 3,

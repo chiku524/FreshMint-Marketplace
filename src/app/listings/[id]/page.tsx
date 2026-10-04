@@ -13,6 +13,7 @@ import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import { canUserStageListing, stageLabel } from "@/lib/marketplace/lifecycle";
 import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { lazySettleEnglishAuction } from "@/lib/marketplace/english-auction";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -165,7 +166,7 @@ export default async function ListingDetailPage({
             {collection ? (
               <>
                 {" · "}
-                <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+                <Link href={collectionHref(collection)}>{collection.title}</Link>
               </>
             ) : null}
           </p>

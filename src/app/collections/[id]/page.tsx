@@ -20,9 +20,9 @@ export default async function CollectionDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { id: idOrSlug } = await params;
   const engine = await getDiscoveryEngine();
-  const surface = engine.getCollectionSurface(id);
+  const surface = engine.getCollectionSurface(idOrSlug);
   if (!surface) notFound();
 
   const { collection, hasTraction } = surface;
@@ -39,14 +39,14 @@ export default async function CollectionDetailPage({
     Boolean(collection.contractAddress) &&
     !String(collection.contractAddress).startsWith("pending:");
   const pieces = [...engine.state.listings.values()]
-    .filter((l) => l.collectionId === id && !l.delisted)
+    .filter((l) => l.collectionId === collection.id && !l.delisted)
     .sort((a, b) => b.createdAt - a.createdAt);
 
   const hero =
     pieces.find((l) => l.id === collection.heroListingId) ?? pieces[0];
   const coverUrl = hero?.mediaUrl ?? null;
   const floorUsd = deriveCollectionFloorUsd(pieces);
-  const volumeUsd = volumes.get(id) ?? 0;
+  const volumeUsd = volumes.get(collection.id) ?? 0;
   const creatorName = creator?.displayName ?? collection.creatorId;
   const aboutBlurb =
     hero?.description?.trim() ||
@@ -125,7 +125,11 @@ export default async function CollectionDetailPage({
                   sold={soldIds.has(listing.id)}
                   creatorName={creatorName}
                   creatorAvatarUrl={creator?.avatarUrl}
-                  collection={{ id: collection.id, title: collection.title }}
+                  collection={{
+                    id: collection.id,
+                    title: collection.title,
+                    slug: collection.slug,
+                  }}
                 />
               ))}
             </div>

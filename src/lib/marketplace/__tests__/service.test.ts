@@ -134,10 +134,40 @@ describe("marketplace service (memory mode)", () => {
     expect("softLaunchBlocked" in result && result.softLaunchBlocked).toBe(true);
   });
 
+  it("rejects duplicate collection slugs and stores a unique slug", async () => {
+    const first = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Unique URL Set",
+      slug: "unique-url-set",
+      network: "solana",
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.collection.slug).toBe("unique-url-set");
+
+    const dup = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Copycat",
+      slug: "unique-url-set",
+      network: "base",
+    });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.errors).toContain("slug_taken");
+
+    const engine = getMemoryEngine();
+    expect(engine.getCollectionByIdOrSlug("unique-url-set")?.id).toBe(
+      first.collection.id,
+    );
+    expect(engine.getCollectionByIdOrSlug(first.collection.id)?.id).toBe(
+      first.collection.id,
+    );
+  });
+
   it("creates a collection and attaches a scheduled drop", async () => {
     const collection = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Dawn Set",
+      slug: "dawn-set",
       network: "solana",
     });
     expect(collection.ok).toBe(true);
@@ -191,6 +221,7 @@ describe("marketplace service (memory mode)", () => {
     const collection = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Owned Set",
+      slug: "owned-set",
       chain: "evm",
     });
     expect(collection.ok).toBe(true);
@@ -621,6 +652,7 @@ describe("marketplace service (memory mode)", () => {
     const pendingBoing = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Goon Squad",
+      slug: "goon-squad",
       network: "boing",
       creatorAddress: boingCreator,
     });
@@ -634,6 +666,7 @@ describe("marketplace service (memory mode)", () => {
     const eth = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Eth Set",
+      slug: "eth-set",
       network: "ethereum",
       creatorAddress: "",
     });
@@ -692,6 +725,7 @@ describe("marketplace service (memory mode)", () => {
     const pending = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Mempool Ok Squad",
+      slug: "mempool-ok-squad",
       network: "boing",
       creatorAddress: boingCreator,
     });
@@ -721,6 +755,7 @@ describe("marketplace service (memory mode)", () => {
     const created = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Onchain Drop",
+      slug: "onchain-drop",
       network: "ethereum",
       creatorAddress: "",
     });
@@ -807,6 +842,7 @@ describe("marketplace service (memory mode)", () => {
     const collection = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Trait Garden",
+      slug: "trait-garden",
       network: "ethereum",
     });
     expect(collection.ok).toBe(true);

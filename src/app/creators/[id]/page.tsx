@@ -137,7 +137,11 @@ export default async function CreatorProfilePage({
           </h2>
           <p style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", margin: 0 }}>
             {collections.map((collection) => (
-              <Link key={collection.id} href={`/collections/${collection.id}`} className="badge">
+              <Link
+                key={collection.id}
+                href={`/collections/${collection.slug?.trim() || collection.id}`}
+                className="badge"
+              >
                 {collection.title} · {collection.totalItems}
               </Link>
             ))}

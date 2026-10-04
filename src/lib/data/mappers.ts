@@ -116,6 +116,7 @@ export function toCollection(c: DbCollection): Collection {
   return {
     id: c.id,
     title: c.title,
+    slug: (c as { slug?: string | null }).slug ?? null,
     creatorId: c.creatorId,
     chain: c.chain as Collection["chain"],
     network: resolveNetwork(c.network, c.chain as Collection["chain"]),

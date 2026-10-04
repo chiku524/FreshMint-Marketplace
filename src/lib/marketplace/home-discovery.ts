@@ -28,6 +28,7 @@ export type HomeCollectionSource = "trending_7d" | "top_volume" | "new_this_week
 export type HomeCollectionCardModel = {
   id: string;
   title: string;
+  slug?: string | null;
   creatorId: string;
   creatorName: string;
   chain: string;
@@ -276,6 +277,7 @@ function toCardFromBrowse(
   return {
     id: row.id,
     title: row.title,
+    slug: row.slug ?? null,
     creatorId: row.creatorId,
     creatorName: row.creatorName,
     chain: row.chain,
@@ -412,6 +414,7 @@ export async function loadHomeDiscovery(
     browseById.set(collection.id, {
       id: collection.id,
       title: collection.title,
+      slug: collection.slug ?? null,
       creatorId: collection.creatorId,
       creatorName: creator?.displayName ?? collection.creatorId,
       chain: collection.chain,

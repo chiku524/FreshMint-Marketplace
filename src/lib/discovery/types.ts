@@ -132,6 +132,8 @@ export interface Listing {
 export interface Collection {
   id: string;
   title: string;
+  /** Public URL segment; prefer over id in links when present. */
+  slug?: string | null;
   creatorId: string;
   chain: Chain;
   network?: NetworkId | string;

@@ -1,3 +1,4 @@
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import type { HomeCollectionCardModel } from "@/lib/marketplace/home-discovery";
 import Link from "next/link";
 
@@ -40,7 +41,7 @@ export function HomeCollectionCard({ item }: { item: HomeCollectionCardModel }) 
 
   return (
     <Link
-      href={`/collections/${item.id}`}
+      href={collectionHref(item)}
       className="fm-home-collection-card"
       style={coverStyle(item)}
     >

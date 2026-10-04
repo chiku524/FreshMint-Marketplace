@@ -548,6 +548,7 @@ export function buildSeedState(): MarketplaceState {
   collections.set("col-static-garden", {
     id: "col-static-garden",
     title: "Static Garden",
+    slug: "static-garden",
     creatorId: "artist-glitch",
     chain: "solana",
     network: "solana",

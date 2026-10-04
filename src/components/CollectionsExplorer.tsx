@@ -11,6 +11,7 @@ import {
 import {
   COLLECTION_INDEX_MIN_VOLUME_USD,
 } from "@/lib/marketplace/collections-browse-config";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import type { Listing } from "@/lib/discovery/types";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -18,6 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export type CollectionBrowseItem = {
   id: string;
   title: string;
+  slug?: string | null;
   creatorId: string;
   creatorName: string;
   chain: string;
@@ -218,7 +220,7 @@ export function CollectionsExplorer({
         ? items.map((collection) => (
             <section key={collection.id} className="collections-gallery-block">
               <h2 className="display me-section__title">
-                <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+                <Link href={collectionHref(collection)}>{collection.title}</Link>
               </h2>
               <p className="me-section__lead">
                 {collection.creatorName} · {collection.chain} · {collection.totalItems}{" "}
@@ -257,7 +259,7 @@ export function CollectionsExplorer({
             return (
               <Link
                 key={collection.id}
-                href={`/collections/${collection.id}`}
+                href={collectionHref(collection)}
                 className="collections-card collections-card--profile"
               >
                 <div
@@ -314,7 +316,7 @@ export function CollectionsExplorer({
           {items.map((collection) => (
             <Link
               key={collection.id}
-              href={`/collections/${collection.id}`}
+              href={collectionHref(collection)}
               className="collections-row"
             >
               <div className="collections-row__thumb" style={coverStyle(collection)} />
