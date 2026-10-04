@@ -11,7 +11,7 @@ function coverStyle(item: HomeCollectionCardModel) {
   const hue = hueFromId(item.id);
   if (item.coverUrl) {
     return {
-      backgroundImage: `linear-gradient(180deg, transparent 36%, rgba(9,9,11,0.72)), url(${item.coverUrl})`,
+      backgroundImage: `linear-gradient(180deg, transparent 36%, var(--media-scrim)), url(${item.coverUrl})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     } as const;

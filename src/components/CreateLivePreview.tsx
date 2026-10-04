@@ -111,7 +111,7 @@ export function CreateLivePreview({
 
   const bannerStyle = heroMediaUrl
     ? {
-        backgroundImage: `linear-gradient(180deg, transparent 42%, rgba(9,9,11,0.55)), url(${heroMediaUrl})`,
+        backgroundImage: `linear-gradient(180deg, transparent 42%, var(--media-scrim-soft)), url(${heroMediaUrl})`,
         backgroundSize: "cover" as const,
         backgroundPosition: "center" as const,
       }

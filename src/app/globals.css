@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-:root {
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
   /* Quiet gallery charcoal — artwork is the color, not the room */
   --bg-deep: #09090b;
   --bg-mid: #121214;
@@ -25,6 +27,95 @@
   --mint-vein: #0e2418;
   --font-display: var(--font-syne);
   --font-body: var(--font-literata);
+
+  /* Theme surfaces (dark = current look) */
+  --surface-header: rgba(9, 9, 11, 0.68);
+  --surface-rail: rgba(9, 9, 11, 0.9);
+  --surface-rail-scrim: rgba(9, 9, 11, 0.42);
+  --surface-menu: rgba(20, 20, 23, 0.96);
+  --surface-chip: rgba(9, 9, 11, 0.72);
+  --surface-chip-soft: rgba(9, 9, 11, 0.35);
+  --surface-hover-card: rgba(26, 26, 29, 0.95);
+  --surface-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  --surface-shadow-deep: 0 18px 36px rgba(0, 0, 0, 0.35);
+  --engrave-base: #070708;
+  --engrave-stone-a: rgba(72, 72, 82, 0.18);
+  --engrave-stone-b: rgba(48, 48, 54, 0.16);
+  --engrave-stone-c: rgba(36, 36, 42, 0.18);
+  --engrave-stone-gold: color-mix(in srgb, var(--accent) 5%, transparent);
+  --engrave-hatch: rgba(0, 0, 0, 0.055);
+  --engrave-hatch-opacity: 0.4;
+  --engrave-grain-opacity: 0.08;
+  --engrave-glow-mint: color-mix(in srgb, var(--emergent) 16%, transparent);
+  --engrave-glow-gold: color-mix(in srgb, var(--accent-soft) 11%, transparent);
+  --engrave-vein-opacity: 0.55;
+  --intro-bg: #09090b;
+  --media-scrim: rgba(9, 9, 11, 0.72);
+  --media-scrim-soft: rgba(9, 9, 11, 0.55);
+  --media-scrim-strong: rgba(9, 9, 11, 0.78);
+  --ring-halo: rgba(9, 9, 11, 0.72);
+  --token-ledger-bg: #121814;
+  --token-minted-bg: #1a1408;
+  --on-media: #f4f4f5;
+  --on-media-muted: rgba(244, 244, 245, 0.72);
+  --on-media-faint: rgba(244, 244, 245, 0.45);
+  --avatar-ink: #ffffff;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  /* Cool mint stone — brand greens, not cream/purple defaults */
+  --bg-deep: #eef3f0;
+  --bg-mid: #e2eae5;
+  --bg-lift: #fbfcfb;
+  --panel: rgba(251, 252, 251, 0.82);
+  --panel-solid: #f4f8f5;
+  --ink: #14201a;
+  --ink-muted: #53665c;
+  --accent: #a67c28;
+  --accent-soft: #8f6a1f;
+  --line: rgba(20, 32, 26, 0.12);
+  --scrim: rgba(238, 243, 240, 0.78);
+  --emergent: #1f8a56;
+  --danger: #c45c45;
+  --mint-leaf: #2f9e6a;
+  --mint-leaf-hi: #3db87c;
+  --mint-leaf-lo: #1f7a4f;
+  --mint-stem: #2d5c44;
+  --mint-vein: #d5e4db;
+
+  --surface-header: rgba(251, 252, 251, 0.84);
+  --surface-rail: rgba(244, 248, 245, 0.94);
+  --surface-rail-scrim: rgba(20, 32, 26, 0.28);
+  --surface-menu: rgba(251, 252, 251, 0.98);
+  --surface-chip: rgba(251, 252, 251, 0.88);
+  --surface-chip-soft: rgba(20, 32, 26, 0.05);
+  --surface-hover-card: rgba(255, 255, 255, 0.98);
+  --surface-shadow: 0 12px 28px rgba(20, 32, 26, 0.1);
+  --surface-shadow-deep: 0 18px 36px rgba(20, 32, 26, 0.12);
+  --engrave-base: #dfe8e2;
+  --engrave-stone-a: rgba(120, 145, 132, 0.16);
+  --engrave-stone-b: rgba(90, 120, 105, 0.12);
+  --engrave-stone-c: rgba(70, 100, 85, 0.1);
+  --engrave-stone-gold: rgba(166, 124, 40, 0.06);
+  --engrave-hatch: rgba(20, 32, 26, 0.04);
+  --engrave-hatch-opacity: 0.32;
+  --engrave-grain-opacity: 0.05;
+  --engrave-glow-mint: rgba(31, 138, 86, 0.12);
+  --engrave-glow-gold: rgba(166, 124, 40, 0.1);
+  --engrave-vein-opacity: 0.42;
+  --intro-bg: #eef3f0;
+  /* Keep media overlays dark so light text stays legible on artwork */
+  --media-scrim: rgba(9, 9, 11, 0.68);
+  --media-scrim-soft: rgba(9, 9, 11, 0.5);
+  --media-scrim-strong: rgba(9, 9, 11, 0.72);
+  --ring-halo: rgba(238, 243, 240, 0.85);
+  --token-ledger-bg: #e4f0e8;
+  --token-minted-bg: #f3ebe0;
+  --on-media: #f4f4f5;
+  --on-media-muted: rgba(244, 244, 245, 0.78);
+  --on-media-faint: rgba(244, 244, 245, 0.5);
+  --avatar-ink: #ffffff;
 }
 
 @theme inline {
@@ -44,12 +135,12 @@
   background:
     radial-gradient(
       120% 90% at 28% 18%,
-      rgba(126, 217, 168, 0.22) 0%,
+      color-mix(in srgb, var(--mint-leaf-hi) 22%, transparent) 0%,
       transparent 42%
     ),
     radial-gradient(
       90% 80% at 78% 88%,
-      rgba(47, 138, 94, 0.35) 0%,
+      color-mix(in srgb, var(--mint-leaf-lo) 35%, transparent) 0%,
       transparent 55%
     ),
     radial-gradient(
@@ -59,9 +150,9 @@
       #07110d 100%
     );
   box-shadow:
-    inset 0 1px 0 rgba(126, 217, 168, 0.18),
+    inset 0 1px 0 color-mix(in srgb, var(--mint-leaf-hi) 18%, transparent),
     inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(77, 184, 132, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--mint-leaf) 14%, transparent),
     0 6px 18px rgba(0, 0, 0, 0.28);
 }
 
@@ -71,8 +162,8 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(110, 207, 154, 0.2) 0%,
-    rgba(77, 184, 132, 0.06) 45%,
+    color-mix(in srgb, var(--emergent) 20%, transparent) 0%,
+    color-mix(in srgb, var(--mint-leaf) 6%, transparent) 45%,
     transparent 72%
   );
   pointer-events: none;
@@ -88,10 +179,10 @@
   z-index: 0;
   background: linear-gradient(
     145deg,
-    rgba(126, 217, 168, 0.28) 0%,
+    color-mix(in srgb, var(--mint-leaf-hi) 28%, transparent) 0%,
     transparent 38%,
     transparent 62%,
-    rgba(61, 107, 82, 0.35) 100%
+    color-mix(in srgb, var(--mint-stem) 35%, transparent) 100%
   );
   opacity: 0.55;
   mix-blend-mode: soft-light;
@@ -149,23 +240,23 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 100% 55% at 15% -5%, rgba(72, 72, 82, 0.18), transparent 52%),
-    radial-gradient(ellipse 80% 50% at 92% 12%, rgba(48, 48, 54, 0.16), transparent 48%),
-    radial-gradient(ellipse 70% 45% at 8% 88%, rgba(36, 36, 42, 0.18), transparent 50%),
-    radial-gradient(ellipse 90% 60% at 78% 96%, rgba(201, 149, 58, 0.05), transparent 55%),
-    linear-gradient(168deg, #070708 0%, var(--bg-deep) 42%, var(--bg-mid) 100%);
+    radial-gradient(ellipse 100% 55% at 15% -5%, var(--engrave-stone-a), transparent 52%),
+    radial-gradient(ellipse 80% 50% at 92% 12%, var(--engrave-stone-b), transparent 48%),
+    radial-gradient(ellipse 70% 45% at 8% 88%, var(--engrave-stone-c), transparent 50%),
+    radial-gradient(ellipse 90% 60% at 78% 96%, var(--engrave-stone-gold), transparent 55%),
+    linear-gradient(168deg, var(--engrave-base) 0%, var(--bg-deep) 42%, var(--bg-mid) 100%);
 }
 
 .fm-engrave-hatch {
   position: absolute;
   inset: 0;
-  opacity: 0.4;
+  opacity: var(--engrave-hatch-opacity);
   background-image: repeating-linear-gradient(
     -18deg,
     transparent,
     transparent 2px,
-    rgba(0, 0, 0, 0.055) 2px,
-    rgba(0, 0, 0, 0.055) 3px
+    var(--engrave-hatch) 2px,
+    var(--engrave-hatch) 3px
   );
   mix-blend-mode: multiply;
 }
@@ -173,7 +264,7 @@ body {
 .fm-engrave-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.08;
+  opacity: var(--engrave-grain-opacity);
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
 }
@@ -191,7 +282,7 @@ body {
   height: min(48vw, 520px);
   top: 8%;
   right: -6%;
-  background: radial-gradient(circle, rgba(110, 207, 154, 0.16), transparent 68%);
+  background: radial-gradient(circle, var(--engrave-glow-mint), transparent 68%);
   animation: fm-glow-drift 18s ease-in-out infinite;
 }
 
@@ -200,7 +291,7 @@ body {
   height: min(42vw, 460px);
   bottom: 12%;
   left: -8%;
-  background: radial-gradient(circle, rgba(212, 174, 102, 0.11), transparent 70%);
+  background: radial-gradient(circle, var(--engrave-glow-gold), transparent 70%);
   animation: fm-glow-drift 22s ease-in-out infinite reverse;
   animation-delay: -6s;
 }
@@ -210,7 +301,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.55;
+  opacity: var(--engrave-vein-opacity);
 }
 
 .fm-engrave-vein--swap {
@@ -222,7 +313,7 @@ body {
     opacity: 0;
   }
   to {
-    opacity: 0.55;
+    opacity: var(--engrave-vein-opacity);
   }
 }
 
@@ -300,7 +391,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 0.85rem 1.25rem;
-  background: rgba(9, 9, 11, 0.68);
+  background: var(--surface-header);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--line);
   padding: 0.95rem var(--page-x);
@@ -318,6 +409,13 @@ a {
   align-items: center;
   font-size: 1.3rem;
   flex-shrink: 0;
+}
+
+.site-header__end {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
 }
 
 .site-main {
@@ -357,7 +455,7 @@ a {
   right: 0;
   bottom: 0;
   left: var(--rail-collapsed);
-  background: rgba(9, 9, 11, 0.42);
+  background: var(--surface-rail-scrim);
   opacity: 0;
   pointer-events: none;
   transition: opacity 220ms ease;
@@ -371,7 +469,7 @@ a {
   left: 0;
   width: var(--rail-collapsed);
   overflow: hidden;
-  background: rgba(9, 9, 11, 0.9);
+  background: var(--surface-rail);
   backdrop-filter: blur(18px);
   border-right: 1px solid var(--line);
   transition: width 220ms ease, box-shadow 220ms ease;
@@ -464,7 +562,7 @@ a {
 .discovery-rail__link:hover,
 .discovery-rail__link:focus-visible {
   color: var(--ink);
-  background: rgba(110, 207, 154, 0.08);
+  background: color-mix(in srgb, var(--emergent) 8%, transparent);
 }
 
 .discovery-rail__link:hover .site-nav__icon,
@@ -475,7 +573,7 @@ a {
 
 .discovery-rail__link.is-active {
   color: var(--ink);
-  background: rgba(110, 207, 154, 0.1);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
 }
 
 .discovery-rail__link.is-active .discovery-rail__icon-slot {
@@ -558,29 +656,29 @@ a {
 
 .fm-btn--primary {
   color: var(--accent-soft);
-  border-color: rgba(201, 149, 58, 0.45);
-  background: rgba(201, 149, 58, 0.08);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .fm-btn--primary:hover,
 .fm-btn--primary:focus-visible {
   color: var(--ink);
-  border-color: rgba(201, 149, 58, 0.7);
-  background: rgba(201, 149, 58, 0.16);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   transform: translateY(-1px);
 }
 
 .fm-btn--ghost {
   color: var(--emergent);
-  border-color: rgba(110, 207, 154, 0.4);
+  border-color: color-mix(in srgb, var(--emergent) 40%, transparent);
   background: transparent;
 }
 
 .fm-btn--ghost:hover,
 .fm-btn--ghost:focus-visible {
   color: var(--ink);
-  border-color: rgba(110, 207, 154, 0.65);
-  background: rgba(110, 207, 154, 0.1);
+  border-color: color-mix(in srgb, var(--emergent) 65%, transparent);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
   transform: translateY(-1px);
 }
 
@@ -628,13 +726,13 @@ a {
 .fm-taste-seed__tag:hover,
 .fm-taste-seed__tag:focus-visible {
   color: var(--ink);
-  border-color: rgba(110, 207, 154, 0.35);
+  border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
 }
 
 .fm-taste-seed__tag.is-on {
   color: var(--emergent);
-  border-color: rgba(110, 207, 154, 0.5);
-  background: rgba(110, 207, 154, 0.1);
+  border-color: color-mix(in srgb, var(--emergent) 50%, transparent);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
 }
 
 .fm-taste-seed__tag:disabled {
@@ -681,13 +779,13 @@ a {
 .docs-toc a:hover,
 .docs-toc a:focus-visible {
   color: var(--ink);
-  background: rgba(244, 244, 245, 0.03);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
 }
 
 .docs-toc a.is-active {
   color: var(--ink);
   border-color: var(--line);
-  background: rgba(110, 207, 154, 0.06);
+  background: color-mix(in srgb, var(--emergent) 6%, transparent);
 }
 
 .docs-toc__index {
@@ -735,7 +833,7 @@ a {
 .docs-discovery__block {
   margin: 0.35rem 0 0;
   padding: 2.25rem 0 2.1rem;
-  border-top: 1px solid rgba(244, 244, 245, 0.16);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
 }
 
 .docs-discovery__block:last-child {
@@ -756,7 +854,7 @@ a {
 .docs-discovery__surfaces > div {
   padding: 1.05rem 1.1rem 1.15rem;
   border: 1px solid var(--line);
-  background: rgba(244, 244, 245, 0.02);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
 }
 
 .docs-discovery__trust {
@@ -768,7 +866,7 @@ a {
 .docs-discovery__trust > div {
   padding: 1.05rem 1.1rem 1.15rem;
   border: 1px solid var(--line);
-  background: rgba(244, 244, 245, 0.02);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
 }
 
 @media (min-width: 900px) {
@@ -810,7 +908,7 @@ a {
   z-index: 80;
   display: grid;
   place-items: center;
-  background: #09090b;
+  background: var(--intro-bg);
   transition: opacity 0.4s ease;
 }
 
@@ -830,8 +928,8 @@ a {
   right: var(--page-x);
   bottom: 1.35rem;
   appearance: none;
-  background: rgba(9, 9, 11, 0.45);
-  border: 1px solid rgba(244, 244, 245, 0.16);
+  background: color-mix(in srgb, var(--bg-deep) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
   color: var(--ink-muted);
   font-family: var(--font-display), sans-serif;
   font-size: 0.78rem;
@@ -845,11 +943,11 @@ a {
 .fm-intro-skip:hover,
 .fm-intro-skip:focus-visible {
   color: var(--ink);
-  border-color: rgba(110, 207, 154, 0.45);
+  border-color: color-mix(in srgb, var(--emergent) 45%, transparent);
 }
 
 html.fm-intro-pending {
-  background: #09090b;
+  background: var(--intro-bg);
 }
 
 html.fm-intro-pending body {
@@ -865,7 +963,7 @@ html.fm-intro-pending .fm-intro-cover {
   position: fixed;
   inset: 0;
   z-index: 75;
-  background: #09090b;
+  background: var(--intro-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -995,7 +1093,7 @@ html.fm-intro-pending .fm-intro-cover {
   height: 100%;
   border: 1px solid var(--line);
   box-shadow:
-    0 0 0 1px rgba(110, 207, 154, 0.08),
+    0 0 0 1px color-mix(in srgb, var(--emergent) 8%, transparent),
     0 18px 36px rgba(0, 0, 0, 0.35);
   background-color: var(--bg-mid);
   transition:
@@ -1006,9 +1104,9 @@ html.fm-intro-pending .fm-intro-cover {
 
 .fm-featured-week__link:hover .fm-featured-week__media {
   transform: translateY(-3px);
-  border-color: rgba(110, 207, 154, 0.35);
+  border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
   box-shadow:
-    0 0 0 1px rgba(110, 207, 154, 0.16),
+    0 0 0 1px color-mix(in srgb, var(--emergent) 16%, transparent),
     0 22px 40px rgba(0, 0, 0, 0.4);
 }
 
@@ -1165,9 +1263,9 @@ html.fm-intro-pending .fm-intro-cover {
   gap: 0.15rem;
   padding: 0.4rem;
   border: 1px solid var(--line);
-  background: rgba(20, 20, 23, 0.96);
+  background: var(--surface-menu);
   backdrop-filter: blur(16px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--surface-shadow);
 }
 
 .site-nav__item {
@@ -1187,7 +1285,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .site-nav__item:hover {
   color: var(--ink);
-  background: rgba(110, 207, 154, 0.08);
+  background: color-mix(in srgb, var(--emergent) 8%, transparent);
 }
 
 .display {
@@ -1287,7 +1385,7 @@ html.fm-intro-pending .fm-intro-cover {
 .work-tile--featured:hover {
   z-index: 3;
   transform: translateY(-4px);
-  border-color: rgba(212, 174, 102, 0.45);
+  border-color: color-mix(in srgb, var(--accent-soft) 45%, transparent);
 }
 
 .work-tile--compact {
@@ -1306,8 +1404,8 @@ html.fm-intro-pending .fm-intro-cover {
   padding: 1.15rem 0.55rem 0.4rem;
   background: linear-gradient(
     to top,
-    rgba(9, 9, 11, 0.78) 0%,
-    rgba(9, 9, 11, 0.28) 62%,
+    var(--media-scrim-strong) 0%,
+    color-mix(in srgb, var(--media-scrim) 40%, transparent) 62%,
     transparent 100%
   );
   pointer-events: none;
@@ -1373,8 +1471,8 @@ html.fm-intro-pending .fm-intro-cover {
   right: 0.4rem;
   z-index: 2;
   padding: 0.18rem 0.42rem;
-  border: 1px solid rgba(244, 244, 245, 0.18);
-  background: rgba(9, 9, 11, 0.72);
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  background: var(--surface-chip);
   color: var(--ink);
   font: inherit;
   font-size: 0.62rem;
@@ -1389,7 +1487,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .work-tile__more:hover,
 .work-tile__more:focus-visible {
-  border-color: rgba(110, 207, 154, 0.45);
+  border-color: color-mix(in srgb, var(--emergent) 45%, transparent);
   color: var(--emergent);
 }
 
@@ -1461,11 +1559,11 @@ html.fm-intro-pending .fm-intro-cover {
 .work-tile--compact.is-spinning {
   z-index: 3;
   overflow: visible;
-  border-color: rgba(110, 207, 154, 0.4);
+  border-color: color-mix(in srgb, var(--emergent) 40%, transparent);
   box-shadow:
-    0 0 0 1px rgba(110, 207, 154, 0.12),
+    0 0 0 1px color-mix(in srgb, var(--emergent) 12%, transparent),
     0 10px 28px rgba(0, 0, 0, 0.4),
-    0 0 24px rgba(110, 207, 154, 0.14);
+    0 0 24px color-mix(in srgb, var(--emergent) 14%, transparent);
 }
 
 .work-tile--compact.is-spinning {
@@ -1508,8 +1606,8 @@ html.fm-intro-pending .fm-intro-cover {
   width: 100%;
   height: 100%;
   background:
-    linear-gradient(135deg, rgba(77, 184, 132, 0.1), transparent 42%),
-    linear-gradient(320deg, rgba(201, 149, 58, 0.07), transparent 48%),
+    linear-gradient(135deg, color-mix(in srgb, var(--mint-leaf) 10%, transparent), transparent 42%),
+    linear-gradient(320deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 48%),
     var(--bg-mid);
 }
 
@@ -1534,12 +1632,12 @@ html.fm-intro-pending .fm-intro-cover {
 
 .badge.emerging {
   color: var(--emergent);
-  border-color: rgba(110, 207, 154, 0.4);
+  border-color: color-mix(in srgb, var(--emergent) 40%, transparent);
 }
 
 .badge.featured {
   color: var(--accent-soft);
-  border-color: rgba(201, 149, 58, 0.4);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .badge.promoted {
@@ -1634,12 +1732,12 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .badge.emerging {
-  box-shadow: 0 0 12px rgba(110, 207, 154, 0.12);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--emergent) 12%, transparent);
   animation: fm-ambient-pulse 5.5s ease-in-out infinite;
 }
 
 .badge.featured {
-  box-shadow: 0 0 12px rgba(212, 174, 102, 0.12);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-soft) 12%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1739,7 +1837,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collections-views button.is-active {
   color: var(--ink);
-  background: rgba(110, 207, 154, 0.1);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
 }
 
 .collections-view-icon {
@@ -1768,7 +1866,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collections-card:hover,
 .collections-card:focus-visible {
-  border-color: rgba(110, 207, 154, 0.35);
+  border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
 }
 
 .collections-card__cover {
@@ -1985,7 +2083,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collection-tabs__nav button.is-active {
   color: var(--ink);
-  border-bottom-color: rgba(110, 207, 154, 0.75);
+  border-bottom-color: color-mix(in srgb, var(--emergent) 75%, transparent);
 }
 
 .collection-tabs__count {
@@ -2065,8 +2163,8 @@ html.fm-intro-pending .fm-intro-cover {
 
 .collections-row:hover,
 .collections-row:focus-visible {
-  border-color: rgba(110, 207, 154, 0.35);
-  background: rgba(244, 244, 245, 0.02);
+  border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
 }
 
 .collections-row__thumb {
@@ -2139,9 +2237,9 @@ html.fm-intro-pending .fm-intro-cover {
   border: 0;
   border-right: 1px solid var(--line);
   background:
-    radial-gradient(70% 55% at 20% 18%, rgba(110, 207, 154, 0.14), transparent 58%),
-    radial-gradient(60% 50% at 82% 42%, rgba(201, 149, 58, 0.1), transparent 62%),
-    radial-gradient(50% 45% at 30% 88%, rgba(47, 138, 94, 0.12), transparent 70%),
+    radial-gradient(70% 55% at 20% 18%, color-mix(in srgb, var(--emergent) 14%, transparent), transparent 58%),
+    radial-gradient(60% 50% at 82% 42%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+    radial-gradient(50% 45% at 30% 88%, color-mix(in srgb, var(--mint-leaf-lo) 12%, transparent), transparent 70%),
     linear-gradient(165deg, var(--bg-lift) 0%, var(--bg-deep) 100%);
   overflow: hidden;
 }
@@ -2261,7 +2359,7 @@ html.fm-intro-pending .fm-intro-cover {
   height: 7.5rem;
   top: 12%;
   left: 10%;
-  background: radial-gradient(circle, rgba(110, 207, 154, 0.35), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--emergent) 35%, transparent), transparent 68%);
   --orb-x: 18px;
   --orb-y: -14px;
   animation-duration: 12s;
@@ -2272,7 +2370,7 @@ html.fm-intro-pending .fm-intro-cover {
   height: 5.5rem;
   top: 38%;
   right: 12%;
-  background: radial-gradient(circle, rgba(212, 174, 102, 0.28), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent-soft) 28%, transparent), transparent 70%);
   --orb-x: -16px;
   --orb-y: 12px;
   animation-duration: 9.5s;
@@ -2284,7 +2382,7 @@ html.fm-intro-pending .fm-intro-cover {
   height: 4.25rem;
   bottom: 22%;
   left: 28%;
-  background: radial-gradient(circle, rgba(77, 184, 132, 0.3), transparent 72%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--mint-leaf) 30%, transparent), transparent 72%);
   --orb-x: 10px;
   --orb-y: -18px;
   animation-duration: 10.5s;
@@ -2311,7 +2409,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .create-preview__exit {
-  color: rgba(244, 244, 245, 0.7);
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
   font-size: 0.84rem;
   text-decoration: none;
 }
@@ -2323,7 +2421,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-preview__eyebrow {
   margin: 0;
-  color: rgba(244, 244, 245, 0.62);
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
   font-family: var(--font-display), sans-serif;
   font-size: 0.68rem;
   letter-spacing: 0.11em;
@@ -2368,8 +2466,8 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .create-preview__profile {
-  border: 1px solid rgba(244, 244, 245, 0.12);
-  background: rgba(9, 9, 11, 0.35);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  background: var(--surface-chip-soft);
   overflow: hidden;
   animation: fm-preview-reveal 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -2387,7 +2485,7 @@ html.fm-intro-pending .fm-intro-cover {
   place-content: center;
   gap: 0.45rem;
   justify-items: center;
-  color: rgba(244, 244, 245, 0.45);
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
   font-family: var(--font-display), sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -2398,9 +2496,9 @@ html.fm-intro-pending .fm-intro-cover {
   width: 2.2rem;
   height: 2.2rem;
   border-radius: 28%;
-  border: 1px solid rgba(110, 207, 154, 0.35);
+  border: 1px solid color-mix(in srgb, var(--emergent) 35%, transparent);
   background:
-    radial-gradient(circle at 35% 30%, rgba(126, 217, 168, 0.28), transparent 55%),
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mint-leaf-hi) 28%, transparent), transparent 55%),
     rgba(14, 36, 24, 0.55);
   animation: fm-brand-breathe 7s ease-in-out infinite;
 }
@@ -2417,10 +2515,10 @@ html.fm-intro-pending .fm-intro-cover {
   height: 3.6rem;
   margin-top: -1.8rem;
   border-radius: 0.75rem;
-  border: 2px solid rgba(9, 9, 11, 0.95);
+  border: 2px solid color-mix(in srgb, var(--bg-deep) 95%, transparent);
   background:
-    linear-gradient(145deg, rgba(110, 207, 154, 0.35), rgba(47, 138, 94, 0.55));
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+    linear-gradient(145deg, color-mix(in srgb, var(--emergent) 35%, transparent), color-mix(in srgb, var(--mint-leaf-lo) 55%, transparent));
+  box-shadow: var(--surface-shadow);
   animation: fm-preview-reveal 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -2441,7 +2539,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-preview__meta {
   margin: 0.25rem 0 0;
-  color: rgba(244, 244, 245, 0.72);
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
   font-size: 0.8rem;
 }
 
@@ -2451,12 +2549,12 @@ html.fm-intro-pending .fm-intro-cover {
   gap: 0.45rem;
   margin: 0.15rem 0 0;
   padding: 0.55rem 0 0;
-  border-top: 1px solid rgba(244, 244, 245, 0.1);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 .create-preview__stats dt {
   margin: 0;
-  color: rgba(244, 244, 245, 0.55);
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
   font-size: 0.65rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -2482,7 +2580,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-preview__piece-blurb {
   margin: 0;
-  color: rgba(244, 244, 245, 0.68);
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
   font-size: 0.84rem;
   line-height: 1.45;
   max-width: 36ch;
@@ -2501,8 +2599,8 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-preview__chip {
   padding: 0.2rem 0.45rem;
-  border: 1px solid rgba(244, 244, 245, 0.14);
-  color: rgba(244, 244, 245, 0.72);
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2510,7 +2608,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .create-preview__chip--gold {
-  border-color: rgba(212, 174, 102, 0.45);
+  border-color: color-mix(in srgb, var(--accent-soft) 45%, transparent);
   color: var(--accent-soft);
 }
 
@@ -2525,7 +2623,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-preview__item-thumb {
   aspect-ratio: 1;
-  border: 1px solid rgba(244, 244, 245, 0.12);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   background: var(--bg-mid) center / cover no-repeat;
   animation: fm-preview-reveal 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -2556,12 +2654,12 @@ html.fm-intro-pending .fm-intro-cover {
   flex: 1;
   height: 0.2rem;
   border-radius: 999px;
-  background: rgba(244, 244, 245, 0.1);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
   transition: background-color 220ms ease;
 }
 
 .create-wizard__progress-seg.is-on {
-  background: rgba(110, 207, 154, 0.7);
+  background: color-mix(in srgb, var(--emergent) 70%, transparent);
 }
 
 .create-wizard__steps {
@@ -2598,13 +2696,13 @@ html.fm-intro-pending .fm-intro-cover {
 
 .create-wizard__steps li.is-done {
   color: var(--ink);
-  border-color: rgba(110, 207, 154, 0.45);
+  border-color: color-mix(in srgb, var(--emergent) 45%, transparent);
 }
 
 .create-wizard__steps li.is-current {
   color: var(--ink);
-  background: rgba(110, 207, 154, 0.1);
-  border-color: rgba(110, 207, 154, 0.55);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--emergent) 55%, transparent);
 }
 
 .create-wizard__step-num {
@@ -2665,8 +2763,8 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .create-wizard__choices button.is-active {
-  border-color: rgba(110, 207, 154, 0.55);
-  background: rgba(110, 207, 154, 0.08);
+  border-color: color-mix(in srgb, var(--emergent) 55%, transparent);
+  background: color-mix(in srgb, var(--emergent) 8%, transparent);
   color: var(--ink);
 }
 
@@ -2795,7 +2893,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .drop-studio__kinds button.is-active {
   color: var(--ink);
-  background: rgba(110, 207, 154, 0.1);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
 }
 
 .drop-studio__quota {
@@ -2900,8 +2998,8 @@ html.fm-intro-pending .fm-intro-cover {
   border: 1px solid var(--line);
   border-radius: 1.15rem;
   background:
-    radial-gradient(80% 70% at 12% 0%, rgba(110, 207, 154, 0.08), transparent 46%),
-    radial-gradient(70% 80% at 92% 100%, rgba(201, 149, 58, 0.08), transparent 50%),
+    radial-gradient(80% 70% at 12% 0%, color-mix(in srgb, var(--emergent) 8%, transparent), transparent 46%),
+    radial-gradient(70% 80% at 92% 100%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 50%),
     var(--panel-solid);
 }
 
@@ -2910,7 +3008,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .nft-flow:focus-visible {
-  outline: 1px solid rgba(110, 207, 154, 0.5);
+  outline: 1px solid color-mix(in srgb, var(--emergent) 50%, transparent);
   outline-offset: 3px;
 }
 
@@ -2946,7 +3044,7 @@ html.fm-intro-pending .fm-intro-cover {
 .nft-flow__controls button {
   appearance: none;
   border: 1px solid var(--line);
-  background: rgba(244, 244, 245, 0.03);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
   color: var(--ink-muted);
   font-family: var(--font-display), sans-serif;
   font-size: 0.75rem;
@@ -2960,7 +3058,7 @@ html.fm-intro-pending .fm-intro-cover {
 .nft-flow__controls button:hover:not(:disabled),
 .nft-flow__controls button:focus-visible {
   color: var(--ink);
-  border-color: rgba(110, 207, 154, 0.4);
+  border-color: color-mix(in srgb, var(--emergent) 40%, transparent);
 }
 
 .nft-flow__controls button:disabled {
@@ -2970,7 +3068,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .nft-flow__controls button[aria-pressed="true"] {
   color: var(--emergent);
-  border-color: rgba(110, 207, 154, 0.45);
+  border-color: color-mix(in srgb, var(--emergent) 45%, transparent);
 }
 
 .nft-flow__count {
@@ -3001,12 +3099,12 @@ html.fm-intro-pending .fm-intro-cover {
 
 .nft-flow__legend-item.is-ledger::before {
   background: var(--emergent);
-  box-shadow: 0 0 8px rgba(110, 207, 154, 0.45);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--emergent) 45%, transparent);
 }
 
 .nft-flow__legend-item.is-chain::before {
   background: var(--accent);
-  box-shadow: 0 0 8px rgba(201, 149, 58, 0.45);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .nft-flow__board {
@@ -3023,17 +3121,17 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .nft-flow__realm {
-  fill: rgba(244, 244, 245, 0.02);
+  fill: color-mix(in srgb, var(--ink) 2%, transparent);
   stroke: var(--line);
   stroke-width: 1;
 }
 
 .nft-flow__realm--ledger {
-  fill: rgba(110, 207, 154, 0.035);
+  fill: color-mix(in srgb, var(--emergent) 3.5%, transparent);
 }
 
 .nft-flow__realm--chain {
-  fill: rgba(201, 149, 58, 0.05);
+  fill: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
 .nft-flow__realm-label {
@@ -3049,7 +3147,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .nft-flow__path-base {
   fill: none;
-  stroke: rgba(244, 244, 245, 0.12);
+  stroke: color-mix(in srgb, var(--ink) 12%, transparent);
   stroke-width: 2.25;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -3093,9 +3191,9 @@ html.fm-intro-pending .fm-intro-cover {
   height: 0.72rem;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1.5px solid rgba(244, 244, 245, 0.35);
+  border: 1.5px solid color-mix(in srgb, var(--ink) 35%, transparent);
   background: var(--bg-mid);
-  box-shadow: 0 0 0 6px rgba(9, 9, 11, 0.72);
+  box-shadow: 0 0 0 6px var(--ring-halo);
 }
 
 .nft-flow__node.is-done .nft-flow__dot {
@@ -3115,15 +3213,15 @@ html.fm-intro-pending .fm-intro-cover {
   border-color: var(--ink);
   background: var(--emergent);
   box-shadow:
-    0 0 0 6px rgba(9, 9, 11, 0.72),
-    0 0 16px rgba(110, 207, 154, 0.45);
+    0 0 0 6px var(--ring-halo),
+    0 0 16px color-mix(in srgb, var(--emergent) 45%, transparent);
 }
 
 .nft-flow__node.is-active.is-chain .nft-flow__dot {
   background: var(--accent);
   box-shadow:
-    0 0 0 6px rgba(9, 9, 11, 0.72),
-    0 0 16px rgba(201, 149, 58, 0.45);
+    0 0 0 6px var(--ring-halo),
+    0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .nft-flow__node-copy {
@@ -3160,16 +3258,16 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .nft-flow__token.is-ledger {
-  background: #121814;
-  border: 1px dashed rgba(126, 217, 168, 0.55);
+  background: var(--token-ledger-bg);
+  border: 1px dashed color-mix(in srgb, var(--mint-leaf-hi) 55%, transparent);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
 .nft-flow__token.is-minted {
-  background: #1a1408;
+  background: var(--token-minted-bg);
   border: 1px solid var(--accent);
   box-shadow:
-    0 0 18px rgba(201, 149, 58, 0.35),
+    0 0 18px color-mix(in srgb, var(--accent) 35%, transparent),
     0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
@@ -3187,7 +3285,7 @@ html.fm-intro-pending .fm-intro-cover {
   gap: 0.7rem;
   padding: 0.7rem 0.75rem;
   border: 1px solid var(--line);
-  background: rgba(244, 244, 245, 0.02);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -3195,13 +3293,13 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .nft-flow__rail-step.is-active {
-  border-color: rgba(110, 207, 154, 0.45);
-  background: rgba(110, 207, 154, 0.06);
+  border-color: color-mix(in srgb, var(--emergent) 45%, transparent);
+  background: color-mix(in srgb, var(--emergent) 6%, transparent);
 }
 
 .nft-flow__rail-step.is-active.is-chain {
-  border-color: rgba(201, 149, 58, 0.45);
-  background: rgba(201, 149, 58, 0.07);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .nft-flow__rail-step.is-active.is-rising {
@@ -3317,12 +3415,12 @@ html.fm-intro-pending .fm-intro-cover {
 .nft-flow__node.is-active.is-rising .nft-flow__dot {
   background: #8ec8c0;
   box-shadow:
-    0 0 0 6px rgba(9, 9, 11, 0.72),
+    0 0 0 6px var(--ring-halo),
     0 0 16px rgba(142, 200, 192, 0.45);
 }
 
 .disc-slot {
-  fill: rgba(244, 244, 245, 0.08);
+  fill: color-mix(in srgb, var(--ink) 8%, transparent);
   transform-box: fill-box;
   transform-origin: center bottom;
 }
@@ -3340,7 +3438,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .disc-slot.is-on.disc-slot--open {
-  fill: rgba(244, 244, 245, 0.28);
+  fill: color-mix(in srgb, var(--ink) 28%, transparent);
 }
 
 .disc-mix {
@@ -3618,7 +3716,7 @@ html.fm-intro-pending .fm-intro-cover {
 
 .fm-home-collection-card:hover,
 .fm-home-auction-card:hover {
-  border-color: rgba(110, 207, 154, 0.35);
+  border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
@@ -3626,7 +3724,7 @@ html.fm-intro-pending .fm-intro-cover {
 .fm-home-collection-card__body,
 .fm-home-auction-card__body {
   padding: 0.75rem 0.85rem 0.9rem;
-  background: linear-gradient(180deg, transparent, rgba(9, 9, 11, 0.78));
+  background: linear-gradient(180deg, transparent, var(--media-scrim-strong));
 }
 
 .fm-home-collection-card__title,
@@ -3634,6 +3732,7 @@ html.fm-intro-pending .fm-intro-cover {
   font-size: 1.05rem;
   font-weight: 600;
   line-height: 1.2;
+  color: var(--on-media);
 }
 
 .fm-home-collection-card__meta,
@@ -3642,13 +3741,13 @@ html.fm-intro-pending .fm-intro-cover {
 .fm-home-auction-card__bid,
 .fm-home-auction-card__countdown {
   margin-top: 0.2rem;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--on-media-muted);
   font-size: 0.82rem;
 }
 
 .fm-home-auction-card__countdown {
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 220, 160, 0.95);
+  color: color-mix(in srgb, var(--accent-soft) 95%, white);
 }
 
 .fm-home-work-slot {
@@ -3733,8 +3832,8 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .fm-home-creator-card:hover {
-  border-color: rgba(110, 207, 154, 0.35);
-  background: rgba(26, 26, 29, 0.95);
+  border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
+  background: var(--surface-hover-card);
   transform: translateY(-1px);
 }
 
@@ -3748,7 +3847,7 @@ html.fm-intro-pending .fm-intro-cover {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #fff;
+  color: var(--avatar-ink);
 }
 
 .fm-home-creator-card__body {
@@ -3812,4 +3911,49 @@ html.fm-intro-pending .fm-intro-cover {
 
 .fm-home-creator-card__avatar {
   /* size set inline via CreatorAvatar */
+}
+
+
+/* Theme toggle */
+.fm-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.fm-theme-toggle:hover,
+.fm-theme-toggle:focus-visible {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--emergent) 45%, transparent);
+  background: color-mix(in srgb, var(--emergent) 10%, transparent);
+  outline: none;
+}
+
+.fm-theme-toggle__icon {
+  display: block;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.fm-theme-toggle__icon--sun {
+  display: none;
+}
+
+[data-theme="light"] .fm-theme-toggle__icon--moon {
+  display: none;
+}
+
+[data-theme="light"] .fm-theme-toggle__icon--sun {
+  display: block;
 }
