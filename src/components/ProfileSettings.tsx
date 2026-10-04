@@ -4,15 +4,6 @@ import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-const fieldStyle: React.CSSProperties = {
-  width: "100%",
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  color: "var(--ink)",
-  padding: "0.55rem 0.7rem",
-  marginTop: "0.35rem",
-};
-
 export function ProfileSettings({
   userId,
   displayName,
@@ -164,21 +155,10 @@ export function ProfileSettings({
   }
 
   return (
-    <section style={{ marginBottom: "2.75rem" }}>
-      <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-        Profile
-      </h2>
-      <div
-        style={{
-          display: "grid",
-          gap: "1.1rem",
-          maxWidth: "28rem",
-          border: "1px solid var(--line)",
-          padding: "1.1rem",
-          background: "var(--panel)",
-        }}
-      >
-        <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+    <section className="me-section">
+      <h2 className="display me-section__title">Profile</h2>
+      <div className="fm-form-surface fm-form-stack">
+        <p className="fm-form-note">
           {email ? email : "No email on this profile yet"}
           {googleLinked ? " · Google linked" : ""}
           {hasPassword ? " · password set" : ""}
@@ -192,16 +172,15 @@ export function ProfileSettings({
             size={64}
           />
           <div style={{ display: "grid", gap: "0.4rem" }}>
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-muted)" }}>
+            <p className="fm-form-note">
               Upload a square-ish photo (PNG, JPEG, WebP, GIF). Same pipeline as
               listing media.
             </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+            <div className="fm-form-actions">
               <button
                 type="button"
                 disabled={busy}
-                className="badge"
-                style={{ cursor: "pointer", background: "transparent" }}
+                className="fm-btn fm-btn--ghost"
                 onClick={() => fileRef.current?.click()}
               >
                 Upload photo
@@ -210,8 +189,7 @@ export function ProfileSettings({
                 <button
                   type="button"
                   disabled={busy}
-                  className="badge"
-                  style={{ cursor: "pointer", background: "transparent" }}
+                  className="fm-btn fm-btn--ghost"
                   onClick={() => void clearPhoto()}
                 >
                   Remove photo
@@ -228,7 +206,7 @@ export function ProfileSettings({
           </div>
         </div>
 
-        <form onSubmit={(e) => void saveName(e)} style={{ display: "grid", gap: "0.6rem" }}>
+        <form onSubmit={(e) => void saveName(e)} className="fm-form-stack">
           <label>
             Display name
             <input
@@ -236,17 +214,14 @@ export function ProfileSettings({
               onChange={(e) => setName(e.target.value)}
               maxLength={64}
               required
-              style={fieldStyle}
+              className="fm-field"
             />
           </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="badge"
-            style={{ cursor: "pointer", background: "transparent", justifySelf: "start" }}
-          >
-            Save name
-          </button>
+          <div className="fm-form-actions">
+            <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
+              Save name
+            </button>
+          </div>
         </form>
 
         <form
@@ -278,7 +253,7 @@ export function ProfileSettings({
               }
             })();
           }}
-          style={{ display: "grid", gap: "0.6rem" }}
+          className="fm-form-stack"
         >
           <label>
             Short bio
@@ -287,7 +262,7 @@ export function ProfileSettings({
               onChange={(e) => setBio(e.target.value)}
               maxLength={500}
               rows={3}
-              style={{ ...fieldStyle, resize: "vertical" }}
+              className="fm-field"
             />
           </label>
           <label>
@@ -296,7 +271,7 @@ export function ProfileSettings({
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://"
-              style={fieldStyle}
+              className="fm-field"
             />
           </label>
           <label>
@@ -305,7 +280,7 @@ export function ProfileSettings({
               value={twitterUrl}
               onChange={(e) => setTwitterUrl(e.target.value)}
               placeholder="https://x.com/…"
-              style={fieldStyle}
+              className="fm-field"
             />
           </label>
           <label>
@@ -314,25 +289,22 @@ export function ProfileSettings({
               value={farcasterUrl}
               onChange={(e) => setFarcasterUrl(e.target.value)}
               placeholder="https://warpcast.com/…"
-              style={fieldStyle}
+              className="fm-field"
             />
           </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="badge"
-            style={{ cursor: "pointer", background: "transparent", justifySelf: "start" }}
-          >
-            Save profile details
-          </button>
+          <div className="fm-form-actions">
+            <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
+              Save profile details
+            </button>
+          </div>
         </form>
 
         {!hasPassword ? (
           <form
             onSubmit={(e) => void attachCredentials(e)}
-            style={{ display: "grid", gap: "0.6rem" }}
+            className="fm-form-stack"
           >
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-muted)" }}>
+            <p className="fm-form-note">
               Add email and password so you can sign in without a wallet.
             </p>
             <label>
@@ -342,7 +314,7 @@ export function ProfileSettings({
                 type="email"
                 defaultValue={email ?? ""}
                 required
-                style={fieldStyle}
+                className="fm-field"
               />
             </label>
             <label>
@@ -353,28 +325,28 @@ export function ProfileSettings({
                 minLength={8}
                 required
                 autoComplete="new-password"
-                style={fieldStyle}
+                className="fm-field"
               />
             </label>
-            <button
-              type="submit"
-              disabled={busy}
-              className="badge"
-              style={{ cursor: "pointer", background: "transparent", justifySelf: "start" }}
-            >
-              Save login
-            </button>
+            <div className="fm-form-actions">
+              <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
+                Save login
+              </button>
+            </div>
           </form>
         ) : null}
 
         {!googleLinked && googleEnabled ? (
-          <a href="/api/auth/google?intent=link&next=/me/settings" className="badge featured">
+          <a
+            href="/api/auth/google?intent=link&next=/me/settings"
+            className="fm-btn fm-btn--ghost"
+          >
             Link Google
           </a>
         ) : null}
 
-        {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
-        {ok ? <p style={{ color: "var(--emergent)", margin: 0 }}>{ok}</p> : null}
+        {error ? <p className="fm-form-error">{error}</p> : null}
+        {ok ? <p className="fm-form-ok">{ok}</p> : null}
       </div>
     </section>
   );

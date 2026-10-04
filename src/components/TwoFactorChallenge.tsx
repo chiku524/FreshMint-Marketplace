@@ -38,39 +38,17 @@ export function TwoFactorChallenge({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 80,
-        display: "grid",
-        placeItems: "center",
-        background: "var(--scrim)",
-        padding: "1rem",
-      }}
-    >
-      <form
-        onSubmit={(e) => void submit(e)}
-        style={{
-          width: "min(100%, 22rem)",
-          padding: "1.35rem",
-          border: "1px solid var(--line)",
-          background: "var(--panel-solid)",
-          display: "grid",
-          gap: "0.85rem",
-        }}
-      >
+    <div className="fm-form-dialog-scrim">
+      <form onSubmit={(e) => void submit(e)} className="fm-form-dialog">
         <div>
-          <h2 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.35rem" }}>
-            Two-factor check
-          </h2>
-          <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+          <h2 className="display fm-form-dialog__title">Two-factor check</h2>
+          <p className="fm-form-note">
             Enter the 6-digit code from your authenticator for{" "}
             <strong style={{ color: "var(--ink)" }}>{displayName}</strong>, or a
             backup code.
           </p>
         </div>
-        <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.9rem" }}>
+        <label className="fm-label">
           Authentication code
           <input
             value={code}
@@ -79,43 +57,19 @@ export function TwoFactorChallenge({
             inputMode="numeric"
             autoComplete="one-time-code"
             placeholder="123456"
-            style={{
-              padding: "0.55rem 0.65rem",
-              background: "var(--bg-deep)",
-              border: "1px solid var(--line)",
-              color: "var(--ink)",
-              letterSpacing: "0.08em",
-            }}
+            className="fm-field fm-field--code"
           />
         </label>
-        {error ? (
-          <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>
-            {error}
-          </p>
-        ) : null}
-        <div style={{ display: "flex", gap: "0.6rem" }}>
+        {error ? <p className="fm-form-error">{error}</p> : null}
+        <div className="fm-form-actions">
           <button
             type="submit"
             disabled={busy || code.trim().length < 6}
-            className="badge featured"
-            style={{
-              cursor: "pointer",
-              background: "transparent",
-              padding: "0.5rem 0.85rem",
-            }}
+            className="fm-btn fm-btn--primary"
           >
             {busy ? "Checking…" : "Verify"}
           </button>
-          <button
-            type="button"
-            className="badge"
-            onClick={onCancel}
-            style={{
-              cursor: "pointer",
-              background: "transparent",
-              padding: "0.5rem 0.85rem",
-            }}
-          >
+          <button type="button" className="fm-btn fm-btn--ghost" onClick={onCancel}>
             Cancel
           </button>
         </div>

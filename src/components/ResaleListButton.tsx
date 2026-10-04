@@ -59,38 +59,24 @@ export function ResaleListButton({
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} style={{ display: "grid", gap: "0.4rem" }}>
-      <label style={{ fontSize: "0.85rem", color: "var(--ink-muted)" }}>
+    <form onSubmit={(e) => void submit(e)} className="fm-form-stack" style={{ maxWidth: "16rem" }}>
+      <label>
         Resale price (USD)
         <input
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           inputMode="decimal"
           required
-          style={{
-            display: "block",
-            width: "100%",
-            marginTop: "0.25rem",
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            color: "var(--ink)",
-            padding: "0.4rem 0.55rem",
-          }}
+          className="fm-field"
         />
       </label>
-      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-        <button
-          type="submit"
-          disabled={busy}
-          className="badge featured"
-          style={{ cursor: "pointer", background: "transparent" }}
-        >
+      <div className="fm-form-actions">
+        <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
           {busy ? "Listing…" : "Publish secondary"}
         </button>
         <button
           type="button"
-          className="badge"
-          style={{ cursor: "pointer", background: "transparent" }}
+          className="fm-btn fm-btn--ghost"
           onClick={() => setOpen(false)}
         >
           Cancel

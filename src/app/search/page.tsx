@@ -37,21 +37,15 @@ export default async function SearchPage({
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Search
       </h1>
-      <form action="/search" method="get" style={{ marginBottom: "1.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <form action="/search" method="get" className="lane-filters__search" style={{ marginBottom: "1.5rem" }}>
         <input
           name="q"
           defaultValue={qRaw}
           placeholder="Works, collections, creators…"
           maxLength={80}
-          style={{
-            flex: "1 1 16rem",
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            color: "var(--ink)",
-            padding: "0.55rem 0.75rem",
-          }}
+          className="fm-field"
         />
-        <button type="submit" className="badge featured" style={{ cursor: "pointer", background: "transparent" }}>
+        <button type="submit" className="fm-btn fm-btn--primary">
           Search
         </button>
       </form>

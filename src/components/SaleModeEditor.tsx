@@ -53,17 +53,11 @@ export function SaleModeEditor({
   }
 
   return (
-    <div
-      style={{
-        marginTop: "1rem",
-        border: "1px dashed var(--line)",
-        padding: "0.85rem 1rem",
-      }}
-    >
+    <div className="fm-listing-form">
       <h3 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.05rem" }}>
         Sale mode
       </h3>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.6rem" }}>
+      <div className="fm-form-actions" style={{ marginBottom: "0.6rem" }}>
         {(
           [
             ["fixed", "Fixed price"],
@@ -74,8 +68,7 @@ export function SaleModeEditor({
           <button
             key={id}
             type="button"
-            className={mode === id ? "badge featured" : "badge"}
-            style={{ cursor: "pointer", background: "transparent" }}
+            className={mode === id ? "fm-btn fm-btn--primary" : "fm-btn fm-btn--ghost"}
             onClick={() => setMode(id)}
           >
             {label}
@@ -83,39 +76,36 @@ export function SaleModeEditor({
         ))}
       </div>
       {mode === "english" ? (
-        <div style={{ display: "grid", gap: "0.4rem", maxWidth: "16rem" }}>
-          <label style={{ fontSize: "0.85rem" }}>
+        <div className="fm-form-stack" style={{ maxWidth: "16rem" }}>
+          <label>
             Starting bid (USD)
             <input
               value={startBid}
               onChange={(e) => setStartBid(e.target.value)}
-              style={{ width: "100%", marginTop: 4 }}
+              className="fm-field"
             />
           </label>
-          <label style={{ fontSize: "0.85rem" }}>
+          <label>
             Reserve (USD, optional)
             <input
               value={reserve}
               onChange={(e) => setReserve(e.target.value)}
-              style={{ width: "100%", marginTop: 4 }}
+              className="fm-field"
             />
           </label>
         </div>
       ) : null}
-      <button
-        type="button"
-        className="badge featured"
-        disabled={busy}
-        style={{ cursor: "pointer", background: "transparent", marginTop: "0.6rem" }}
-        onClick={() => void save()}
-      >
-        {busy ? "Saving…" : "Update sale mode"}
-      </button>
-      {msg ? (
-        <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: "var(--ink-muted)" }}>
-          {msg}
-        </p>
-      ) : null}
+      <div className="fm-form-actions" style={{ marginTop: "0.6rem" }}>
+        <button
+          type="button"
+          className="fm-btn fm-btn--primary"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? "Saving…" : "Update sale mode"}
+        </button>
+      </div>
+      {msg ? <p className="fm-form-note" style={{ marginTop: "0.4rem" }}>{msg}</p> : null}
     </div>
   );
 }

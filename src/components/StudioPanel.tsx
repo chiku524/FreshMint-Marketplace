@@ -142,20 +142,18 @@ export function StudioPanel({
         ) : (
           <form
             onSubmit={createShelf}
-            style={{ display: "grid", gap: "0.75rem", maxWidth: "32rem" }}
+            className="fm-form-stack fm-form-stack--wide"
           >
-            <input
-              value={shelfName}
-              onChange={(e) => setShelfName(e.target.value)}
-              placeholder="Shelf name"
-              required
-              style={{
-                background: "var(--panel)",
-                border: "1px solid var(--line)",
-                color: "var(--ink)",
-                padding: "0.55rem 0.7rem",
-              }}
-            />
+            <label>
+              Shelf name
+              <input
+                value={shelfName}
+                onChange={(e) => setShelfName(e.target.value)}
+                placeholder="Shelf name"
+                required
+                className="fm-field"
+              />
+            </label>
             <div
               style={{
                 display: "grid",
@@ -184,18 +182,11 @@ export function StudioPanel({
                 </label>
               ))}
             </div>
-            <button
-              type="submit"
-              className="badge emerging"
-              style={{
-                cursor: "pointer",
-                background: "transparent",
-                justifySelf: "start",
-                padding: "0.5rem 0.8rem",
-              }}
-            >
-              Publish shelf
-            </button>
+            <div className="fm-form-actions">
+              <button type="submit" className="fm-btn fm-btn--primary">
+                Publish shelf
+              </button>
+            </div>
           </form>
         )}
       </section>

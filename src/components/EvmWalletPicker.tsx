@@ -15,39 +15,29 @@ export function EvmWalletPicker({
     <div
       role="dialog"
       aria-label="Choose EVM wallet"
-      style={{
-        border: "1px solid var(--line)",
-        background: "var(--panel)",
-        padding: "0.85rem 1rem",
-        display: "grid",
-        gap: "0.5rem",
-        maxWidth: "22rem",
-      }}
+      className="fm-form-dialog"
+      style={{ position: "relative", boxShadow: "none" }}
     >
-      <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+      <p className="fm-form-note">
         Several EVM wallets are installed. Pick the one you want to link.
       </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+      <div className="fm-form-actions">
         {wallets.map((wallet) => (
           <button
             key={wallet.id}
             type="button"
-            className="badge featured"
+            className="fm-btn fm-btn--primary"
             onClick={() => onSelect(wallet)}
-            style={{ cursor: "pointer", background: "transparent" }}
           >
             {wallet.name}
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        className="badge"
-        onClick={onCancel}
-        style={{ cursor: "pointer", background: "transparent", justifySelf: "start" }}
-      >
-        Cancel
-      </button>
+      <div className="fm-form-actions">
+        <button type="button" className="fm-btn fm-btn--ghost" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

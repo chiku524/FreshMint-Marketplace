@@ -43,12 +43,7 @@ import {
 } from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /** Parallel media uploads — high enough to cut serial wait, low enough for Blob/API. */
 const UPLOAD_CONCURRENCY = 4;
@@ -91,15 +86,6 @@ type Piece = {
   size: number;
   traits: NftTrait[];
   maxSupply: string;
-};
-
-const fieldStyle: CSSProperties = {
-  width: "100%",
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  color: "var(--ink)",
-  padding: "0.55rem 0.7rem",
-  marginTop: "0.35rem",
 };
 
 const ACCEPT =
@@ -1482,8 +1468,7 @@ export function CreateWizard() {
             <div className="create-wizard__nav">
               <button
                 type="button"
-                className="badge featured"
-                style={{ cursor: "pointer", background: "transparent" }}
+                className="fm-btn fm-btn--primary"
                 onClick={() => {
                   setPublished(null);
                   setStepIndex(0);
@@ -1619,7 +1604,7 @@ export function CreateWizard() {
                       }
                     }
                   }}
-                  style={fieldStyle}
+                  className="fm-field"
                 >
                   <option value="">Create one below…</option>
                   {networkCollections.map((c) => (
@@ -1639,7 +1624,7 @@ export function CreateWizard() {
                   }}
                   placeholder="Dawn Set"
                   maxLength={120}
-                  style={fieldStyle}
+                  className="fm-field"
                   disabled={Boolean(collectionId)}
                   aria-describedby="create-collection-title-status"
                 />
@@ -1696,7 +1681,7 @@ export function CreateWizard() {
                     maxLength={48}
                     autoComplete="off"
                     spellCheck={false}
-                    style={{ ...fieldStyle, marginTop: 0 }}
+                    className="fm-field fm-field--flush"
                     aria-describedby="create-collection-slug-status"
                   />
                 </div>
@@ -1748,7 +1733,7 @@ export function CreateWizard() {
                     maxLength={2000}
                     rows={2}
                     placeholder="About this collection"
-                    style={{ ...fieldStyle, resize: "vertical" }}
+                    className="fm-field"
                   />
                 </label>
                 <div
@@ -1857,7 +1842,7 @@ export function CreateWizard() {
                       value={collectionWebsiteUrl}
                       onChange={(e) => setCollectionWebsiteUrl(e.target.value)}
                       placeholder="https://"
-                      style={fieldStyle}
+                      className="fm-field"
                       inputMode="url"
                     />
                   </label>
@@ -1867,7 +1852,7 @@ export function CreateWizard() {
                       value={collectionTwitterUrl}
                       onChange={(e) => setCollectionTwitterUrl(e.target.value)}
                       placeholder="https://x.com/…"
-                      style={fieldStyle}
+                      className="fm-field"
                       inputMode="url"
                     />
                   </label>
@@ -1877,7 +1862,7 @@ export function CreateWizard() {
                       value={collectionDiscordUrl}
                       onChange={(e) => setCollectionDiscordUrl(e.target.value)}
                       placeholder="https://discord.gg/…"
-                      style={fieldStyle}
+                      className="fm-field"
                       inputMode="url"
                     />
                   </label>
@@ -1889,7 +1874,7 @@ export function CreateWizard() {
                         setCollectionInstagramUrl(e.target.value)
                       }
                       placeholder="https://instagram.com/…"
-                      style={fieldStyle}
+                      className="fm-field"
                       inputMode="url"
                     />
                   </label>
@@ -1904,7 +1889,7 @@ export function CreateWizard() {
                   setNetwork(e.target.value);
                   setCollectionId("");
                 }}
-                style={fieldStyle}
+                className="fm-field"
               >
                 <option value="ethereum">Ethereum (Sepolia)</option>
                 <option value="base">Base (Sepolia)</option>
@@ -1963,7 +1948,7 @@ export function CreateWizard() {
                   <input
                     value={startingBidUsd}
                     onChange={(e) => setStartingBidUsd(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                 </label>
                 <label>
@@ -1971,7 +1956,7 @@ export function CreateWizard() {
                   <input
                     value={reserveUsd}
                     onChange={(e) => setReserveUsd(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                 </label>
               </div>
@@ -2010,7 +1995,7 @@ export function CreateWizard() {
                   type="datetime-local"
                   value={startsAt}
                   onChange={(e) => setStartsAt(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
               </label>
               <label>
@@ -2019,7 +2004,7 @@ export function CreateWizard() {
                   type="datetime-local"
                   value={endsAt}
                   onChange={(e) => setEndsAt(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
               </label>
               <label>
@@ -2030,7 +2015,7 @@ export function CreateWizard() {
                   step="1"
                   value={priceUsd}
                   onChange={(e) => setPriceUsd(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
                 <span style={{ display: "block", marginTop: "0.35rem" }}>
                   <PlatformFeeBreakdown
@@ -2058,7 +2043,7 @@ export function CreateWizard() {
                 multiple={batchUpload}
                 accept={ACCEPT}
                 disabled={busy}
-                style={fieldStyle}
+                className="fm-field"
                 onChange={(e) => {
                   const selectedFiles = e.target.files
                     ? Array.from(e.target.files)
@@ -2119,7 +2104,7 @@ export function CreateWizard() {
                     step="1"
                     value={priceUsd}
                     onChange={(e) => setPriceUsd(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                   <span style={{ display: "block", marginTop: "0.35rem" }}>
                     <PlatformFeeBreakdown
@@ -2133,7 +2118,7 @@ export function CreateWizard() {
                   <input
                     value={medium}
                     onChange={(e) => setMedium(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                 </label>
               </div>
@@ -2143,7 +2128,7 @@ export function CreateWizard() {
                 <input
                   value={medium}
                   onChange={(e) => setMedium(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
               </label>
             )}
@@ -2153,7 +2138,7 @@ export function CreateWizard() {
                 value={styleTags}
                 onChange={(e) => setStyleTags(e.target.value)}
                 placeholder="ink, minimal"
-                style={fieldStyle}
+                className="fm-field"
               />
             </label>
             {batchUpload ? (
@@ -2163,7 +2148,7 @@ export function CreateWizard() {
                   <input
                     type="file"
                     accept=".csv,text/csv"
-                    style={fieldStyle}
+                    className="fm-field"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = "";
@@ -2229,7 +2214,7 @@ export function CreateWizard() {
                               ),
                             )
                           }
-                          style={fieldStyle}
+                          className="fm-field"
                         />
                       </label>
                       <label>
@@ -2246,7 +2231,7 @@ export function CreateWizard() {
                               ),
                             )
                           }
-                          style={fieldStyle}
+                          className="fm-field"
                         />
                       </label>
                       {batchUpload && dropKind === "limited" ? (
@@ -2265,7 +2250,7 @@ export function CreateWizard() {
                                 ),
                               )
                             }
-                            style={fieldStyle}
+                            className="fm-field"
                           />
                         </label>
                       ) : null}
@@ -2412,13 +2397,9 @@ export function CreateWizard() {
         <div className="create-wizard__nav">
           <button
             type="button"
-            className="badge"
+            className="fm-btn fm-btn--ghost"
             disabled={busy || stepIndex === 0}
-            style={{
-              cursor: stepIndex === 0 ? "default" : "pointer",
-              background: "transparent",
-              opacity: stepIndex === 0 ? 0.4 : 1,
-            }}
+            style={{ opacity: stepIndex === 0 ? 0.4 : 1 }}
             onClick={goBack}
           >
             Back
@@ -2426,9 +2407,8 @@ export function CreateWizard() {
           {step.id !== "review" ? (
             <button
               type="button"
-              className="badge featured"
+              className="fm-btn fm-btn--primary"
               disabled={busy}
-              style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void advance()}
             >
               {busy ? "Working…" : "Continue"}
@@ -2436,9 +2416,8 @@ export function CreateWizard() {
           ) : (
             <button
               type="button"
-              className="badge featured"
+              className="fm-btn fm-btn--primary"
               disabled={busy}
-              style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void publish()}
             >
               {busy

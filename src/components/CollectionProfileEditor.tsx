@@ -3,15 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-const fieldStyle: React.CSSProperties = {
-  width: "100%",
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  color: "var(--ink)",
-  padding: "0.55rem 0.7rem",
-  marginTop: "0.35rem",
-};
-
 async function uploadImage(file: File): Promise<string> {
   const fd = new FormData();
   fd.set("file", file);
@@ -229,7 +220,7 @@ export function CollectionProfileEditor({
           maxLength={2000}
           rows={3}
           placeholder="What is this collection about?"
-          style={{ ...fieldStyle, resize: "vertical" }}
+          className="fm-field"
         />
       </label>
 
@@ -240,7 +231,7 @@ export function CollectionProfileEditor({
             value={websiteUrl}
             onChange={(e) => setWebsiteUrl(e.target.value)}
             placeholder="https://"
-            style={fieldStyle}
+            className="fm-field"
             inputMode="url"
           />
         </label>
@@ -250,7 +241,7 @@ export function CollectionProfileEditor({
             value={twitterUrl}
             onChange={(e) => setTwitterUrl(e.target.value)}
             placeholder="https://x.com/…"
-            style={fieldStyle}
+            className="fm-field"
             inputMode="url"
           />
         </label>
@@ -260,7 +251,7 @@ export function CollectionProfileEditor({
             value={discordUrl}
             onChange={(e) => setDiscordUrl(e.target.value)}
             placeholder="https://discord.gg/…"
-            style={fieldStyle}
+            className="fm-field"
             inputMode="url"
           />
         </label>
@@ -270,7 +261,7 @@ export function CollectionProfileEditor({
             value={instagramUrl}
             onChange={(e) => setInstagramUrl(e.target.value)}
             placeholder="https://instagram.com/…"
-            style={fieldStyle}
+            className="fm-field"
             inputMode="url"
           />
         </label>
@@ -279,7 +270,7 @@ export function CollectionProfileEditor({
       {error ? <p className="collection-profile-editor__error">{error}</p> : null}
       {ok ? <p className="collection-profile-editor__ok">{ok}</p> : null}
 
-      <button type="submit" className="badge featured" disabled={busy}>
+      <button type="submit" className="fm-btn fm-btn--primary" disabled={busy}>
         {busy ? "Saving…" : "Save profile"}
       </button>
     </form>

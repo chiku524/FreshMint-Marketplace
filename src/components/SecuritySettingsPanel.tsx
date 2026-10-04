@@ -100,171 +100,129 @@ export function SecuritySettingsPanel({
     }
   }
 
-  const field = {
-    padding: "0.55rem 0.65rem",
-    background: "var(--bg-deep)",
-    border: "1px solid var(--line)",
-    color: "var(--ink)",
-    width: "100%",
-  } as const;
-
   return (
-    <section
-      style={{
-        border: "1px solid var(--line)",
-        background: "var(--panel)",
-        padding: "1.25rem",
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "36rem",
-      }}
-    >
-      <div>
-        <h2 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.4rem" }}>
-          Two-factor authentication
-        </h2>
-        <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.95rem" }}>
-          Status:{" "}
-          <span className={enabled ? "badge emerging" : "badge"}>
-            {enabled ? "Enabled" : "Off"}
-          </span>
-        </p>
-        <p style={{ margin: "0.6rem 0 0", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-          Authenticator apps (Google Authenticator, 1Password, Authy) plus one-time
-          backup codes. Required at every wallet or demo sign-in once enabled.
-        </p>
-      </div>
-
-      {!enabled && !enroll ? (
-        <button
-          type="button"
-          className="badge featured"
-          disabled={busy}
-          onClick={() => void startEnroll()}
-          style={{
-            cursor: "pointer",
-            background: "transparent",
-            justifySelf: "start",
-            padding: "0.55rem 0.9rem",
-          }}
-        >
-          {busy ? "Preparing…" : "Enable 2FA"}
-        </button>
-      ) : null}
-
-      {enroll ? (
-        <form onSubmit={(e) => void confirmEnroll(e)} style={{ display: "grid", gap: "0.85rem" }}>
-          <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-            Scan this QR with your authenticator, or enter the secret manually.
+    <section className="me-section">
+      <h2 className="display me-section__title">Two-factor authentication</h2>
+      <div className="fm-form-surface fm-form-surface--wide fm-form-stack fm-form-stack--wide">
+        <div>
+          <p className="fm-form-note">
+            Status:{" "}
+            <span className={enabled ? "badge emerging" : "badge"}>
+              {enabled ? "Enabled" : "Off"}
+            </span>
           </p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={enroll.qrDataUrl}
-            alt="2FA QR code"
-            width={220}
-            height={220}
-            style={{ border: "1px solid var(--line)" }}
-          />
-          <code
-            style={{
-              fontSize: "0.85rem",
-              wordBreak: "break-all",
-              color: "var(--accent-soft)",
-            }}
-          >
-            {enroll.secret}
-          </code>
-          <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.9rem" }}>
-            Confirm with a 6-digit code
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              style={field}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="badge emerging"
-            style={{
-              cursor: "pointer",
-              background: "transparent",
-              justifySelf: "start",
-              padding: "0.5rem 0.85rem",
-            }}
-          >
-            Confirm & enable
-          </button>
-        </form>
-      ) : null}
+          <p className="fm-form-note" style={{ marginTop: "0.6rem" }}>
+            Authenticator apps (Google Authenticator, 1Password, Authy) plus one-time
+            backup codes. Required at every wallet or demo sign-in once enabled.
+          </p>
+        </div>
 
-      {enabled ? (
-        <>
-          <form onSubmit={(e) => void disable(e)} style={{ display: "grid", gap: "0.65rem" }}>
-            <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.9rem" }}>
+        {!enabled && !enroll ? (
+          <div className="fm-form-actions">
+            <button
+              type="button"
+              className="fm-btn fm-btn--primary"
+              disabled={busy}
+              onClick={() => void startEnroll()}
+            >
+              {busy ? "Preparing…" : "Enable 2FA"}
+            </button>
+          </div>
+        ) : null}
+
+        {enroll ? (
+          <form onSubmit={(e) => void confirmEnroll(e)} className="fm-form-stack">
+            <p className="fm-form-note">
+              Scan this QR with your authenticator, or enter the secret manually.
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={enroll.qrDataUrl}
+              alt="2FA QR code"
+              width={220}
+              height={220}
+              style={{ border: "1px solid var(--line)", borderRadius: "0.4rem" }}
+            />
+            <code
+              style={{
+                fontSize: "0.85rem",
+                wordBreak: "break-all",
+                color: "var(--accent-soft)",
+              }}
+            >
+              {enroll.secret}
+            </code>
+            <label>
+              Confirm with a 6-digit code
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="fm-field fm-field--code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+              />
+            </label>
+            <div className="fm-form-actions">
+              <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
+                Confirm & enable
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {enabled ? (
+          <form onSubmit={(e) => void disable(e)} className="fm-form-stack">
+            <label>
               Disable 2FA (code or backup)
               <input
                 value={disableCode}
                 onChange={(e) => setDisableCode(e.target.value)}
-                style={field}
+                className="fm-field fm-field--code"
               />
             </label>
-            <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+            <div className="fm-form-actions">
               <button
                 type="submit"
                 disabled={busy}
-                className="badge"
-                style={{
-                  cursor: "pointer",
-                  background: "transparent",
-                  padding: "0.5rem 0.85rem",
-                  color: "var(--danger)",
-                }}
+                className="fm-btn fm-btn--ghost"
+                style={{ color: "var(--danger)" }}
               >
                 Disable
               </button>
               <button
                 type="button"
                 disabled={busy}
-                className="badge"
+                className="fm-btn fm-btn--ghost"
                 onClick={() => void regenerateBackups()}
-                style={{
-                  cursor: "pointer",
-                  background: "transparent",
-                  padding: "0.5rem 0.85rem",
-                }}
               >
                 Regenerate backup codes
               </button>
             </div>
           </form>
-        </>
-      ) : null}
+        ) : null}
 
-      {backupCodes ? (
-        <div
-          style={{
-            border: "1px solid rgba(212, 174, 102, 0.35)",
-            padding: "0.9rem",
-            background: "rgba(212, 174, 102, 0.06)",
-          }}
-        >
-          <p style={{ margin: "0 0 0.5rem", color: "var(--accent-soft)", fontSize: "0.9rem" }}>
-            Save these backup codes now — they won’t be shown again.
-          </p>
-          <ul style={{ margin: 0, paddingLeft: "1.1rem", fontFamily: "monospace" }}>
-            {backupCodes.map((c) => (
-              <li key={c}>{c}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+        {backupCodes ? (
+          <div
+            style={{
+              border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+              borderRadius: "0.45rem",
+              padding: "0.9rem",
+              background: "color-mix(in srgb, var(--accent) 6%, transparent)",
+            }}
+          >
+            <p className="fm-form-note" style={{ color: "var(--accent-soft)", marginBottom: "0.5rem" }}>
+              Save these backup codes now — they won’t be shown again.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: "1.1rem", fontFamily: "monospace" }}>
+              {backupCodes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
-      {error ? (
-        <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.9rem" }}>{error}</p>
-      ) : null}
+        {error ? <p className="fm-form-error">{error}</p> : null}
+      </div>
     </section>
   );
 }

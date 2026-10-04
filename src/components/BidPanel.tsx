@@ -173,23 +173,16 @@ export function BidPanel({
   }, [remainingMs]);
 
   return (
-    <div
-      style={{
-        marginTop: "1rem",
-        border: "1px solid var(--line)",
-        padding: "0.9rem 1rem",
-        background: "var(--panel)",
-      }}
-    >
+    <div className="fm-listing-form">
       <h3 className="display" style={{ margin: "0 0 0.5rem", fontSize: "1.15rem" }}>
         English auction
       </h3>
       {live ? (
         <>
-          <p style={{ margin: "0 0 0.65rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+          <p className="fm-form-note" style={{ marginBottom: "0.65rem" }}>
             Open bidding in USD. Min next bid ${minBidUsd}.
           </p>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div className="fm-form-actions">
             <input
               type="number"
               min={minBidUsd}
@@ -197,33 +190,24 @@ export function BidPanel({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               disabled={busy || resolveBuyAuthCta(sessionUserId) !== "ready"}
-              style={{
-                background: "var(--bg)",
-                border: "1px solid var(--line)",
-                color: "var(--ink)",
-                padding: "0.45rem 0.6rem",
-                width: "8rem",
-              }}
+              className="fm-field fm-field--narrow"
             />
             {resolveBuyAuthCta(sessionUserId) === "checking" ? (
-              <button
-                type="button"
-                className="badge featured"
-                disabled
-                style={{ cursor: "wait", background: "transparent" }}
-              >
+              <button type="button" className="fm-btn fm-btn--primary" disabled>
                 Checking sign-in…
               </button>
             ) : resolveBuyAuthCta(sessionUserId) === "sign_in" ? (
-              <Link href={`/sign-in?next=/listings/${listingId}`} className="badge featured">
+              <Link
+                href={`/sign-in?next=/listings/${listingId}`}
+                className="fm-btn fm-btn--primary"
+              >
                 Sign in to continue
               </Link>
             ) : (
               <button
                 type="button"
-                className="badge featured"
+                className="fm-btn fm-btn--primary"
                 disabled={busy}
-                style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
                 onClick={() => void onBid()}
               >
                 {busy ? "Placing bid…" : "Place bid"}
