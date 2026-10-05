@@ -486,15 +486,13 @@ export function CreateWizard() {
     const { id, deployIntent, creatorAddress } = input;
     if (!deployIntent.walletTx) return;
     setDeployNote("Confirm collection deploy in your wallet (you pay gas)…");
-    const wt = deployIntent.walletTx as EvmWalletTx & { chain: string };
+    const wt = deployIntent.walletTx as EvmWalletTx | BoingWalletTx;
     let txHash: string | null = null;
     let contractAddress = deployIntent.contractAddress;
     if (wt.chain === "evm") {
       txHash = await sendEvmWalletTx(wt);
     } else if (wt.chain === "boing") {
-      const sent = await sendBoingWalletTxDetailed(
-        deployIntent.walletTx as Parameters<typeof sendBoingWalletTxDetailed>[0],
-      );
+      const sent = await sendBoingWalletTxDetailed(wt);
       if (sent.contractAddress) contractAddress = sent.contractAddress;
 
       // Boing node returns `{ tx_hash: "ok" }` on mempool accept — not a real
@@ -1229,12 +1227,12 @@ export function CreateWizard() {
           const batch = batches[b]!;
           let txHash = batch.txHash || "";
           if (batch.walletTx) {
-            const wt = batch.walletTx as EvmWalletTx & { chain: string };
+            const wt = batch.walletTx as EvmWalletTx | BoingWalletTx;
             if (wt.chain === "evm") {
               txHash = await sendEvmWalletTx(wt);
             } else if (wt.chain === "boing") {
               try {
-                txHash = await sendBoingMintWalletTx(wt as BoingWalletTx);
+                txHash = await sendBoingMintWalletTx(wt);
               } catch (err) {
                 const code = err instanceof Error ? err.message : "";
                 if (code === "boing_tx_id_required") {

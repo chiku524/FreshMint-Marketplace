@@ -115,12 +115,12 @@ export function CollectionPublishPanel({
         setProgress(`Minting batch ${b + 1} of ${batches.length}…`);
         let txHash = batch.txHash || "";
         if (batch.walletTx) {
-          const wt = batch.walletTx as EvmWalletTx & { chain: string };
+          const wt = batch.walletTx as EvmWalletTx | BoingWalletTx;
           if (wt.chain === "evm") {
             txHash = await sendEvmWalletTx(wt);
           } else if (wt.chain === "boing") {
             try {
-              txHash = await sendBoingMintWalletTx(wt as BoingWalletTx);
+              txHash = await sendBoingMintWalletTx(wt);
             } catch (err) {
               const code = err instanceof Error ? err.message : "";
               if (code === "boing_tx_id_required") {
