@@ -36,8 +36,14 @@ describe("resolveBuyPrimaryCta", () => {
   it("asks signed-out buyers to sign in", () => {
     expect(resolveBuyPrimaryCta({ ...base, sessionUserId: null })).toEqual({
       kind: "sign_in",
-      label: "Sign in to continue",
+      label: "Sign in to buy",
     });
+  });
+
+  it("shows Buy now before confirm opens", () => {
+    expect(
+      resolveBuyPrimaryCta({ ...base, sessionUserId: "u1", confirmOpen: false }),
+    ).toEqual({ kind: "continue", label: "Buy now" });
   });
 
   it("advances connect → bridge/pay and supports resume", () => {

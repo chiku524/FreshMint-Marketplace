@@ -279,8 +279,8 @@ export function BidPanel({
                   <>You have 48 hours to complete payment.</>
                 )}{" "}
                 {purchaseId
-                  ? "A checkout at the winning bid is ready — use Resume / Continue buy below (wallet required for crypto)."
-                  : "Use Buy / Continue below at the winning bid (wallet required for crypto)."}
+                  ? "A checkout at the winning bid is ready — use Resume payment / Buy now below (wallet required for crypto)."
+                  : "Use Buy now below at the winning bid (wallet required for crypto)."}
               </p>
             </>
           ) : awardedOrClaim ? (

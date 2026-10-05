@@ -53,7 +53,7 @@ export function ResaleListButton({
         style={{ cursor: "pointer", background: "transparent" }}
         onClick={() => setOpen(true)}
       >
-        List for resale
+        List for sale
       </button>
     );
   }
@@ -61,7 +61,7 @@ export function ResaleListButton({
   return (
     <form onSubmit={(e) => void submit(e)} className="fm-form-stack" style={{ maxWidth: "16rem" }}>
       <label>
-        Resale price (USD)
+        List price (USD)
         <input
           value={price}
           onChange={(e) => setPrice(e.target.value)}
@@ -72,7 +72,7 @@ export function ResaleListButton({
       </label>
       <div className="fm-form-actions">
         <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
-          {busy ? "Listing…" : "Publish secondary"}
+          {busy ? "Listing…" : "List for sale"}
         </button>
         <button
           type="button"
@@ -86,8 +86,8 @@ export function ResaleListButton({
         <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
       ) : (
         <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-          Fixed-price secondary. Platform 0.5% + creator royalty (default 5%) come from the listed
-          price.
+          Buy-now secondary listing. Platform 0.5% + creator royalty (default 5%) come from the
+          listed price.
         </p>
       )}
     </form>

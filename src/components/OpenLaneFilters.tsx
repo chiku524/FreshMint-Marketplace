@@ -101,16 +101,19 @@ export function OpenLaneFilters({
           $100+
         </Link>
         <Link className="badge" href={link({ saleMode: undefined })}>
-          Any sale mode
+          Any price type
         </Link>
         <Link className="badge" href={link({ saleMode: "fixed" })}>
-          Fixed price
+          Buy now
         </Link>
         <Link className="badge" href={link({ saleMode: "timed_window" })}>
-          Timed window
+          Timed listing
         </Link>
         <Link className="badge" href={link({ saleMode: "english" })}>
           English auction
+        </Link>
+        <Link className="badge" href={link({ saleMode: "dutch" })}>
+          Dutch auction
         </Link>
         <Link
           className="badge"

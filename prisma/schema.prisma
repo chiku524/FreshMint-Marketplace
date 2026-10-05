@@ -58,6 +58,7 @@ model User {
   signalEvents SignalEvent[]
   purchases    Purchase[]
   bids         Bid[]
+  offers       Offer[]
   highBids     Listing[] @relation("HighBidder")
   packagePurchases PackagePurchase[]
   moderationActions ModerationAction[]
@@ -144,7 +145,7 @@ model Listing {
   oeEndsAt         DateTime?
   auctionStartsAt  DateTime?
   auctionEndsAt    DateTime?
-  /// fixed | timed_window | english — sale/bidding mode (type stays for discovery)
+  /// fixed | timed_window | english | dutch — sale/bidding mode (type stays for discovery)
   saleMode         String   @default("fixed")
   startingBidUsd   Float?
   reserveUsd       Float?
@@ -189,6 +190,7 @@ model Listing {
   purchases    Purchase[]
   shelfItems   ShelfItem[]
   bids         Bid[]
+  offers       Offer[]
   highBidder   User?     @relation("HighBidder", fields: [highBidderId], references: [id], onDelete: SetNull)
 
   @@index([creatorId])
@@ -448,6 +450,25 @@ model Bid {
 
   @@index([listingId, createdAt])
   @@index([bidderId])
+  @@index([createdAt])
+}
+
+/// Collector offer on a Buy-now / timed listing (OpenSea-like).
+model Offer {
+  id        String   @id @default(cuid())
+  listingId String
+  offererId String
+  amountUsd Float
+  /// open | accepted | cancelled | expired
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  offerer User    @relation(fields: [offererId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status, createdAt])
+  @@index([offererId])
   @@index([createdAt])
 }
 

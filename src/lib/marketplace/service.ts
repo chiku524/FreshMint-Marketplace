@@ -2544,6 +2544,22 @@ export async function purchaseListing(input: {
     amountUsd = settled.amountUsd;
   }
 
+  if (saleMode === "dutch") {
+    const { dutchCurrentPriceUsd } = await import("@/lib/marketplace/sale-mode");
+    const dutchPrice = dutchCurrentPriceUsd({
+      startingBidUsd: listing.startingBidUsd,
+      priceUsd: listing.priceUsd,
+      reserveUsd: listing.reserveUsd,
+      auctionStartsAt: listing.auctionStartsAt,
+      auctionEndsAt: listing.auctionEndsAt,
+    });
+    if (dutchPrice == null || !(dutchPrice > 0)) {
+      return { ok: false as const, error: "invalid_dutch_price" };
+    }
+    input = { ...input, amountUsd: dutchPrice };
+    amountUsd = dutchPrice;
+  }
+
   const window = dropWindowFor(listing, collection);
   if (saleMode !== "english") {
     if (window.state === "upcoming") {
@@ -3565,10 +3581,13 @@ export async function updateListingSaleMode(input: {
     saleMode,
     type: nextType,
     startingBidUsd:
-      saleMode === "english"
+      saleMode === "english" || saleMode === "dutch"
         ? (input.startingBidUsd ?? listing.priceUsd ?? null)
         : null,
-    reserveUsd: saleMode === "english" ? (input.reserveUsd ?? null) : null,
+    reserveUsd:
+      saleMode === "english" || saleMode === "dutch"
+        ? (input.reserveUsd ?? null)
+        : null,
     auctionStartsAt:
       saleMode === "fixed"
         ? null
@@ -3582,7 +3601,11 @@ export async function updateListingSaleMode(input: {
           ? new Date(input.auctionEndsAt).getTime()
           : listing.auctionEndsAt,
     priceUsd:
-      input.priceUsd !== undefined ? input.priceUsd : listing.priceUsd,
+      input.priceUsd !== undefined
+        ? input.priceUsd
+        : saleMode === "dutch"
+          ? (input.startingBidUsd ?? listing.priceUsd)
+          : listing.priceUsd,
   };
 
   if (mode === "memory" || isMemoryMode()) {

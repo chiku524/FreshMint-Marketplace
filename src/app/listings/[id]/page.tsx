@@ -2,8 +2,14 @@ import { FollowButton } from "@/components/FollowButton";
 import { FeaturedBoostButton } from "@/components/FeaturedBoostButton";
 import { BidPanel } from "@/components/BidPanel";
 import { ListingActions } from "@/components/ListingActions";
+import { OfferPanel } from "@/components/OfferPanel";
 import { SaleModeEditor } from "@/components/SaleModeEditor";
-import { minNextBidUsd, resolveSaleMode, saleModeBadge } from "@/lib/marketplace/sale-mode";
+import {
+  dutchCurrentPriceUsd,
+  minNextBidUsd,
+  resolveSaleMode,
+  saleModeBadge,
+} from "@/lib/marketplace/sale-mode";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
@@ -160,7 +166,19 @@ export default async function ListingDetailPage({
             <Link href={`/creators/${listing.creatorId}`}>
               {creator?.displayName ?? listing.creatorId}
             </Link>
-            {listing.priceUsd != null ? ` · $${listing.priceUsd}` : " · timed drop"}
+            {listing.priceUsd != null || saleMode === "dutch"
+              ? ` · $${
+                  saleMode === "dutch"
+                    ? (dutchCurrentPriceUsd({
+                        startingBidUsd: listing.startingBidUsd,
+                        priceUsd: listing.priceUsd,
+                        reserveUsd: listing.reserveUsd,
+                        auctionStartsAt: listing.auctionStartsAt,
+                        auctionEndsAt: listing.auctionEndsAt,
+                      }) ?? listing.priceUsd ?? "—")
+                    : listing.priceUsd
+                }`
+              : " · timed listing"}
             {" · "}
             {listing.medium}
             {collection ? (
@@ -237,7 +255,7 @@ export default async function ListingDetailPage({
           </div>
           {listing.type === "auction" && saleMode === "timed_window" ? (
             <p className="listing-detail__note">
-              Timed drop window
+              Timed listing
               {drop.state === "upcoming"
                 ? " (not started)"
                 : drop.state === "live"
@@ -245,19 +263,23 @@ export default async function ListingDetailPage({
                   : drop.state === "ended"
                     ? " (ended)"
                     : ""}
-              . Buy at the fixed USD-quoted list price in crypto while the window
-              is open — no open bidding.
+              . Buy now at the list price while the window is open.
+            </p>
+          ) : null}
+          {saleMode === "dutch" ? (
+            <p className="listing-detail__note">
+              Dutch auction
+              {drop.state === "upcoming"
+                ? " (not started)"
+                : drop.state === "live"
+                  ? " (live — price declining)"
+                  : drop.state === "ended"
+                    ? " (ended)"
+                    : ""}
+              . Buy now at the current price before it hits the floor.
             </p>
           ) : null}
 
-          {user?.id === listing.creatorId ? (
-            <SaleModeEditor
-              listingId={listing.id}
-              saleMode={saleMode}
-              startingBidUsd={listing.startingBidUsd}
-              reserveUsd={listing.reserveUsd}
-            />
-          ) : null}
           {saleMode === "english" ? (
             <BidPanel
               listingId={listing.id}
@@ -280,7 +302,17 @@ export default async function ListingDetailPage({
             listingId={listing.id}
             creatorId={listing.creatorId}
             priceUsd={
-              englishAwardAmount != null ? englishAwardAmount : listing.priceUsd
+              englishAwardAmount != null
+                ? englishAwardAmount
+                : saleMode === "dutch"
+                  ? dutchCurrentPriceUsd({
+                      startingBidUsd: listing.startingBidUsd,
+                      priceUsd: listing.priceUsd,
+                      reserveUsd: listing.reserveUsd,
+                      auctionStartsAt: listing.auctionStartsAt,
+                      auctionEndsAt: listing.auctionEndsAt,
+                    })
+                  : listing.priceUsd
             }
             stage={listing.stage}
             sold={
@@ -304,6 +336,7 @@ export default async function ListingDetailPage({
             repeatable={cap == null || cap > 1}
             minted={minted}
             canStageRising={canUserStageListing(user, listing)}
+            suppressBuy={saleMode === "english" && auctionLive}
             pendingPurchase={
               pendingPurchase
                 ? {
@@ -313,6 +346,30 @@ export default async function ListingDetailPage({
                 : null
             }
           />
+
+          {(saleMode === "fixed" || saleMode === "timed_window") &&
+          minted &&
+          !soldIds.has(listing.id) ? (
+            <OfferPanel
+              listingId={listing.id}
+              listPriceUsd={listing.priceUsd}
+              isSeller={
+                user?.id === listing.creatorId ||
+                user?.id === (listing.sellerId ?? listing.creatorId)
+              }
+              sessionUserId={user?.id ?? null}
+            />
+          ) : null}
+
+          {user?.id === listing.creatorId ? (
+            <SaleModeEditor
+              listingId={listing.id}
+              saleMode={saleMode}
+              startingBidUsd={listing.startingBidUsd}
+              reserveUsd={listing.reserveUsd}
+              priceUsd={listing.priceUsd}
+            />
+          ) : null}
           {user?.id === listing.creatorId && listing.stage !== "draft" ? (
             <FeaturedBoostButton
               listingId={listing.id}

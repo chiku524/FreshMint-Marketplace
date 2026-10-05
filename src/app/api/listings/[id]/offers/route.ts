@@ -1,20 +1,24 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { updateListingSaleMode } from "@/lib/marketplace/service";
+import { listOffersForListing, makeOffer } from "@/lib/marketplace/offers";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const offers = await listOffersForListing(id, 50);
+  return NextResponse.json({ ok: true, offers });
+}
+
 const bodySchema = z.object({
-  saleMode: z.enum(["fixed", "timed_window", "english", "dutch"]),
-  startingBidUsd: z.number().nonnegative().nullable().optional(),
-  reserveUsd: z.number().nonnegative().nullable().optional(),
-  auctionStartsAt: z.string().nullable().optional(),
-  auctionEndsAt: z.string().nullable().optional(),
-  priceUsd: z.number().nonnegative().nullable().optional(),
+  amountUsd: z.coerce.number().positive(),
 });
 
-export async function PATCH(
+export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -27,10 +31,10 @@ export async function PATCH(
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
-  const result = await updateListingSaleMode({
+  const result = await makeOffer({
     listingId: id,
-    creatorId: user.id,
-    ...parsed.data,
+    offererId: user.id,
+    amountUsd: parsed.data.amountUsd,
   });
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });

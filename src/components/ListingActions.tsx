@@ -72,7 +72,7 @@ function stepLabel(step: BuyStep, crossChain: boolean): string {
     case "done":
       return "Owned on-chain";
     default:
-      return crossChain ? "Bridge & buy" : "Confirm buy";
+      return crossChain ? "Bridge & buy" : "Confirm purchase";
   }
 }
 
@@ -94,6 +94,8 @@ export function ListingActions({
   showSave = true,
   isSecondary = false,
   creatorRoyaltyBps = null,
+  /** Hide Buy now while an English auction is live (use Place bid instead). */
+  suppressBuy = false,
 }: {
   listingId: string;
   creatorId?: string;
@@ -116,6 +118,7 @@ export function ListingActions({
   layout?: "inline" | "menu";
   /** When false, Save lives on the WorkCard caption instead. */
   showSave?: boolean;
+  suppressBuy?: boolean;
 }) {
   const router = useRouter();
   const listingNetwork = (network ??
@@ -184,6 +187,7 @@ export function ListingActions({
   const crossChain = payNetwork !== listingNetwork;
   const uniqueSold = (sold || justSold) && !heldPurchase && !pendingPurchase;
   const canBuy =
+    !suppressBuy &&
     minted &&
     priceUsd != null &&
     !uniqueSold &&
@@ -807,7 +811,7 @@ export function ListingActions({
           if (primary.kind === "sign_in") {
             return (
               <Link href={signInHref} className="badge featured">
-                Continue
+                Buy now
               </Link>
             );
           }
@@ -818,7 +822,7 @@ export function ListingActions({
               style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void openCheckout()}
             >
-              Continue
+              Buy now
               {settleQuote?.formatted || priceUsd != null ? (
                 <span style={{ opacity: 0.75 }}>
                   {" "}
@@ -1124,7 +1128,7 @@ export function ListingActions({
       ) : null}
       {msg === "sign_in" ? (
         <span style={{ fontSize: "0.8rem", maxWidth: "22rem" }}>
-          <Link href={signInHref}>Continue</Link> to sign in, then pay from your
+          <Link href={signInHref}>Sign in</Link> to buy, then pay from your
           wallet. Link wallets anytime under{" "}
           <Link href="/me/settings">/me/settings</Link>.
         </span>

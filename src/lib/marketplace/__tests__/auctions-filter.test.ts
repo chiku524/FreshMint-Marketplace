@@ -59,8 +59,9 @@ describe("parseAuctionsSaleMode", () => {
     expect(parseAuctionsSaleMode("")).toBe("all");
   });
 
-  it("accepts english and timed_window", () => {
+  it("accepts english, dutch, and timed_window", () => {
     expect(parseAuctionsSaleMode("english")).toBe("english");
+    expect(parseAuctionsSaleMode("dutch")).toBe("dutch");
     expect(parseAuctionsSaleMode("timed_window")).toBe("timed_window");
     expect(parseAuctionsSaleMode("all")).toBe("all");
   });
@@ -108,5 +109,6 @@ describe("auctionsHref", () => {
     expect(auctionsHref("timed_window")).toBe(
       "/auctions?saleMode=timed_window",
     );
+    expect(auctionsHref("dutch")).toBe("/auctions?saleMode=dutch");
   });
 });

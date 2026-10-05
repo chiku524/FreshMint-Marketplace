@@ -1,5 +1,6 @@
 import type { Collection, CreatorProfile, Listing } from "@/lib/discovery/types";
 import { visibilityForStage } from "@/lib/discovery/staging";
+import { resolveSaleMode } from "@/lib/marketplace/sale-mode";
 
 export type SearchHit =
   | { kind: "work"; listing: Listing }
@@ -49,7 +50,7 @@ export function searchCatalog(input: {
 }
 
 export type OpenLaneExtraFilters = {
-  saleMode?: "fixed" | "timed_window" | "english";
+  saleMode?: "fixed" | "timed_window" | "english" | "dutch";
   endingSoon?: boolean;
   now?: number;
   endingSoonMs?: number;
@@ -63,15 +64,7 @@ export function listingMatchesOpenExtras(
 ): boolean {
   const now = filters.now ?? Date.now();
   if (filters.saleMode) {
-    const mode =
-      listing.saleMode === "english" ||
-      listing.saleMode === "timed_window" ||
-      listing.saleMode === "fixed"
-        ? listing.saleMode
-        : listing.type === "auction"
-          ? "timed_window"
-          : "fixed";
-    if (mode !== filters.saleMode) return false;
+    if (resolveSaleMode(listing) !== filters.saleMode) return false;
   }
   if (filters.endingSoon) {
     const ends = listing.auctionEndsAt;

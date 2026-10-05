@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dutchCurrentPriceUsd,
   listingTypeForSaleMode,
   minNextBidUsd,
   parseSaleMode,
@@ -21,9 +22,10 @@ import {
 } from "@/lib/marketplace/package-sell";
 
 describe("saleMode mapping", () => {
-  it("maps english/timed_window to auction type for discovery", () => {
+  it("maps english/timed_window/dutch to auction type for discovery", () => {
     expect(listingTypeForSaleMode("english")).toBe("auction");
     expect(listingTypeForSaleMode("timed_window")).toBe("auction");
+    expect(listingTypeForSaleMode("dutch")).toBe("auction");
     expect(listingTypeForSaleMode("fixed", "single")).toBe("single");
     expect(listingTypeForSaleMode("fixed", "open_edition")).toBe(
       "open_edition",
@@ -35,15 +37,57 @@ describe("saleMode mapping", () => {
     expect(resolveSaleMode({ type: "auction", saleMode: "english" })).toBe(
       "english",
     );
+    expect(resolveSaleMode({ type: "auction", saleMode: "dutch" })).toBe(
+      "dutch",
+    );
     expect(resolveSaleMode({ type: "single" })).toBe("fixed");
     expect(parseSaleMode("nope")).toBe("fixed");
+    expect(parseSaleMode("dutch")).toBe("dutch");
   });
 
   it("exposes distinct badges", () => {
     expect(saleModeBadge({ type: "auction", saleMode: "english" })).toMatch(
       /English auction/i,
     );
-    expect(saleModeBadge({ type: "auction" })).toMatch(/Timed window/i);
+    expect(saleModeBadge({ type: "auction", saleMode: "dutch" })).toMatch(
+      /Dutch auction/i,
+    );
+    expect(saleModeBadge({ type: "auction" })).toMatch(/Timed listing/i);
+    expect(saleModeBadge({ type: "single", saleMode: "fixed" })).toMatch(
+      /Buy now/i,
+    );
+  });
+
+  it("declines Dutch auction price over the window", () => {
+    const start = 1_000;
+    const end = 11_000;
+    expect(
+      dutchCurrentPriceUsd({
+        startingBidUsd: 100,
+        reserveUsd: 20,
+        auctionStartsAt: start,
+        auctionEndsAt: end,
+        now: start,
+      }),
+    ).toBe(100);
+    expect(
+      dutchCurrentPriceUsd({
+        startingBidUsd: 100,
+        reserveUsd: 20,
+        auctionStartsAt: start,
+        auctionEndsAt: end,
+        now: start + 5_000,
+      }),
+    ).toBe(60);
+    expect(
+      dutchCurrentPriceUsd({
+        startingBidUsd: 100,
+        reserveUsd: 20,
+        auctionStartsAt: start,
+        auctionEndsAt: end,
+        now: end,
+      }),
+    ).toBe(20);
   });
 });
 

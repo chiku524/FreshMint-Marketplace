@@ -35,7 +35,7 @@ const createSchema = z
     oeEndsAt: z.string().nullable().optional(),
     auctionStartsAt: z.string().nullable().optional(),
     auctionEndsAt: z.string().nullable().optional(),
-    saleMode: z.enum(["fixed", "timed_window", "english"]).optional(),
+    saleMode: z.enum(["fixed", "timed_window", "english", "dutch"]).optional(),
     startingBidUsd: z.number().nonnegative().nullable().optional(),
     reserveUsd: z.number().nonnegative().nullable().optional(),
     collectionId: z.string().min(1).nullable().optional(),

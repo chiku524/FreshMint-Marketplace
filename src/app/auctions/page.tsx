@@ -48,7 +48,7 @@ function DiscoverLinks() {
         Calendar
       </Link>
       <Link href="/create?intent=auction" className="badge">
-        Schedule a timed drop
+        Create timed / auction listing
       </Link>
     </p>
   );
@@ -56,13 +56,15 @@ function DiscoverLinks() {
 
 function liveHeading(filter: AuctionsSaleModeFilter, count: number): string {
   if (filter === "english") return `Live English auctions (${count})`;
-  if (filter === "timed_window") return `Live timed drops (${count})`;
+  if (filter === "dutch") return `Live Dutch auctions (${count})`;
+  if (filter === "timed_window") return `Live timed listings (${count})`;
   return `Live now (${count})`;
 }
 
 function archiveHeading(filter: AuctionsSaleModeFilter, count: number): string {
   if (filter === "english") return `Cleared English auctions (${count})`;
-  if (filter === "timed_window") return `Cleared timed drops (${count})`;
+  if (filter === "dutch") return `Cleared Dutch auctions (${count})`;
+  if (filter === "timed_window") return `Cleared timed listings (${count})`;
   return `Cleared sales (${count})`;
 }
 
@@ -93,8 +95,8 @@ export default async function AuctionsPage({
       <header className="page-lead">
         <h1 className="display page-lead__title">Auctions</h1>
         <p className="page-lead__copy">
-          Timed drops at list price and English open bidding. Filters stay in
-          the URL so you can share a view.
+          Timed listings (Buy now in a window), English auctions (highest bid),
+          and Dutch auctions (declining price). Filters stay in the URL.
         </p>
       </header>
 

@@ -208,7 +208,9 @@ export function CreateWizard() {
   const [startsAt, setStartsAt] = useState(toLocalInput(now + 60 * 60 * 1000));
   const [endsAt, setEndsAt] = useState(toLocalInput(now + 25 * 60 * 60 * 1000));
   const [priceUsd, setPriceUsd] = useState("25");
-  const [saleMode, setSaleMode] = useState<"fixed" | "timed_window" | "english">("fixed");
+  const [saleMode, setSaleMode] = useState<
+    "fixed" | "timed_window" | "english" | "dutch"
+  >("fixed");
   const [startingBidUsd, setStartingBidUsd] = useState("10");
   const [reserveUsd, setReserveUsd] = useState("");
   const [medium, setMedium] = useState("digital");
@@ -1111,7 +1113,7 @@ export function CreateWizard() {
                     (intent === "drop"
                       ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
                       : intent === "auction"
-                        ? "Timed drop"
+                        ? "Auction listing"
                         : ""),
                   type,
                   network,
@@ -1135,11 +1137,14 @@ export function CreateWizard() {
                         ? "fixed"
                         : "fixed",
                   startingBidUsd:
-                    intent === "auction" && saleMode === "english"
+                    intent === "auction" &&
+                    (saleMode === "english" || saleMode === "dutch")
                       ? Number(startingBidUsd) || Number(price) || null
                       : null,
                   reserveUsd:
-                    intent === "auction" && saleMode === "english" && reserveUsd
+                    intent === "auction" &&
+                    (saleMode === "english" || saleMode === "dutch") &&
+                    reserveUsd
                       ? Number(reserveUsd)
                       : null,
                   publishSoftLaunch: false,
@@ -1536,8 +1541,8 @@ export function CreateWizard() {
           <>
             <h2 className="display create-wizard__title">What are you creating?</h2>
             <p className="create-wizard__lead">
-              One path at a time — a collection drop, a single 1/1, or a timed
-              drop (timed window).
+              List for sale at a fixed price by default. Auctions are an advanced
+              option on the schedule step.
             </p>
             <div className="create-wizard__choices" role="group" aria-label="Creation type">
               {(
@@ -1545,17 +1550,17 @@ export function CreateWizard() {
                   {
                     id: "drop" as const,
                     title: "Collection drop",
-                    body: "Limited or open edition. Upload many works, traits CSV, schedule the window.",
+                    body: "Limited or open edition. Upload many works, set prices, schedule the drop.",
                   },
                   {
                     id: "single" as const,
-                    title: "1/1 listing",
-                    body: "One unique piece in a collection. Soft-launch to Open Lane.",
+                    title: "1/1 for sale",
+                    body: "One unique piece — Buy now on Open Lane after mint & publish.",
                   },
                   {
                     id: "auction" as const,
-                    title: "Timed drop",
-                    body: "Choose timed window (buy at list price) or English auction (open bidding) on the schedule step.",
+                    title: "Auction / timed",
+                    body: "Advanced: timed listing, English auction (highest bid), or Dutch auction (price drops).",
                   },
                 ] as const
               ).map((choice) => (
@@ -1926,23 +1931,27 @@ export function CreateWizard() {
               {intent === "auction"
                 ? saleMode === "english"
                   ? "English auction window"
-                  : "Timed drop window"
+                  : saleMode === "dutch"
+                    ? "Dutch auction window"
+                    : "Timed listing window"
                 : "Drop schedule"}
             </h2>
             <p className="create-wizard__lead">
               {saleMode === "english"
-                ? "Collectors place open USD bids while the window is live. Winner claims at the high bid."
-                : "Collectors pay crypto at this USD-quoted price while the window is live."}
+                ? "Collectors place open USD bids while the window is live. Winner pays the high bid."
+                : saleMode === "dutch"
+                  ? "Price starts high and declines to the floor. First Buy now at the live price wins."
+                  : "Collectors Buy now at the list price while the window is live."}
             </p>
             {intent === "auction" ? (
-              <div className="drop-studio__kinds" role="group" aria-label="Sale mode">
+              <div className="drop-studio__kinds" role="group" aria-label="Advanced sale type">
                 <button
                   type="button"
                   className={saleMode === "timed_window" ? "is-active" : undefined}
                   aria-pressed={saleMode === "timed_window"}
                   onClick={() => setSaleMode("timed_window")}
                 >
-                  Timed window (buy at list price)
+                  Timed listing
                 </button>
                 <button
                   type="button"
@@ -1950,14 +1959,23 @@ export function CreateWizard() {
                   aria-pressed={saleMode === "english"}
                   onClick={() => setSaleMode("english")}
                 >
-                  English auction (open bidding)
+                  English auction
+                </button>
+                <button
+                  type="button"
+                  className={saleMode === "dutch" ? "is-active" : undefined}
+                  aria-pressed={saleMode === "dutch"}
+                  onClick={() => setSaleMode("dutch")}
+                >
+                  Dutch auction
                 </button>
               </div>
             ) : null}
-            {intent === "auction" && saleMode === "english" ? (
+            {intent === "auction" &&
+            (saleMode === "english" || saleMode === "dutch") ? (
               <div className="create-wizard__grid-2" style={{ marginTop: "0.75rem" }}>
                 <label>
-                  Starting bid (USD)
+                  {saleMode === "dutch" ? "Starting price (USD)" : "Starting bid (USD)"}
                   <input
                     value={startingBidUsd}
                     onChange={(e) => setStartingBidUsd(e.target.value)}
@@ -1965,7 +1983,9 @@ export function CreateWizard() {
                   />
                 </label>
                 <label>
-                  Reserve (USD, optional)
+                  {saleMode === "dutch"
+                    ? "Floor price (USD)"
+                    : "Reserve (USD, optional)"}
                   <input
                     value={reserveUsd}
                     onChange={(e) => setReserveUsd(e.target.value)}
@@ -2330,8 +2350,12 @@ export function CreateWizard() {
                   {intent === "drop"
                     ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
                     : intent === "auction"
-                      ? "Timed drop"
-                      : "1/1 listing"}
+                      ? saleMode === "english"
+                        ? "English auction"
+                        : saleMode === "dutch"
+                          ? "Dutch auction"
+                          : "Timed listing"
+                      : "1/1 for sale"}
                 </dd>
               </div>
               <div>

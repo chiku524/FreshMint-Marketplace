@@ -4,13 +4,14 @@
 
 | Creator sale mode | `saleMode` | Discovery `type` | Checkout |
 |---|---|---|---|
-| Fixed price | `fixed` | `single` / `collection` / `open_edition` | Always-on list price |
-| Timed window | `timed_window` | `auction` | Buy at list price while window open |
+| Buy now (fixed) | `fixed` | `single` / `collection` / `open_edition` | Always-on list price; offers allowed |
+| Timed listing | `timed_window` | `auction` | Buy now at list price while window open; offers allowed |
 | English auction | `english` | `auction` | Open USD bidding; winner settles at high bid |
+| Dutch auction | `dutch` | `auction` | Price declines start→floor; Buy now at live price |
 
 Legacy `type === "auction"` with missing `saleMode` resolves to **`timed_window`**.
 
-`type` stays `auction` for both timed window and English so Timed drops discovery keeps working. Badges use `saleMode`.
+`type` stays `auction` for timed listing, English, and Dutch so Timed / Auctions discovery keeps working. Badges use `saleMode`. Happy path is Buy now; English/Dutch are advanced options in create + listing “Advanced selling”.
 
 ## English auction
 
