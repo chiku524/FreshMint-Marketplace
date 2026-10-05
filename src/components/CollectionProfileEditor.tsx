@@ -37,6 +37,7 @@ export function CollectionProfileEditor({
   twitterUrl: initialTwitter = null,
   discordUrl: initialDiscord = null,
   instagramUrl: initialInstagram = null,
+  embedded = false,
 }: {
   collectionId: string;
   description?: string;
@@ -46,6 +47,8 @@ export function CollectionProfileEditor({
   twitterUrl?: string | null;
   discordUrl?: string | null;
   instagramUrl?: string | null;
+  /** When true, omit page heading (dialog provides the title). */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const imageRef = useRef<HTMLInputElement>(null);
@@ -124,10 +127,19 @@ export function CollectionProfileEditor({
   }
 
   return (
-    <form className="collection-profile-editor" onSubmit={save}>
-      <h2 className="display collection-profile-editor__title">
-        Collection profile
-      </h2>
+    <form
+      className={
+        embedded
+          ? "collection-profile-editor collection-profile-editor--embedded"
+          : "collection-profile-editor"
+      }
+      onSubmit={save}
+    >
+      {embedded ? null : (
+        <h2 className="display collection-profile-editor__title">
+          Collection profile
+        </h2>
+      )}
       <p className="collection-profile-editor__lead">
         Logo, banner, and social links shown on your collection page — similar to
         OpenSea collection headers.

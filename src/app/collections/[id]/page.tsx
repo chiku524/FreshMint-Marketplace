@@ -1,6 +1,6 @@
 import { CollectionDetailTabs } from "@/components/CollectionDetailTabs";
+import { CollectionEditModal } from "@/components/CollectionEditModal";
 import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
-import { CollectionProfileEditor } from "@/components/CollectionProfileEditor";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
@@ -115,9 +115,21 @@ export default async function CollectionDetailPage({
         }
         actions={
           isOwner ? (
-            <Link href="/create" className="badge featured">
-              Add works
-            </Link>
+            <>
+              <CollectionEditModal
+                collectionId={collection.id}
+                description={collection.description ?? ""}
+                imageUrl={collection.imageUrl}
+                bannerUrl={collection.bannerUrl}
+                websiteUrl={collection.websiteUrl}
+                twitterUrl={collection.twitterUrl}
+                discordUrl={collection.discordUrl}
+                instagramUrl={collection.instagramUrl}
+              />
+              <Link href="/create" className="badge featured">
+                Add works
+              </Link>
+            </>
           ) : null
         }
       />
@@ -136,16 +148,6 @@ export default async function CollectionDetailPage({
                   l.tokenId && l.contractAddress && l.mintTxHash,
                 ),
               }))}
-          />
-          <CollectionProfileEditor
-            collectionId={collection.id}
-            description={collection.description ?? ""}
-            imageUrl={collection.imageUrl}
-            bannerUrl={collection.bannerUrl}
-            websiteUrl={collection.websiteUrl}
-            twitterUrl={collection.twitterUrl}
-            discordUrl={collection.discordUrl}
-            instagramUrl={collection.instagramUrl}
           />
           {canUpdateFeeRecipients && collection.contractAddress ? (
             <UpdateFeeRecipientsButton
