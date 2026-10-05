@@ -258,7 +258,7 @@ model Collection {
   deployTxHash    String?
   /// none | pending_wallet | confirmed | failed
   deployStatus    String  @default("none")
-  /// Boing reference NFT template: "1" (per-token mint) | "2" (mint_batch). Unused on EVM/Solana.
+  /// Boing reference NFT template: "1" (per-token) | "2" (mint_batch ≤50) | "3" (≤500). Unused on EVM/Solana.
   nftTemplateVersion String @default("1")
   /// Custody address holding minted tokens until withdraw
   escrowAddress   String?

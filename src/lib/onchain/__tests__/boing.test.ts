@@ -307,12 +307,16 @@ describe("boing mint intent", () => {
   });
 });
 
-describe("boing mint_batch v2 encoding", () => {
+describe("boing mint_batch v2/v3 encoding", () => {
   it("encodes selector 0x06 and 96+64n bytes", async () => {
     const {
       encodeReferenceMintBatchCalldataHex,
       SELECTOR_MINT_BATCH,
       BOING_MINT_BATCH_SIZE,
+      BOING_MINT_BATCH_SIZE_V2,
+      BOING_MINT_BATCH_SIZE_V3,
+      boingMintBatchChunkSize,
+      resolveBoingNftDeployTemplateVersion,
     } = await import("@/lib/onchain/boing");
     const to = ACCOUNT;
     const ids = [`0x${"aa".repeat(32)}`, `0x${"bb".repeat(32)}`];
@@ -325,18 +329,29 @@ describe("boing mint_batch v2 encoding", () => {
         `^0x${"0".repeat(62)}${SELECTOR_MINT_BATCH.toString(16).padStart(2, "0")}`,
       ),
     );
-    expect(BOING_MINT_BATCH_SIZE).toBe(50);
+    expect(BOING_MINT_BATCH_SIZE_V2).toBe(50);
+    expect(BOING_MINT_BATCH_SIZE_V3).toBe(500);
+    expect(BOING_MINT_BATCH_SIZE).toBe(500);
+    expect(boingMintBatchChunkSize("2")).toBe(50);
+    expect(boingMintBatchChunkSize("3")).toBe(500);
+    expect(resolveBoingNftDeployTemplateVersion()).toBe("3");
   });
 
-  it("rejects n > 50", async () => {
+  it("allows n up to 500 and rejects n > 500", async () => {
     const { encodeReferenceMintBatchCalldataHex } = await import(
       "@/lib/onchain/boing"
     );
-    const ids = Array.from({ length: 51 }, (_, i) =>
+    const ids500 = Array.from({ length: 500 }, (_, i) =>
       `0x${i.toString(16).padStart(64, "0")}`,
     );
     expect(() =>
-      encodeReferenceMintBatchCalldataHex(ACCOUNT, ids, ids),
+      encodeReferenceMintBatchCalldataHex(ACCOUNT, ids500, ids500),
+    ).not.toThrow();
+    const ids501 = Array.from({ length: 501 }, (_, i) =>
+      `0x${i.toString(16).padStart(64, "0")}`,
+    );
+    expect(() =>
+      encodeReferenceMintBatchCalldataHex(ACCOUNT, ids501, ids501),
     ).toThrow(/boing_mint_batch_size/);
   });
 });

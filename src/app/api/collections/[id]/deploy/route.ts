@@ -14,7 +14,7 @@ const confirmSchema = z.object({
   contractAddress: z.string().min(1).optional(),
   escrowAddress: z.string().min(1).optional(),
   creatorAddress: z.string().min(1).optional(),
-  nftTemplateVersion: z.enum(["1", "2"]).optional(),
+  nftTemplateVersion: z.enum(["1", "2", "3"]).optional(),
 });
 
 const syncSchema = z.object({

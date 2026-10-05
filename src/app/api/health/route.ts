@@ -12,7 +12,9 @@ import {
   probeBoingNetwork,
   REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID,
   REFERENCE_NFT_COLLECTION_TEMPLATE_V1,
+  REFERENCE_NFT_COLLECTION_TEMPLATE_V3,
   isBoingNftTemplateV2DeployAvailable,
+  isBoingNftTemplateV3DeployAvailable,
   resolveBoingNftCollectionBytecode,
   resolveBoingNftDeployTemplateVersion,
 } from "@/lib/onchain/boing";
@@ -48,8 +50,10 @@ export async function GET() {
       nftTemplate: {
         artifactId: REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID,
         version: resolveBoingNftDeployTemplateVersion(),
+        preferred: REFERENCE_NFT_COLLECTION_TEMPLATE_V3,
         v1: REFERENCE_NFT_COLLECTION_TEMPLATE_V1,
         v2Available: isBoingNftTemplateV2DeployAvailable(),
+        v3Available: isBoingNftTemplateV3DeployAvailable(),
         bytecodeBytes: (resolveBoingNftCollectionBytecode().length - 2) / 2,
       },
     },

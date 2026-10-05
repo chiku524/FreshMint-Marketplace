@@ -1,12 +1,10 @@
 /**
- * Official reference NFT collection template **v2** bytecode (mint_batch / 0x06).
+ * Historical reference NFT collection template **v2** bytecode (`mint_batch` / 0x06, n≤50).
  *
- * Pin from `cargo run -p boing-execution --example dump_reference_token_artifacts`
- * stdout **line 3** after nodes + QA allow the v2 template. Until then this stays
- * null and FreshMint keeps deploying / healing with v1.
- *
- * Override without a code change:
- * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX`
+ * New deploys prefer **v3** (`defaultReferenceNftCollectionTemplateV3BytecodeHex.ts`).
+ * Keep this null unless a distinct historical v2 dump must be vendored for heal of
+ * collections stamped `"2"`. Runtime can still read
+ * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX`.
  */
 export const DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX:
   | `0x${string}`

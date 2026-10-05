@@ -158,7 +158,7 @@ export interface Collection {
   contractAddress?: string | null;
   deployTxHash?: string | null;
   deployStatus?: "none" | "pending_wallet" | "confirmed" | "failed" | string;
-  /** Boing reference NFT template version (`"1"` | `"2"`). Defaults to `"1"`. */
+  /** Boing reference NFT template version (`"1"` | `"2"` | `"3"`). Defaults to `"1"`. */
   nftTemplateVersion?: string | null;
   escrowAddress?: string | null;
   packageSellEnabled?: boolean;

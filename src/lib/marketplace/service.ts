@@ -666,7 +666,7 @@ export async function confirmCollectionDeploy(input: {
   contractAddress?: string | null;
   escrowAddress?: string | null;
   creatorAddress?: string | null;
-  /** Boing template version used for this deploy (`"1"` | `"2"`). */
+  /** Boing template version used for this deploy (`"1"` | `"2"` | `"3"`). */
   nftTemplateVersion?: string | null;
 }) {
   if (!input.txHash || input.txHash.length < 8) {

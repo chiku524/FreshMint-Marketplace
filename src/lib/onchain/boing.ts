@@ -4,6 +4,7 @@ import { marketAddressFor, rpcUrlFor } from "@/lib/chains/registry";
 import type { MintIntent } from "./evm";
 import { DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX } from "./boing-artifacts/defaultReferenceNftCollectionTemplateBytecodeHex";
 import { DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX } from "./boing-artifacts/defaultReferenceNftCollectionTemplateV2BytecodeHex";
+import { DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX } from "./boing-artifacts/defaultReferenceNftCollectionTemplateV3BytecodeHex";
 
 export const BOING_TESTNET_CHAIN_ID = 6913;
 export const BOING_TESTNET_CHAIN_ID_HEX = "0x1b01";
@@ -15,15 +16,24 @@ export const REFERENCE_NFT_COLLECTION_TEMPLATE_ARTIFACT_ID =
 export const REFERENCE_NFT_COLLECTION_TEMPLATE_V1 = "1";
 /** Template with selector `0x06` `mint_batch` (up to 50 tokens / tx). */
 export const REFERENCE_NFT_COLLECTION_TEMPLATE_V2 = "2";
+/** Template with selector `0x06` `mint_batch` (up to 500 tokens / tx). */
+export const REFERENCE_NFT_COLLECTION_TEMPLATE_V3 = "3";
 /**
- * Preferred deploy template version when v2 bytecode is available; otherwise `"1"`.
- * Existing on-chain v1 collections never gain `0x06` — use per-collection `nftTemplateVersion`.
+ * Preferred deploy template version when v3 bytecode is available (SDK aligned).
+ * Existing on-chain v1/v2 collections keep their stamped `nftTemplateVersion`.
  */
 export const REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION =
-  REFERENCE_NFT_COLLECTION_TEMPLATE_V1;
+  REFERENCE_NFT_COLLECTION_TEMPLATE_V3;
 
-/** Max tokens per `mint_batch` contract_call (protocol / Express target). */
-export const BOING_MINT_BATCH_SIZE = 50;
+/** Max tokens per `mint_batch` on template v2. */
+export const BOING_MINT_BATCH_SIZE_V2 = 50;
+/** Max tokens per `mint_batch` on template v3. */
+export const BOING_MINT_BATCH_SIZE_V3 = 500;
+/**
+ * Absolute max `n` for `mint_batch` encoding (v3 protocol max).
+ * Chunk size for a collection comes from {@link boingMintBatchChunkSize}.
+ */
+export const BOING_MINT_BATCH_SIZE = BOING_MINT_BATCH_SIZE_V3;
 
 const QA_PLACEHOLDER_DESCRIPTION_HASH = `0x${"00".repeat(32)}`;
 
@@ -31,7 +41,7 @@ const QA_PLACEHOLDER_DESCRIPTION_HASH = `0x${"00".repeat(32)}`;
 export const SELECTOR_OWNER_OF = 0x03;
 export const SELECTOR_TRANSFER_NFT = 0x04;
 export const SELECTOR_SET_METADATA_HASH = 0x05;
-/** Template v2: atomic multi-token mint + metadata. */
+/** Template v2/v3: atomic multi-token mint + metadata. */
 export const SELECTOR_MINT_BATCH = 0x06;
 
 /**
@@ -117,30 +127,72 @@ export function ensure0xHex(hex: string): `0x${string}` {
 
 export type BoingNftTemplateVersion =
   | typeof REFERENCE_NFT_COLLECTION_TEMPLATE_V1
-  | typeof REFERENCE_NFT_COLLECTION_TEMPLATE_V2;
+  | typeof REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+  | typeof REFERENCE_NFT_COLLECTION_TEMPLATE_V3;
 
 export function normalizeBoingNftTemplateVersion(
   value: string | null | undefined,
 ): BoingNftTemplateVersion {
-  return value?.trim() === REFERENCE_NFT_COLLECTION_TEMPLATE_V2
-    ? REFERENCE_NFT_COLLECTION_TEMPLATE_V2
-    : REFERENCE_NFT_COLLECTION_TEMPLATE_V1;
+  const v = value?.trim();
+  if (v === REFERENCE_NFT_COLLECTION_TEMPLATE_V3) {
+    return REFERENCE_NFT_COLLECTION_TEMPLATE_V3;
+  }
+  if (v === REFERENCE_NFT_COLLECTION_TEMPLATE_V2) {
+    return REFERENCE_NFT_COLLECTION_TEMPLATE_V2;
+  }
+  return REFERENCE_NFT_COLLECTION_TEMPLATE_V1;
 }
 
-/** True when collection was deployed with template v2 (`mint_batch`). */
+/** True when collection was deployed with template v2/v3 (`mint_batch` / 0x06). */
 export function supportsBoingMintBatch(
   templateVersion: string | null | undefined,
 ): boolean {
+  const v = normalizeBoingNftTemplateVersion(templateVersion);
   return (
-    normalizeBoingNftTemplateVersion(templateVersion) ===
-    REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+    v === REFERENCE_NFT_COLLECTION_TEMPLATE_V2 ||
+    v === REFERENCE_NFT_COLLECTION_TEMPLATE_V3
   );
 }
 
+/** Per-collection `mint_batch` chunk size (v1 → 1, v2 → 50, v3 → 500). */
+export function boingMintBatchChunkSize(
+  templateVersion: string | null | undefined,
+): number {
+  const v = normalizeBoingNftTemplateVersion(templateVersion);
+  if (v === REFERENCE_NFT_COLLECTION_TEMPLATE_V3) {
+    return BOING_MINT_BATCH_SIZE_V3;
+  }
+  if (v === REFERENCE_NFT_COLLECTION_TEMPLATE_V2) {
+    return BOING_MINT_BATCH_SIZE_V2;
+  }
+  return 1;
+}
+
 /**
- * v2 bytecode when pinned or set via
- * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX`, or when
- * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION=2` + the shared override hex.
+ * v3 bytecode when pinned or set via
+ * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX`, or when
+ * `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION=3` + the shared override hex.
+ */
+export function resolveBoingNftCollectionV3Bytecode(): `0x${string}` | null {
+  const v3Env =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX?.trim();
+  if (v3Env) return ensure0xHex(v3Env);
+  const versionOverride =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION?.trim();
+  const sharedOverride =
+    process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX?.trim();
+  if (versionOverride === REFERENCE_NFT_COLLECTION_TEMPLATE_V3 && sharedOverride) {
+    return ensure0xHex(sharedOverride);
+  }
+  if (DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX) {
+    return DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX;
+  }
+  return null;
+}
+
+/**
+ * Historical v2 bytecode (n≤50). Prefer v3 for new deploys; keep v2 for
+ * collections stamped `"2"` and as a fallback when only the stale V2 env is set.
  */
 export function resolveBoingNftCollectionV2Bytecode(): `0x${string}` | null {
   const v2Env =
@@ -159,6 +211,11 @@ export function resolveBoingNftCollectionV2Bytecode(): `0x${string}` | null {
   return null;
 }
 
+export function isBoingNftTemplateV3DeployAvailable(): boolean {
+  const hex = resolveBoingNftCollectionV3Bytecode();
+  return Boolean(hex && hex.length > 10);
+}
+
 export function isBoingNftTemplateV2DeployAvailable(): boolean {
   const hex = resolveBoingNftCollectionV2Bytecode();
   return Boolean(hex && hex.length > 10);
@@ -166,6 +223,9 @@ export function isBoingNftTemplateV2DeployAvailable(): boolean {
 
 /** Template version used for **new** collection deploys. */
 export function resolveBoingNftDeployTemplateVersion(): BoingNftTemplateVersion {
+  if (isBoingNftTemplateV3DeployAvailable()) {
+    return REFERENCE_NFT_COLLECTION_TEMPLATE_V3;
+  }
   if (isBoingNftTemplateV2DeployAvailable()) {
     return REFERENCE_NFT_COLLECTION_TEMPLATE_V2;
   }
@@ -176,7 +236,13 @@ export function resolveBoingNftDeployTemplateVersion(): BoingNftTemplateVersion 
 export function resolveBoingNftCollectionBytecodeForVersion(
   version: string | null | undefined,
 ): `0x${string}` {
-  if (supportsBoingMintBatch(version)) {
+  const v = normalizeBoingNftTemplateVersion(version);
+  if (v === REFERENCE_NFT_COLLECTION_TEMPLATE_V3) {
+    const v3 = resolveBoingNftCollectionV3Bytecode();
+    if (!v3) throw new Error("boing_nft_template_v3_bytecode_missing");
+    return v3;
+  }
+  if (v === REFERENCE_NFT_COLLECTION_TEMPLATE_V2) {
     const v2 = resolveBoingNftCollectionV2Bytecode();
     if (!v2) throw new Error("boing_nft_template_v2_bytecode_missing");
     return v2;
@@ -187,14 +253,15 @@ export function resolveBoingNftCollectionBytecodeForVersion(
     process.env.BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION?.trim();
   if (
     override?.trim() &&
-    versionEnv !== REFERENCE_NFT_COLLECTION_TEMPLATE_V2
+    versionEnv !== REFERENCE_NFT_COLLECTION_TEMPLATE_V2 &&
+    versionEnv !== REFERENCE_NFT_COLLECTION_TEMPLATE_V3
   ) {
     return ensure0xHex(override);
   }
   return DEFAULT_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX;
 }
 
-/** Bytecode for new deploys: v2 when available, otherwise pinned v1. */
+/** Bytecode for new deploys: v3 when available, else v2, else pinned v1. */
 export function resolveBoingNftCollectionBytecode(): `0x${string}` {
   return resolveBoingNftCollectionBytecodeForVersion(
     resolveBoingNftDeployTemplateVersion(),
@@ -963,9 +1030,10 @@ function u64WordBe(n: number): string {
 }
 
 /**
- * Template v2 `mint_batch(to, tokenIds[], metadataHashes[])` calldata bytes.
+ * Template v2/v3 `mint_batch(to, tokenIds[], metadataHashes[])` calldata bytes.
  * Layout: selector word + `to` + `n` + token id words + metadata hash words.
- * Mirrors upcoming `boing-sdk` `encodeReferenceMintBatchCalldata`.
+ * `n` ≤ {@link BOING_MINT_BATCH_SIZE} (500). Mirrors `boing-sdk`
+ * `encodeReferenceMintBatchCalldata`.
  */
 export function encodeReferenceMintBatchCalldata(
   toHexAccount32: string,
@@ -1108,7 +1176,8 @@ export function buildBoingMintIntent(input: {
 
 /**
  * One `boing_sendTransaction` `contract_call` for up to {@link BOING_MINT_BATCH_SIZE}
- * tokens via template v2 `mint_batch` (selector `0x06`).
+ * tokens via template v2/v3 `mint_batch` (selector `0x06`). Callers must chunk by
+ * {@link boingMintBatchChunkSize} for the collection's stamped version.
  */
 export function buildBoingBatchMintIntent(input: {
   creatorAddress: string;

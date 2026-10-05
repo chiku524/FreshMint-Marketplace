@@ -3,6 +3,7 @@ import { resolveNetwork, vmFromNetwork, type NetworkId } from "@/lib/chains/regi
 import type { Chain } from "@/lib/discovery/types";
 import {
   BOING_MINT_BATCH_SIZE,
+  boingMintBatchChunkSize,
   buildBoingBatchMintIntent,
   buildBoingMintIntent,
   provisionalBoingCollectionAddress,
@@ -197,7 +198,7 @@ export function buildCollectionMintBatches(input: {
   startingTokenId?: number;
   /**
    * Boing reference NFT template version for this collection.
-   * `"1"` (default) → one wallet tx per piece; `"2"` → `mint_batch` chunks of ≤50.
+   * `"1"` → one wallet tx per piece; `"2"` → `mint_batch` ≤50; `"3"` → ≤500.
    */
   nftTemplateVersion?: string | null;
   collectionTitle?: string;
@@ -235,8 +236,9 @@ export function buildCollectionMintBatches(input: {
   }
 
   if (chain === "boing" && supportsBoingMintBatch(input.nftTemplateVersion)) {
-    for (let i = 0; i < input.items.length; i += BOING_MINT_BATCH_SIZE) {
-      const slice = input.items.slice(i, i + BOING_MINT_BATCH_SIZE);
+    const chunkSize = boingMintBatchChunkSize(input.nftTemplateVersion);
+    for (let i = 0; i < input.items.length; i += chunkSize) {
+      const slice = input.items.slice(i, i + chunkSize);
       const mint = buildBoingBatchMintIntent({
         creatorAddress: input.creatorAddress,
         collectionAddress: input.contractAddress,
