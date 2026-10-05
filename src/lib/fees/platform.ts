@@ -55,6 +55,7 @@ export function platformFeeRecipients(): {
   operator: string | null;
   treasurySolana: string | null;
   operatorSolana: string | null;
+  treasuryBtc: string | null;
 } {
   const treasury =
     process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS?.trim() || null;
@@ -64,7 +65,9 @@ export function platformFeeRecipients(): {
     process.env.NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA?.trim() || null;
   const operatorSolana =
     process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA?.trim() || null;
-  return { treasury, operator, treasurySolana, operatorSolana };
+  const treasuryBtc =
+    process.env.NEXT_PUBLIC_PLATFORM_TREASURY_BTC?.trim() || null;
+  return { treasury, operator, treasurySolana, operatorSolana, treasuryBtc };
 }
 
 export function describePlatformFee(amountUsd: number | null | undefined): string {

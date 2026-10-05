@@ -51,7 +51,7 @@ Every purchase takes a **0.5%** treasury fee from the listed price (buyer still 
 
 | Share | BPS | Recipient |
 |-------|-----|-----------|
-| 0.5%  | 50  | Marketplace treasury — community, events, and future updates (EVM Safe 2-of-3 + Solana Squads vault) |
+| 0.5%  | 50  | Marketplace treasury — community, events, and future updates (EVM + Solana settlement addresses; BTC recorded for ops) |
 | 99.5% | —   | Seller |
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
@@ -63,7 +63,7 @@ npm run wallets:deploy-safe
 npm run wallets:deploy-squads
 ```
 
-Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
+Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_TREASURY_BTC`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
 Platform sales record the 0.5% split on each `Purchase` row. Primary checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
 
@@ -76,14 +76,15 @@ Creators can pay a fixed **$15 USD** promotional fee (native-quoted) to activate
 - Set `FEATURED_BOOST_REQUIRE_CONFIRM=true` in production so soft-accept of unverified hashes is off (live on Vercel)
 - UI: `FeaturedBoostButton` on the listing page (owner only)
 
-### Treasury deploy status (testnets)
+### Platform treasury addresses
 
-| Chain | Multisig | Address | Status |
-|-------|----------|---------|--------|
-| Ethereum Sepolia | Safe 2-of-3 | `0x6E481562F3ecC39405Dc8F8B17F6c754B36D0C14` | Deployed |
-| Solana Devnet | Squads vault | `96rDHepuNiz1eDDMikrkHqtM51Sw8s6miUxKhwtTn7YR` | Deployed |
+| Chain | Address | Used by settlement |
+|-------|---------|--------------------|
+| EVM | `0xDde8Ec0A27467a8Eb6E7a3245e07d2D67B6B56bb` | Yes (`NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`) |
+| Solana | `3u2DbBkCqoSQmcreHfwQWDekJ8HPctgns3v6L3LdupwW` | Yes (`NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`) |
+| Bitcoin | `bc1q27glxg2fr0f3jrl6m3vyy3ynuaclzwd4ya7jxq` | Recorded only (`NEXT_PUBLIC_PLATFORM_TREASURY_BTC`; no BTC pay path yet) |
 
-Operator EOAs (constructor leftovers / ops): EVM `0xc1AE84cEc6839683D562aC9011ADF21c31A3f869`, Solana `QzQR6DPw8VD5uU47uiAJYA95jt61ExFNHXhC3EF6MDY`.
+Optional operator leftovers (constructor / `setFeeRecipients`): EVM `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, Solana `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
 New EVM collections pick treasury + operator from env at deploy time and use the 0.5% on-chain `buy()` split after `npm run contracts:bytecode`. Older live collections keep their prior BPS until redeployed (`setFeeRecipients` changes **addresses only**, not BPS). The collection **owner** can retarget recipients in the app or via CLI:
 

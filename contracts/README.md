@@ -20,7 +20,7 @@ forge create contracts/FreshMintERC721.sol:FreshMintERC721 \
   --chain sepolia
 ```
 
-Also set `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA` / `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA` for Solana fee legs.
+Also set `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA` / `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA` for Solana fee legs, and `NEXT_PUBLIC_PLATFORM_TREASURY_BTC` for the Bitcoin treasury address (ops / future; not used by settlement yet).
 
 Repeat per network with the matching RPC:
 
