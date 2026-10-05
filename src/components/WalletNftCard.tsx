@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { WalletNft } from "@/lib/wallet/inventory";
 
@@ -12,7 +13,9 @@ function hueFromId(id: string): number {
 export function WalletNftCard({ nft }: { nft: WalletNft }) {
   const hue = hueFromId(nft.id);
   const [spinning, setSpinning] = useState(false);
-  const href = nft.explorerUrl;
+  const marketplaceHref = nft.listingId ? `/listings/${nft.listingId}` : null;
+  const href = marketplaceHref ?? nft.explorerUrl;
+  const external = !marketplaceHref;
   const media = nft.mediaUrl;
 
   return (
@@ -31,34 +34,66 @@ export function WalletNftCard({ nft }: { nft: WalletNft }) {
         }
       }}
     >
-      <a href={href} className="work-tile__media-link" tabIndex={-1} aria-hidden>
-        <div
-          className="work-media"
-          style={
-            media
-              ? {
-                  backgroundImage: `url(${media})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }
-              : {
-                  background: `
+      {marketplaceHref ? (
+        <Link
+          href={marketplaceHref}
+          className="work-tile__media-link"
+          tabIndex={-1}
+          aria-hidden
+        >
+          <div
+            className="work-media"
+            style={
+              media
+                ? {
+                    backgroundImage: `url(${media})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : {
+                    background: `
             linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
             linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
           `,
-                }
-          }
-        />
-      </a>
+                  }
+            }
+          />
+        </Link>
+      ) : (
+        <a href={href} className="work-tile__media-link" tabIndex={-1} aria-hidden>
+          <div
+            className="work-media"
+            style={
+              media
+                ? {
+                    backgroundImage: `url(${media})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : {
+                    background: `
+            linear-gradient(145deg, hsla(${hue}, 45%, 42%, 0.55), transparent 50%),
+            linear-gradient(320deg, hsla(${(hue + 40) % 360}, 35%, 35%, 0.4), var(--bg-deep))
+          `,
+                  }
+            }
+          />
+        </a>
+      )}
       <div className="work-tile__caption">
         <h3 className="display work-tile__title">
-          <a href={href} target="_blank" rel="noreferrer">
-            {nft.title}
-          </a>
+          {marketplaceHref ? (
+            <Link href={marketplaceHref}>{nft.title}</Link>
+          ) : (
+            <a href={href} target="_blank" rel="noreferrer">
+              {nft.title}
+            </a>
+          )}
         </h3>
         <p className="work-tile__meta">
           {nft.networkLabel}
           {nft.chain === "evm" ? ` · #${nft.tokenId}` : ""}
+          {external ? " · explorer" : ""}
         </p>
       </div>
     </article>

@@ -29,6 +29,7 @@ export async function PATCH(
   }
   const result = await updateListingSaleMode({
     listingId: id,
+    actorId: user.id,
     creatorId: user.id,
     ...parsed.data,
   });

@@ -50,11 +50,10 @@ export function SaleModeEditor({
           startingBidUsd: startBid ? Number(startBid) : null,
           reserveUsd: reserve ? Number(reserve) : null,
           priceUsd:
-            mode === "dutch" && startBid
+            (mode === "dutch" || mode === "fixed" || mode === "timed_window") &&
+            startBid
               ? Number(startBid)
-              : mode === "fixed" && startBid
-                ? Number(startBid)
-                : undefined,
+              : undefined,
         }),
       });
       const data = await res.json();
@@ -109,6 +108,19 @@ export function SaleModeEditor({
               </button>
             ))}
           </div>
+          {mode === "fixed" || mode === "timed_window" ? (
+            <div className="fm-form-stack" style={{ maxWidth: "16rem" }}>
+              <label>
+                List price (USD)
+                <input
+                  value={startBid}
+                  onChange={(e) => setStartBid(e.target.value)}
+                  className="fm-field"
+                  inputMode="decimal"
+                />
+              </label>
+            </div>
+          ) : null}
           {mode === "english" || mode === "dutch" ? (
             <div className="fm-form-stack" style={{ maxWidth: "16rem" }}>
               <label>

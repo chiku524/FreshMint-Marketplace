@@ -3544,7 +3544,9 @@ export async function getPersistedMetrics() {
 
 export async function updateListingSaleMode(input: {
   listingId: string;
-  creatorId: string;
+  /** @deprecated use actorId — kept for call-site compatibility */
+  creatorId?: string;
+  actorId?: string;
   saleMode: "fixed" | "timed_window" | "english" | string;
   startingBidUsd?: number | null;
   reserveUsd?: number | null;
@@ -3555,11 +3557,13 @@ export async function updateListingSaleMode(input: {
   const { parseSaleMode, listingTypeForSaleMode, resolveSaleMode } = await import(
     "@/lib/marketplace/sale-mode"
   );
+  const { canManageListing } = await import("@/lib/marketplace/listing-manage");
   const saleMode = parseSaleMode(input.saleMode);
   const engine = await getDiscoveryEngine();
   const listing = engine.state.listings.get(input.listingId);
   if (!listing) return { ok: false as const, error: "not_found" };
-  if (listing.creatorId !== input.creatorId) {
+  const actorId = input.actorId ?? input.creatorId;
+  if (!canManageListing(actorId, listing)) {
     return { ok: false as const, error: "forbidden" };
   }
   if ((listing as { currentHighBidUsd?: number | null }).currentHighBidUsd) {
