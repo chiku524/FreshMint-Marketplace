@@ -2154,7 +2154,7 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .collection-edit-modal__dialog {
-  width: min(100%, 36rem);
+  width: min(100%, 44rem);
   max-height: min(92vh, 52rem);
   overflow: auto;
   gap: 1rem;
