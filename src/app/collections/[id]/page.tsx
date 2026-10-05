@@ -10,6 +10,9 @@ import { resolveNetwork } from "@/lib/chains/registry";
 import { formatBytes, COLLECTION_MEDIA_CAP_BYTES } from "@/lib/marketplace/drops";
 import { aggregateCollectionVolumesUsd } from "@/lib/marketplace/collections-browse";
 import { deriveCollectionFloorUsd } from "@/lib/marketplace/home-discovery";
+import {
+  listingVisibleOnCollectionPage,
+} from "@/lib/marketplace/listing-manage";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import Link from "next/link";
@@ -40,19 +43,20 @@ export default async function CollectionDetailPage({
     collection.deployStatus === "confirmed" &&
     Boolean(collection.contractAddress) &&
     !String(collection.contractAddress).startsWith("pending:");
-  const allPieces = [...engine.state.listings.values()]
-    .filter((l) => l.collectionId === collection.id && !l.delisted)
+  // Full collection inventory (not traction-capped surface samples).
+  const allInCollection = [...engine.state.listings.values()]
+    .filter((l) => l.collectionId === collection.id)
     .sort((a, b) => b.createdAt - a.createdAt);
-  // Owners see drafts (for Finish publishing); collectors only see soft-launched+.
-  const pieces = isOwner
-    ? allPieces
-    : allPieces.filter((l) => l.stage !== "draft");
+  // Owners: drafts + cancelled. Buyers: soft-launch+ and public cancelled.
+  const pieces = allInCollection.filter((l) =>
+    listingVisibleOnCollectionPage(l, isOwner),
+  );
 
   const hero =
     pieces.find((l) => l.id === collection.heroListingId) ??
     pieces[0] ??
-    allPieces.find((l) => l.id === collection.heroListingId) ??
-    allPieces[0];
+    allInCollection.find((l) => l.id === collection.heroListingId) ??
+    allInCollection[0];
   const coverUrl = hero?.mediaUrl ?? null;
   const floorUsd = deriveCollectionFloorUsd(pieces);
   const volumeUsd = volumes.get(collection.id) ?? 0;
@@ -61,6 +65,12 @@ export default async function CollectionDetailPage({
     collection.description?.trim() ||
     hero?.description?.trim() ||
     `Creator-owned set on ${network}. Collectors pay crypto and receive the NFT at purchase.`;
+  const publicItemCount = allInCollection.filter((l) =>
+    listingVisibleOnCollectionPage(l, false),
+  ).length;
+  const headerItemCount = isOwner
+    ? pieces.length || collection.totalItems || 0
+    : publicItemCount || collection.totalItems || 0;
 
   return (
     <div className="page-wrap collection-detail">
@@ -80,7 +90,7 @@ export default async function CollectionDetailPage({
         bannerUrl={collection.bannerUrl}
         coverUrl={coverUrl}
         chain={network}
-        itemCount={collection.totalItems || pieces.length}
+        itemCount={headerItemCount}
         floorUsd={floorUsd}
         volumeUsd={volumeUsd}
         description={aboutBlurb}
@@ -137,11 +147,6 @@ export default async function CollectionDetailPage({
             discordUrl={collection.discordUrl}
             instagramUrl={collection.instagramUrl}
           />
-          <CollectionPackagePanel
-            collectionId={collection.id}
-            collectionSlug={collection.slug}
-            isOwner={isOwner}
-          />
           {canUpdateFeeRecipients && collection.contractAddress ? (
             <UpdateFeeRecipientsButton
               collectionId={collection.id}
@@ -151,6 +156,13 @@ export default async function CollectionDetailPage({
           ) : null}
         </div>
       ) : null}
+
+      {/* Owners configure package sell; buyers see buy UI when enabled. */}
+      <CollectionPackagePanel
+        collectionId={collection.id}
+        collectionSlug={collection.slug}
+        isOwner={isOwner}
+      />
 
       <CollectionDetailTabs
         itemCount={pieces.length}
@@ -162,7 +174,8 @@ export default async function CollectionDetailPage({
                   key={listing.id}
                   listing={listing}
                   showActions
-                  sold={soldIds.has(listing.id)}
+                  sold={soldIds.has(listing.id) || Boolean(listing.delisted)}
+                  canStageRising={isOwner}
                   creatorName={creatorName}
                   creatorAvatarUrl={creator?.avatarUrl}
                   collection={{
@@ -175,8 +188,14 @@ export default async function CollectionDetailPage({
             </div>
           ) : (
             <p className="collection-detail__empty">
-              No pieces yet.{" "}
-              <Link href="/create">Add a drop to this collection</Link>.
+              {isOwner ? (
+                <>
+                  No pieces yet.{" "}
+                  <Link href="/create">Add a drop to this collection</Link>.
+                </>
+              ) : (
+                "No pieces in this collection yet."
+              )}
             </p>
           )
         }

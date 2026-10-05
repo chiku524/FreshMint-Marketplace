@@ -3,6 +3,7 @@ import {
   canManageListing,
   listingHasPublicSurface,
   listingSellerId,
+  listingVisibleOnCollectionPage,
 } from "@/lib/marketplace/listing-manage";
 
 describe("listing-manage helpers", () => {
@@ -44,6 +45,34 @@ describe("listing-manage helpers", () => {
         mintTxHash: null,
       }),
     ).toBe(false);
+  });
+
+  it("shows all collection pieces to owner; hides drafts from buyers", () => {
+    const draft = { stage: "draft", delisted: false, mediaUrl: "/a.png" };
+    const soft = { stage: "soft_launch", delisted: false, mediaUrl: "/b.png" };
+    const cancelledPublic = {
+      stage: "soft_launch",
+      delisted: true,
+      mediaUrl: "/c.png",
+    };
+    const cancelledEmpty = {
+      stage: "soft_launch",
+      delisted: true,
+      mediaUrl: null,
+      tokenId: null,
+      contractAddress: null,
+      mintTxHash: null,
+    };
+
+    expect(listingVisibleOnCollectionPage(draft, true)).toBe(true);
+    expect(listingVisibleOnCollectionPage(soft, true)).toBe(true);
+    expect(listingVisibleOnCollectionPage(cancelledPublic, true)).toBe(true);
+    expect(listingVisibleOnCollectionPage(cancelledEmpty, true)).toBe(true);
+
+    expect(listingVisibleOnCollectionPage(draft, false)).toBe(false);
+    expect(listingVisibleOnCollectionPage(soft, false)).toBe(true);
+    expect(listingVisibleOnCollectionPage(cancelledPublic, false)).toBe(true);
+    expect(listingVisibleOnCollectionPage(cancelledEmpty, false)).toBe(false);
   });
 });
 

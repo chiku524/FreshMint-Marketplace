@@ -32,6 +32,29 @@ export function listingHasPublicSurface(listing: {
   );
 }
 
+/**
+ * Which collection artworks appear on `/collections/[idOrSlug]`.
+ * Owners see drafts + cancelled; buyers/anonymous see soft-launch+ (and
+ * cancelled pieces that still have a public NFT surface). Soft-launched /
+ * listed items are never hidden by traction/sample capping.
+ */
+export function listingVisibleOnCollectionPage(
+  listing: {
+    stage?: string | null;
+    delisted?: boolean;
+    mediaUrl?: string | null;
+    tokenId?: string | null;
+    contractAddress?: string | null;
+    mintTxHash?: string | null;
+  },
+  isOwner: boolean,
+): boolean {
+  if (isOwner) return true;
+  if (listing.stage === "draft") return false;
+  if (listing.delisted && !listingHasPublicSurface(listing)) return false;
+  return true;
+}
+
 async function cancelOpenOffersForListing(listingId: string): Promise<void> {
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode } = await import("@/lib/data/memory-store");
