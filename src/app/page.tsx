@@ -236,21 +236,6 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {discovery.newCollections.length > 0 ? (
-        <section className="site-section">
-          <HomeSectionHeader
-            title="New collections"
-            subtitle="Created this week with at least one published work."
-            viewAllHref="/collections/new"
-          />
-          <HomeScrollRail>
-            {discovery.newCollections.map((item) => (
-              <HomeCollectionCard key={item.id} item={item} />
-            ))}
-          </HomeScrollRail>
-        </section>
-      ) : null}
-
       <section className="site-section">
         <HomeSectionHeader
           title={
