@@ -22,14 +22,21 @@ jobs:
           import base64, gzip, pathlib
           root = pathlib.Path(".agent-upload")
 
-          def load_b64(name: str):
+          def load_b64(name):
+            parts = sorted(root.glob(name + ".part*"))
+            if parts:
+              return "".join(p.read_text().strip() for p in parts)
             direct = root / name
             if direct.exists() and direct.stat().st_size > 64:
               return direct.read_text().strip()
-            parts = sorted(root.glob(name + ".part*"))
-            if not parts:
-              return None
-            return "".join(p.read_text().strip() for p in parts)
+            return None
+
+          def decode_b64(s):
+            s = "".join(s.split())
+            pad = (-len(s)) % 4
+            if pad:
+              s += "=" * pad
+            return gzip.decompress(base64.b64decode(s))
 
           mapping = {
             "boing.ts.gz.b64": pathlib.Path("src/lib/onchain/boing.ts"),
@@ -40,7 +47,7 @@ jobs:
             if not b64:
               print(f"skip missing {name}")
               continue
-            raw = gzip.decompress(base64.b64decode(b64))
+            raw = decode_b64(b64)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(raw)
             print(f"wrote {dest} ({len(raw)} bytes)")
