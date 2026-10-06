@@ -1,0 +1,79 @@
+/* Listing detail CTA group + action modals */
+.listing-detail__cta-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.listing-detail__cta-group > .listing-actions {
+  margin-top: 0;
+}
+
+.listing-detail__cta-group > .fm-btn {
+  flex-shrink: 0;
+}
+
+.listing-action-modal__scrim {
+  align-items: start;
+  overflow: auto;
+  padding: 1.25rem 1rem 2rem;
+  z-index: 90;
+}
+
+.listing-action-modal__dialog {
+  width: min(100%, 28rem);
+  max-height: min(92vh, 40rem);
+  overflow: auto;
+  gap: 1rem;
+  outline: none;
+}
+
+.listing-action-modal__dialog--narrow {
+  width: min(100%, 22rem);
+}
+
+.listing-action-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.listing-action-modal__title {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.listing-action-modal__close {
+  flex-shrink: 0;
+  padding: 0.45rem 0.8rem;
+}
+
+.listing-action-modal__body {
+  min-width: 0;
+}
+
+.listing-manage-panel--embedded,
+.listing-offer-panel--embedded {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.listing-more-actions {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.listing-more-actions__report {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+}
+
+.listing-manage-panel .fm-form-note,
+.listing-offer-panel .fm-form-note,
+.listing-more-actions .fm-form-note {
+  color: color-mix(in srgb, var(--ink) 52%, var(--ink-muted));
+}
