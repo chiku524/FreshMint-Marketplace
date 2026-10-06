@@ -897,9 +897,44 @@ export function extractBoingContractAddress(result: unknown): string | null {
 
 type BoingBlockTx = {
   nonce?: number;
-  sender?: string;
+  /** Hex string or 32-byte array — boing-node JSON often emits byte arrays. */
+  sender?: string | number[] | Uint8Array;
   payload?: Record<string, unknown>;
 };
+
+/**
+ * Normalize a Boing AccountId from RPC / block JSON.
+ * `boing_getBlockByHeight` returns `sender` as a 32-byte number array, not hex.
+ */
+export function coerceBoingAccountIdFromRpc(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (isBoingNativeAccountIdHex(trimmed)) {
+      return normalizeBoingAccountId(trimmed);
+    }
+    // Compact hex without 0x
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+      return normalizeBoingAccountId(`0x${trimmed}`);
+    }
+    return null;
+  }
+  if (value instanceof Uint8Array) {
+    if (value.length !== 32) return null;
+    return normalizeBoingAccountId(`0x${Buffer.from(value).toString("hex")}`);
+  }
+  if (Array.isArray(value) && value.length === 32) {
+    const bytes = Buffer.alloc(32);
+    for (let i = 0; i < 32; i++) {
+      const n = value[i];
+      if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > 255) {
+        return null;
+      }
+      bytes[i] = n;
+    }
+    return normalizeBoingAccountId(`0x${bytes.toString("hex")}`);
+  }
+  return null;
+}
 
 /**
  * Scan recent blocks for an NFT collection deploy by this sender (+ optional asset name).
@@ -943,10 +978,7 @@ export async function findBoingNftCollectionDeploy(input: {
     const txs = block?.transactions ?? [];
     for (let i = txs.length - 1; i >= 0; i--) {
       const tx = txs[i]!;
-      const txSender =
-        typeof tx.sender === "string"
-          ? normalizeBoingAccountId(tx.sender)
-          : "";
+      const txSender = coerceBoingAccountIdFromRpc(tx.sender) ?? "";
       if (txSender !== sender) continue;
       const payload = tx.payload;
       if (!payload || typeof payload !== "object") continue;

@@ -9,9 +9,11 @@ import {
   BOING_TESTNET_RPC_FALLBACKS,
   buildBoingMintIntent,
   buildBoingPurchaseIntent,
+  coerceBoingAccountIdFromRpc,
   encodeBoingOwnerOf,
   encodeBoingTransferNft,
   extractBoingTxHash,
+  findBoingNftCollectionDeploy,
   formatBoingBalanceUserMessage,
   getBoingNativeBalance,
   isBoingMempoolAccepted,
@@ -155,6 +157,10 @@ describe("boing purchase intent", () => {
 });
 
 describe("boing deploy address helpers", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("matches boing-sdk nonce-derived golden vector", () => {
     const sender = `0x${"01".repeat(32)}`;
     expect(predictNonceDerivedContractAddress(sender, BigInt(0))).toBe(
@@ -169,6 +175,79 @@ describe("boing deploy address helpers", () => {
     expect(
       isProvisionalBoingCollectionAddress(id, `0x${"22".repeat(32)}`),
     ).toBe(false);
+  });
+
+  it("coerces AccountIds from hex strings and 32-byte RPC arrays", () => {
+    const hex = `0x${"33".repeat(32)}`;
+    expect(coerceBoingAccountIdFromRpc(hex)).toBe(hex);
+    expect(coerceBoingAccountIdFromRpc(hex.slice(2))).toBe(hex);
+    const bytes = Array.from({ length: 32 }, () => 0x33);
+    expect(coerceBoingAccountIdFromRpc(bytes)).toBe(hex);
+    expect(coerceBoingAccountIdFromRpc(Uint8Array.from(bytes))).toBe(hex);
+    expect(coerceBoingAccountIdFromRpc([1, 2, 3])).toBeNull();
+    expect(coerceBoingAccountIdFromRpc(null)).toBeNull();
+  });
+
+  it("finds NFT deploys when block sender is a byte array (boing-node JSON)", async () => {
+    const sender = `0x${"33".repeat(32)}`;
+    const senderBytes = Array.from({ length: 32 }, () => 0x33);
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        method?: string;
+        params?: unknown[];
+      };
+      if (body.method === "boing_chainHeight") {
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: 10 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (body.method === "boing_getBlockByHeight") {
+        const height = Number(body.params?.[0]);
+        const txs =
+          height === 10
+            ? [
+                {
+                  nonce: 7,
+                  sender: senderBytes,
+                  payload: {
+                    ContractDeployWithPurposeAndMetadata: {
+                      asset_name: "Byte Array Squad",
+                      asset_symbol: "FMINT",
+                      bytecode: [1, 2, 3],
+                    },
+                  },
+                },
+              ]
+            : [];
+        return new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            result: { transactions: txs },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ jsonrpc: "2.0", id: 1, error: { message: "unexpected" } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const found = await findBoingNftCollectionDeploy({
+      senderAddress: sender,
+      assetName: "Byte Array Squad",
+      lookbackBlocks: 8,
+    });
+    expect(found).not.toBeNull();
+    expect(found?.txNonce).toBe(7);
+    expect(found?.blockHeight).toBe(10);
+    expect(found?.contractAddress).toBe(
+      predictNonceDerivedContractAddress(sender, 7),
+    );
+    expect(found?.assetName).toBe("Byte Array Squad");
   });
 
   it("extracts tx ids from wallet result shapes", () => {
