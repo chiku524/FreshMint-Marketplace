@@ -1,10 +1,8 @@
 "use client";
 
 import { FmImage } from "@/components/FmImage";
-
+import { ListingPreviewModal } from "@/components/ListingPreviewModal";
 import type { RankedListing, Listing, Collection } from "@/lib/discovery/types";
-import { collectionHref } from "@/lib/marketplace/collection-slug";
-import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import Link from "next/link";
 import {
   useEffect,
@@ -13,6 +11,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
+import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import {
   placementBadgeText,
   placementLabel,
@@ -168,6 +168,7 @@ export function WorkCard({
   const menu = useDelayedMenu();
   const menuId = useId();
   const [spinning, setSpinning] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const supplyCap = primarySupplyCap(listing);
   const dropState = dropWindowFor(listing).state;
 
@@ -265,11 +266,13 @@ export function WorkCard({
       {trackImpression ? (
         <ImpressionTracker listingId={listing.id} bucket={bucket} />
       ) : null}
-      <Link
-        href={`/listings/${listing.id}`}
+      <button
+        type="button"
         className="work-tile__media-link"
         tabIndex={-1}
         aria-hidden
+        data-listing-preview-open=""
+        onClick={() => setPreviewOpen(true)}
       >
         <div
           className="work-media"
@@ -293,10 +296,19 @@ export function WorkCard({
             />
           ) : null}
         </div>
-      </Link>
+      </button>
       <div className="work-tile__caption">
         <h3 className="display work-tile__title">
-          <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
+          <button
+            type="button"
+            className="work-tile__title-open"
+            aria-haspopup="dialog"
+            aria-expanded={previewOpen}
+            data-listing-preview-open=""
+            onClick={() => setPreviewOpen(true)}
+          >
+            {listing.title}
+          </button>
         </h3>
         <p className="work-tile__meta">
           <span className="work-tile__price">{priceLabel(listing, bucket)}</span>
@@ -342,6 +354,17 @@ export function WorkCard({
         >
           {menuBody}
         </div>
+      ) : null}
+      {previewOpen ? (
+        <ListingPreviewModal
+          listing={listing}
+          onClose={() => setPreviewOpen(false)}
+          creatorName={creatorName}
+          collection={collection}
+          sold={sold || bucket === "sold"}
+          canStageRising={canStageRising}
+          showActions={showActions}
+        />
       ) : null}
     </article>
   );
