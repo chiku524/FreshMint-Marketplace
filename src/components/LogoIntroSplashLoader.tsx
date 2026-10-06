@@ -2,7 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { Component, useCallback, useEffect, useState, type ReactNode } from "react";
-import { LOGO_INTRO_REPLAY_EVENT, LOGO_INTRO_SEEN_KEY } from "@/remotion/meta";
+import {
+  LOGO_INTRO_PLAY_MS,
+  LOGO_INTRO_REPLAY_EVENT,
+  LOGO_INTRO_SEEN_KEY,
+} from "@/remotion/meta";
 
 type Phase = "checking" | "play" | "leaving" | "done";
 
@@ -126,7 +130,7 @@ export function LogoIntroSplash() {
 
   useEffect(() => {
     if (phase !== "play") return;
-    const timer = window.setTimeout(dismiss, 16_000);
+    const timer = window.setTimeout(dismiss, LOGO_INTRO_PLAY_MS);
     return () => window.clearTimeout(timer);
   }, [phase, dismiss]);
 

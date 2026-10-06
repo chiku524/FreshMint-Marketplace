@@ -26,10 +26,11 @@ export function LogoIntroPlayer({ onEnded }: { onEnded: () => void }) {
         compositionHeight={LOGO_INTRO.height}
         fps={LOGO_INTRO.fps}
         autoPlay
+        loop
         acknowledgeRemotionLicense
         clickToPlay={false}
         spaceKeyToPlayOrPause={false}
-        moveToBeginningWhenEnded={false}
+        moveToBeginningWhenEnded
         style={{ width: "100%", height: "100%" }}
       />
     </div>
