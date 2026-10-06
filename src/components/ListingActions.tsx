@@ -1,1 +1,1160 @@
-test
+"use client";
+
+import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
+import type { Chain, NetworkId } from "@/lib/discovery/types";
+import { quoteNativeFromUsd, quotePayInFromUsdAt } from "@/lib/onchain/fx";
+import {
+  browserWalletAvailable,
+  maybeSendWalletTx,
+  requestBuyerAddress,
+  sendEvmWalletTx,
+  type EvmWalletTx,
+} from "@/lib/onchain/wallet-client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
+import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import {
+  humanizeCheckoutError,
+  resolveBuyPrimaryCta,
+} from "@/lib/marketplace/buy-auth-cta";
+import { captureCheckoutError } from "@/lib/observability/sentry";
+import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
+import { DISCOVERY_CONFIG } from "@/lib/discovery/config";
+
+const PAY_LABELS: Record<string, string> = {
+  ethereum: "Ethereum (ETH)",
+  base: "Base (ETH)",
+  arbitrum: "Arbitrum (ETH)",
+  optimism: "Optimism (ETH)",
+  solana: "Solana (SOL)",
+  boing: "Boing (BOING)",
+};
+
+const WALLET_HINT: Record<string, string> = {
+  evm: "MetaMask / Rabby",
+  solana: "Phantom",
+  boing: "Boing Express",
+};
+
+type BuyStep =
+  | "idle"
+  | "connecting"
+  | "bridging"
+  | "paying"
+  | "transferring"
+  | "done";
+
+function vmForNetwork(network: string): Chain {
+  if (network === "solana") return "solana";
+  if (network === "boing") return "boing";
+  return "evm";
+}
+
+function shortAddr(addr: string) {
+  if (addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+
+function stepLabel(step: BuyStep, crossChain: boolean): string {
+  switch (step) {
+    case "connecting":
+      return "Connect wallet…";
+    case "bridging":
+      return "Bridge via Relay…";
+    case "paying":
+      return crossChain ? "Confirming bridge…" : "Confirm payment…";
+    case "transferring":
+      return "Transfer NFT to your wallet…";
+    case "done":
+      return "Owned on-chain";
+    default:
+      return crossChain ? "Bridge & buy" : "Confirm purchase";
+  }
+}
+
+export function ListingActions({
+  listingId,
+  priceUsd,
+  stage,
+  sold = false,
+  listingType,
+  chain = "evm",
+  network,
+  dropState = "none",
+  repeatable = false,
+  minted = true,
+  canStageRising = false,
+  pendingPurchase = null,
+  layout = "inline",
+  showSave = true,
+  showCommunityActions = true,
+  isSecondary = false,
+  creatorRoyaltyBps = null,
+  /** Hide Buy now while an English auction is live (use Place bid instead). */
+  suppressBuy = false,
+}: {
+  listingId: string;
+  creatorId?: string;
+  priceUsd: number | null;
+  stage: string;
+  sold?: boolean;
+  listingType?: string;
+  chain?: Chain;
+  network?: NetworkId | string;
+  dropState?: "none" | "upcoming" | "live" | "ended";
+  repeatable?: boolean;
+  /** Listing has tokenId + contract + mint tx from publish. */
+  minted?: boolean;
+  /** Owner or editor — show stage controls. */
+  canStageRising?: boolean;
+  pendingPurchase?: { purchaseId: string; status: string } | null;
+  isSecondary?: boolean;
+  creatorRoyaltyBps?: number | null;
+  /** Menu layout keeps checkout on the listing page so compact tiles stay readable. */
+  layout?: "inline" | "menu";
+  /** When false, Save lives on the WorkCard caption instead. */
+  showSave?: boolean;
+  /** When false, Save / Nominate / Report are omitted (use ListingMoreActionsModal). */
+  showCommunityActions?: boolean;
+  suppressBuy?: boolean;
+}) {
+  const router = useRouter();
+  const listingNetwork = (network ??
+    (chain === "solana"
+      ? "solana"
+      : chain === "boing"
+        ? "boing"
+        : "ethereum")) as NetworkId;
+  const [msg, setMsg] = useState<string | null>(null);
+  const showCheckoutError = (raw: string | null | undefined) => {
+    setMsg(humanizeCheckoutError(raw));
+    void captureCheckoutError(new Error(String(raw || "checkout_failed")), {
+      route: "ListingActions",
+      listingId,
+      userId: sessionUserId ?? undefined,
+      code: String(raw || "checkout_failed").slice(0, 64),
+    });
+  };
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+  const [confirmBuy, setConfirmBuy] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [buyStep, setBuyStep] = useState<BuyStep>("idle");
+  const [justSold, setJustSold] = useState(false);
+  const [heldPurchase, setHeldPurchase] = useState<{
+    purchaseId: string;
+    status: string;
+  } | null>(pendingPurchase);
+  const [boughtThisSession, setBoughtThisSession] = useState(false);
+  const [payNetwork, setPayNetwork] = useState<NetworkId>(listingNetwork);
+  const [payNetworks, setPayNetworks] = useState<NetworkId[]>([
+    listingNetwork,
+  ]);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [serverPayFormatted, setServerPayFormatted] = useState<string | null>(
+    null,
+  );
+  const [paymentAddress, setPaymentAddress] = useState<string | null>(null);
+  const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
+  const [bridgeFeeUsd, setBridgeFeeUsd] = useState<string | null>(null);
+  const [bridgeEstimatedOutput, setBridgeEstimatedOutput] = useState<
+    string | null
+  >(null);
+  const [bridgeQuoteRequestId, setBridgeQuoteRequestId] = useState<
+    string | null
+  >(null);
+  const [bridgeQuoteLoading, setBridgeQuoteLoading] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(
+    undefined,
+  );
+  const [curatorScore, setCuratorScore] = useState<number | null>(null);
+  const signInHref = `/sign-in?next=${encodeURIComponent(`/listings/${listingId}`)}`;
+
+  const settleQuote = useMemo(() => {
+    if (priceUsd == null || !(priceUsd > 0)) return null;
+    return quoteNativeFromUsd(priceUsd, chain);
+  }, [priceUsd, chain]);
+  const localPayQuote = useMemo(() => {
+    if (priceUsd == null || !(priceUsd > 0)) return null;
+    return quotePayInFromUsdAt({
+      amountUsd: priceUsd,
+      listingChain: chain,
+      payNetwork,
+    });
+  }, [priceUsd, chain, payNetwork]);
+
+  const crossChain = payNetwork !== listingNetwork;
+  const uniqueSold = (sold || justSold) && !heldPurchase && !pendingPurchase;
+  const canBuy =
+    !suppressBuy &&
+    minted &&
+    priceUsd != null &&
+    !uniqueSold &&
+    !heldPurchase &&
+    !pendingPurchase &&
+    dropState !== "upcoming" &&
+    dropState !== "ended";
+
+  const payVm = vmForNetwork(payNetwork);
+  const payWalletReady = browserWalletAvailable(payVm);
+  const recvWalletReady = browserWalletAvailable(chain);
+
+  useEffect(() => {
+    if (pendingPurchase) setHeldPurchase(pendingPurchase);
+  }, [pendingPurchase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me", { credentials: "include" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.user && typeof data.user.id === "string") {
+          setSessionUserId(data.user.id);
+          setCuratorScore(
+            typeof data.user.curatorScore === "number"
+              ? data.user.curatorScore
+              : 0,
+          );
+        } else {
+          setSessionUserId(null);
+          setCuratorScore(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSessionUserId(null);
+          setCuratorScore(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!confirmBuy || !priceUsd) return;
+    let cancelled = false;
+    const cross = payNetwork !== listingNetwork;
+    // Live Relay fee quotes require a connected payment wallet (P1).
+    const canLiveBridge = cross && Boolean(paymentAddress);
+    setQuoteBusy(true);
+    setBridgeQuoteLoading(canLiveBridge);
+    if (cross && !paymentAddress) {
+      setBridgeFeeUsd(null);
+      setBridgeEstimatedOutput(null);
+      setBridgeQuoteRequestId(null);
+    }
+    if (!cross) {
+      setBridgeFeeUsd(null);
+      setBridgeEstimatedOutput(null);
+      setBridgeQuoteRequestId(null);
+      setBridgeQuoteLoading(false);
+    }
+    void fetch("/api/purchase/quote", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listingId,
+        payNetwork,
+        ...(canLiveBridge && paymentAddress
+          ? { buyerPaymentAddress: paymentAddress }
+          : {}),
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          if (data.error === "boing_same_chain_only") {
+            setMsg("Boing listings are same-chain only (pay with BOING)");
+          } else if (data.error === "listing_not_minted") {
+            setMsg("This listing isn't minted on-chain yet");
+          } else if (res.status === 401) {
+            setMsg("sign_in");
+          }
+          setServerPayFormatted(null);
+          setBridgeFeeUsd(null);
+          setBridgeEstimatedOutput(null);
+          setBridgeQuoteRequestId(null);
+          return;
+        }
+        if (Array.isArray(data.payNetworks)) {
+          setPayNetworks(data.payNetworks as NetworkId[]);
+        }
+        const pay = data.quote?.pay?.formatted as string | undefined;
+        setServerPayFormatted(pay ?? null);
+        const bridge = data.bridge as
+          | {
+              feeUsd?: string;
+              estimatedOutput?: string;
+              requestId?: string;
+            }
+          | null
+          | undefined;
+        if (bridge) {
+          setBridgeFeeUsd(bridge.feeUsd ?? null);
+          setBridgeEstimatedOutput(bridge.estimatedOutput ?? null);
+          setBridgeQuoteRequestId(bridge.requestId ?? null);
+        } else if (canLiveBridge) {
+          // Live quote attempted but feeUsd missing — still allow Bridge & buy.
+          setBridgeFeeUsd(null);
+          setBridgeEstimatedOutput(null);
+          setBridgeQuoteRequestId(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setServerPayFormatted(null);
+          if (canLiveBridge) {
+            setBridgeFeeUsd(null);
+            setBridgeEstimatedOutput(null);
+            setBridgeQuoteRequestId(null);
+          }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setQuoteBusy(false);
+          setBridgeQuoteLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmBuy, listingId, payNetwork, priceUsd, paymentAddress, listingNetwork]);
+
+  async function post(url: string, body: Record<string, unknown>) {
+    const res = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 401) {
+        setMsg("sign_in");
+        return { error: "sign_in" };
+      }
+      const raw = data.error || data.errors?.join(", ") || "failed";
+      const error =
+        raw === "self_purchase"
+          ? "You can't buy your own work"
+          : raw === "already_sold"
+            ? "already_sold"
+            : raw === "checkout_expired"
+              ? "This checkout expired — try buying again"
+              : raw === "drop_not_started"
+              ? "This drop hasn't started yet"
+              : raw === "drop_ended"
+                ? "This drop has ended"
+                : raw === "unavailable"
+                  ? "This work isn't available to buy"
+                  : raw === "listing_not_minted"
+                    ? "This listing isn't minted on-chain yet"
+                    : raw === "boing_same_chain_only"
+                      ? "Boing listings are same-chain only (pay with BOING)"
+                      : raw === "wash_blocked" || raw === "high_velocity_low_dwell"
+                        ? "Purchase blocked"
+                        : raw === "invalid_body"
+                          ? "Couldn't start this purchase. Try again."
+                          : raw;
+      setMsg(error);
+      return { error };
+    }
+    return data as Record<string, unknown>;
+  }
+
+  async function openCheckout() {
+    setMsg(null);
+    // Prefer FreshMint session before wallet connect for purchase.
+    let signedIn = sessionUserId;
+    if (signedIn === undefined) {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        const data = await res.json();
+        signedIn =
+          data.user && typeof data.user.id === "string" ? data.user.id : null;
+        setSessionUserId(signedIn);
+      } catch {
+        signedIn = null;
+        setSessionUserId(null);
+      }
+    }
+    if (!signedIn) {
+      setMsg("sign_in");
+      setConfirmBuy(false);
+      return;
+    }
+    setConfirmBuy(true);
+    setBuyStep("idle");
+    setPayNetwork(listingNetwork);
+    setPaymentAddress(null);
+    setReceiveAddress(null);
+    setServerPayFormatted(null);
+    setBridgeFeeUsd(null);
+    setBridgeEstimatedOutput(null);
+    setBridgeQuoteRequestId(null);
+    if (listingNetwork === "boing") {
+      setPayNetworks(["boing"]);
+    } else {
+      setPayNetworks([
+        listingNetwork,
+        "ethereum",
+        "base",
+        "arbitrum",
+        "optimism",
+        "solana",
+      ].filter((n, i, a) => a.indexOf(n) === i) as NetworkId[]);
+    }
+  }
+
+  async function connectWallets() {
+    setBuyStep("connecting");
+    setMsg(null);
+    const payAddr = await requestBuyerAddress(payVm);
+    if (!payAddr) {
+      setMsg(
+        `Install or unlock ${WALLET_HINT[payVm] ?? "a wallet"} to pay on ${PAY_LABELS[payNetwork] ?? payNetwork}`,
+      );
+      setBuyStep("idle");
+      return null;
+    }
+    setPaymentAddress(payAddr);
+    let recv = payAddr;
+    if (crossChain) {
+      const recvAddr = await requestBuyerAddress(chain);
+      if (!recvAddr) {
+        setMsg(
+          `Also connect ${WALLET_HINT[chain] ?? "a wallet"} on ${chain} to receive the NFT`,
+        );
+        setBuyStep("idle");
+        return null;
+      }
+      recv = recvAddr;
+    }
+    setReceiveAddress(recv);
+    return { payAddr, recv };
+  }
+
+  async function completePurchase() {
+    const amount = Number(priceUsd);
+    if (!Number.isFinite(amount) || amount <= 0 || buying) return;
+    setBuying(true);
+    setMsg(null);
+    try {
+      if (!sessionUserId) {
+        setMsg("sign_in");
+        setBuyStep("idle");
+        setConfirmBuy(false);
+        return;
+      }
+      const wallets = await connectWallets();
+      if (!wallets) return;
+
+      const data = await post("/api/purchase", {
+        listingId,
+        amountUsd: amount,
+        payNetwork,
+        buyerPaymentAddress: wallets.payAddr,
+        buyerReceiveAddress: wallets.recv,
+      });
+      if (!data || "error" in data) {
+        if (data && data.error === "already_sold") {
+          setJustSold(true);
+          setConfirmBuy(false);
+        }
+        setBuyStep("idle");
+        return;
+      }
+
+      const purchaseId = String(data.purchaseId ?? "");
+      if (purchaseId) {
+        setHeldPurchase({
+          purchaseId,
+          status: String(data.status ?? "pending_payment"),
+        });
+      }
+
+      if (data.status === "pending_transfer") {
+        setBuyStep("transferring");
+        const transferTx = data.transferWalletTx;
+        let transferHash: string | null = null;
+        if (transferTx) {
+          const wt = transferTx as EvmWalletTx & { chain: string };
+          if (wt.chain === "evm") {
+            transferHash = await sendEvmWalletTx(wt);
+          } else {
+            transferHash = await maybeSendWalletTx({
+              walletTx: transferTx,
+              listingId,
+              action: "buy",
+              amountUsd: amount,
+            });
+          }
+        }
+        if (!transferHash) {
+          setMsg(
+            "Payment already landed — confirm the NFT transfer in your wallet, or finish from your collection",
+          );
+          setBuyStep("idle");
+          return;
+        }
+        const done = await post("/api/purchase/confirm", {
+          purchaseId,
+          step: "transfer",
+          txHash: transferHash,
+        });
+        if (!done || "error" in done) {
+          setBuyStep("idle");
+          return;
+        }
+        setBuyStep("done");
+        finishPurchase(
+          { ...data, ...done, fees: data.fees, transferTxHash: transferHash },
+          "Owned on-chain",
+        );
+        return;
+      }
+
+      let paymentHash: string | null = null;
+      let bridgeRequestId =
+        data.bridge &&
+        typeof data.bridge === "object" &&
+        data.bridge !== null &&
+        "requestId" in data.bridge
+          ? String((data.bridge as { requestId?: string }).requestId ?? "")
+          : "";
+
+      if (crossChain && data.bridge) {
+        setBuyStep("bridging");
+        const bridge = data.bridge as {
+          amount?: string;
+          requestId?: string;
+        };
+        const prep = await fetch("/api/bridge/prepare", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fromNetwork: payNetwork,
+            toNetwork: listingNetwork,
+            amount: bridge.amount,
+            userAddress: wallets.payAddr,
+            recipientAddress:
+              typeof data.settlementAddress === "string"
+                ? data.settlementAddress
+                : undefined,
+          }),
+        });
+        const prepData = await prep.json();
+        if (!prep.ok) {
+          setMsg(prepData.error || "Couldn’t prepare the bridge. Try again.");
+          setBuyStep("idle");
+          return;
+        }
+        bridgeRequestId =
+          prepData.requestId ?? prepData.quote?.requestId ?? bridgeRequestId;
+        const hashes: string[] = [];
+        for (const step of prepData.walletSteps ?? []) {
+          if (step.chain === "evm" && step.to && step.data) {
+            const hash = await sendEvmWalletTx({
+              chain: "evm",
+              chainId: step.chainId,
+              to: step.to,
+              data: step.data,
+              value: step.value ?? "0x0",
+              from: wallets.payAddr,
+            });
+            hashes.push(hash);
+          }
+        }
+        paymentHash = hashes[0] ?? `bridge:${bridgeRequestId || Date.now()}`;
+        setBuyStep("paying");
+        await fetch("/api/bridge/confirm", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestId: bridgeRequestId || undefined,
+            txHashes: hashes,
+          }),
+        });
+      } else if (data.paymentWalletTx) {
+        setBuyStep("paying");
+        paymentHash = await maybeSendWalletTx({
+          walletTx: data.paymentWalletTx,
+          listingId,
+          action: "buy",
+          amountUsd: amount,
+        });
+        if (!paymentHash) {
+          setMsg("Confirm the payment in your wallet popup");
+          setBuyStep("idle");
+          return;
+        }
+      }
+
+      if (!paymentHash || !purchaseId) {
+        setMsg("Payment required to continue");
+        setBuyStep("idle");
+        return;
+      }
+
+      const paid = await post("/api/purchase/confirm", {
+        purchaseId,
+        step: "payment",
+        txHash: paymentHash,
+        bridgeRequestId: bridgeRequestId || undefined,
+      });
+      if (!paid || "error" in paid) {
+        setBuyStep("idle");
+        return;
+      }
+
+      setBuyStep("transferring");
+      const transferTx = paid.transferWalletTx ?? data.transferWalletTx;
+      let transferHash: string | null = null;
+      if (transferTx) {
+        const wt = transferTx as EvmWalletTx & { chain: string };
+        if (wt.chain === "evm") {
+          transferHash = await sendEvmWalletTx(wt);
+        } else {
+          transferHash = await maybeSendWalletTx({
+            walletTx: transferTx,
+            listingId,
+            action: "buy",
+            amountUsd: amount,
+          });
+        }
+      }
+      if (!transferHash) {
+        setMsg(
+          "Payment landed — confirm the NFT transfer in your wallet to finish",
+        );
+        setBuyStep("idle");
+        return;
+      }
+
+      const done = await post("/api/purchase/confirm", {
+        purchaseId,
+        step: "transfer",
+        txHash: transferHash,
+      });
+      if (!done || "error" in done) {
+        setBuyStep("idle");
+        return;
+      }
+
+      setBuyStep("done");
+      const transferNote =
+        typeof transferHash === "string" && transferHash
+          ? transferHash
+          : null;
+      finishPurchase(
+        { ...data, ...done, fees: data.fees, transferTxHash: transferNote },
+        "Owned on-chain",
+      );
+    } catch (e) {
+      showCheckoutError(e instanceof Error ? e.message : "purchase_failed");
+      setBuyStep("idle");
+    } finally {
+      setBuying(false);
+    }
+  }
+
+  function finishPurchase(data: Record<string, unknown>, prefix: string) {
+    const feeNote =
+      data.fees &&
+      typeof data.fees === "object" &&
+      data.fees !== null &&
+      "sellerNetUsd" in data.fees
+        ? ` · seller $${Number((data.fees as { sellerNetUsd: number }).sellerNetUsd).toFixed(2)} after ${PLATFORM_FEE_PERCENT.total}% fee`
+        : "";
+    setConfirmBuy(false);
+    setBuyStep("idle");
+    if (!repeatable && listingType !== "open_edition") setJustSold(true);
+    const xfer =
+      typeof data.transferTxHash === "string" ? data.transferTxHash : null;
+    setMsg(`${prefix}${feeNote}`);
+    setLastTxHash(xfer);
+    setBoughtThisSession(true);
+    setHeldPurchase(null);
+    router.refresh();
+  }
+
+  const payAmountLabel =
+    serverPayFormatted ??
+    localPayQuote?.pay.formatted ??
+    settleQuote?.formatted ??
+    `$${priceUsd}`;
+
+  const menuLayout = layout === "menu";
+
+  return (
+    <div
+      className={`listing-actions${menuLayout ? " listing-actions--menu" : ""}`}
+    >
+      {!menuLayout && showCommunityActions && showSave ? (
+        <button
+          type="button"
+          className="badge"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() =>
+            void post("/api/signals", { listingId, type: "save" }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg("Saved");
+                router.refresh();
+              }
+            })
+          }
+        >
+          Save
+        </button>
+      ) : null}
+      {!menuLayout &&
+      showCommunityActions &&
+      sessionUserId &&
+      stage !== "draft" &&
+      (curatorScore ?? 0) >= DISCOVERY_CONFIG.nominationStakePoints ? (
+        <button
+          type="button"
+          className="badge"
+          style={{ cursor: "pointer", background: "transparent" }}
+          title={`Costs ${DISCOVERY_CONFIG.nominationStakePoints} curator points`}
+          onClick={() =>
+            void post("/api/nominate", { listingId }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg(
+                  `Nominated (−${DISCOVERY_CONFIG.nominationStakePoints} curator pts)`,
+                );
+                setCuratorScore((s) =>
+                  s == null
+                    ? s
+                    : Math.max(0, s - DISCOVERY_CONFIG.nominationStakePoints),
+                );
+                router.refresh();
+              } else if (d && "error" in d) {
+                setMsg(String((d as { error?: string }).error ?? "nominate_failed"));
+              }
+            })
+          }
+        >
+          Nominate
+        </button>
+      ) : !menuLayout &&
+        showCommunityActions &&
+        sessionUserId &&
+        stage !== "draft" ? (
+        <span
+          className="badge"
+          title={`Need ${DISCOVERY_CONFIG.nominationStakePoints}+ curator points to nominate`}
+          style={{ opacity: 0.55 }}
+        >
+          Nominate (need {DISCOVERY_CONFIG.nominationStakePoints} pts)
+        </span>
+      ) : null}
+      {uniqueSold ? <span className="badge featured">Sold</span> : null}
+      {showCommunityActions && dropState === "upcoming" ? (
+        <span className="badge emerging">Drop scheduled</span>
+      ) : null}
+      {showCommunityActions && dropState === "ended" && !uniqueSold ? (
+        <span className="badge">Drop ended</span>
+      ) : null}
+      {!minted && !uniqueSold && priceUsd != null ? (
+        <span className="badge" title="Creator must finish publish mint first">
+          Not minted yet
+        </span>
+      ) : null}
+      {canBuy && !confirmBuy ? (
+        menuLayout ? (
+          <Link href={`/listings/${listingId}`} className="badge featured">
+            Buy{priceUsd != null ? ` $${priceUsd}` : ""}
+          </Link>
+        ) : (() => {
+          const primary = resolveBuyPrimaryCta({
+            sessionUserId,
+            confirmOpen: false,
+            paymentAddress: null,
+            crossChain: false,
+            buying: false,
+          });
+          if (primary.kind === "checking") {
+            return (
+              <span
+                className="badge"
+                aria-busy="true"
+                style={{
+                  opacity: 0.65,
+                  cursor: "default",
+                  background: "transparent",
+                  color: "var(--ink-muted)",
+                }}
+              >
+                Checking sign-in…
+              </span>
+            );
+          }
+          if (primary.kind === "sign_in") {
+            return (
+              <Link href={signInHref} className="badge featured">
+                Buy now
+              </Link>
+            );
+          }
+          return (
+            <button
+              type="button"
+              className="badge featured"
+              style={{ cursor: "pointer", background: "transparent" }}
+              onClick={() => void openCheckout()}
+            >
+              Buy now
+              {settleQuote?.formatted || priceUsd != null ? (
+                <span style={{ opacity: 0.75 }}>
+                  {" "}
+                  · {settleQuote?.formatted ?? `$${priceUsd}`}
+                </span>
+              ) : null}
+            </button>
+          );
+        })()
+      ) : null}
+      {canBuy && confirmBuy && !menuLayout ? (
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "24rem",
+            marginTop: "0.15rem",
+            padding: "0.75rem 0.85rem",
+            border: "1px solid var(--line)",
+            background: "var(--panel-solid)",
+          }}
+        >
+          <p
+            className="display"
+            style={{ margin: "0 0 0.25rem", fontSize: "1rem" }}
+          >
+            {payAmountLabel}
+            {priceUsd != null ? (
+              <span
+                style={{
+                  marginLeft: "0.35rem",
+                  color: "var(--ink-muted)",
+                  fontSize: "0.85rem",
+                  fontWeight: 400,
+                }}
+              >
+                ≈ ${priceUsd}
+              </span>
+            ) : null}
+          </p>
+          <p
+            style={{
+              margin: "0 0 0.45rem",
+              color: "var(--ink-muted)",
+              fontSize: "0.8rem",
+              lineHeight: 1.45,
+            }}
+          >
+            Lands in your {chain} wallet.
+          </p>
+          <PlatformFeeBreakdown
+            priceUsd={priceUsd}
+            isSecondary={isSecondary}
+            creatorRoyaltyBps={creatorRoyaltyBps}
+          />
+          {crossChain ? (
+            <BridgeQuoteSummary
+              feeUsd={bridgeFeeUsd}
+              estimatedOutput={bridgeEstimatedOutput}
+              requestId={bridgeQuoteRequestId}
+              loading={bridgeQuoteLoading}
+              needsWallet={!paymentAddress}
+              onConnectWallet={() => {
+                void connectWallets();
+              }}
+            />
+          ) : null}
+
+          <ol
+            style={{
+              margin: "0 0 0.75rem",
+              paddingLeft: "1.1rem",
+              color: "var(--ink-muted)",
+              fontSize: "0.78rem",
+              lineHeight: 1.45,
+            }}
+          >
+            <li style={{ opacity: buyStep === "connecting" ? 1 : 0.75 }}>
+              Connect {WALLET_HINT[payVm]}
+              {crossChain ? ` + ${WALLET_HINT[chain]}` : ""}
+            </li>
+            <li
+              style={{
+                opacity:
+                  buyStep === "bridging" || buyStep === "paying" ? 1 : 0.75,
+              }}
+            >
+              {crossChain
+                ? `Bridge ${PAY_LABELS[payNetwork] ?? payNetwork} → ${PAY_LABELS[listingNetwork] ?? listingNetwork}`
+                : `Pay on ${PAY_LABELS[listingNetwork] ?? listingNetwork}`}
+            </li>
+            <li style={{ opacity: buyStep === "transferring" ? 1 : 0.75 }}>
+              Receive NFT transfer on {chain}
+            </li>
+          </ol>
+
+          <label
+            style={{
+              display: "block",
+              marginBottom: "0.55rem",
+              fontSize: "0.8rem",
+              color: "var(--ink-muted)",
+            }}
+          >
+            Pay with
+            <select
+              value={payNetwork}
+              disabled={buying}
+              onChange={(e) => {
+                setPayNetwork(e.target.value as NetworkId);
+                setPaymentAddress(null);
+                setReceiveAddress(null);
+                setMsg(null);
+              }}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: "0.25rem",
+                padding: "0.35rem 0.45rem",
+              }}
+            >
+              {payNetworks.map((n) => (
+                <option key={n} value={n}>
+                  {PAY_LABELS[n] ?? n}
+                  {n === listingNetwork ? " · listing network" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <p
+            style={{
+              margin: "0 0 0.65rem",
+              fontSize: "0.75rem",
+              color: "var(--ink-muted)",
+              lineHeight: 1.4,
+            }}
+          >
+            {quoteBusy ? "Updating quote…" : null}
+            {!quoteBusy && crossChain ? (
+              <>
+                Cross-chain via Relay. You pay on{" "}
+                {PAY_LABELS[payNetwork] ?? payNetwork}; NFT stays on{" "}
+                {PAY_LABELS[listingNetwork] ?? listingNetwork}.
+              </>
+            ) : null}
+            {!quoteBusy && !crossChain && !payWalletReady ? (
+              <>Needs {WALLET_HINT[payVm]} in this browser.</>
+            ) : null}
+            {!quoteBusy && crossChain && (!payWalletReady || !recvWalletReady) ? (
+              <>
+                Needs {WALLET_HINT[payVm]}
+                {!recvWalletReady ? ` and ${WALLET_HINT[chain]}` : ""}.
+              </>
+            ) : null}
+            {paymentAddress ? (
+              <>
+                {" "}
+                Pay from {shortAddr(paymentAddress)}
+                {receiveAddress && receiveAddress !== paymentAddress
+                  ? ` · receive ${shortAddr(receiveAddress)}`
+                  : ""}
+                .
+              </>
+            ) : null}
+          </p>
+
+          {buying || buyStep !== "idle" ? (
+            <p
+              style={{
+                margin: "0 0 0.55rem",
+                fontSize: "0.8rem",
+                color: "var(--accent-soft)",
+              }}
+              aria-live="polite"
+            >
+              {stepLabel(buyStep === "idle" && buying ? "connecting" : buyStep, crossChain)}
+            </p>
+          ) : null}
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+            {(() => {
+              const primary = resolveBuyPrimaryCta({
+                sessionUserId,
+                confirmOpen: true,
+                paymentAddress,
+                crossChain,
+                buying,
+                busyLabel: stepLabel(
+                  buyStep === "idle" && buying ? "connecting" : buyStep,
+                  crossChain,
+                ),
+              });
+              return (
+                <button
+                  type="button"
+                  className="badge featured"
+                  disabled={buying || primary.kind === "checking"}
+                  style={{
+                    cursor: buying ? "wait" : "pointer",
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    if (primary.kind === "sign_in") {
+                      window.location.assign(signInHref);
+                      return;
+                    }
+                    if (primary.kind === "connect_wallet") {
+                      void connectWallets().then((wallets) => {
+                        if (wallets) setBuyStep("idle");
+                      });
+                      return;
+                    }
+                    void completePurchase();
+                  }}
+                >
+                  {primary.label}
+                </button>
+              );
+            })()}
+            <button
+              type="button"
+              className="badge"
+              disabled={buying}
+              style={{ cursor: buying ? "wait" : "pointer", background: "transparent" }}
+              onClick={() => {
+                setConfirmBuy(false);
+                setBuyStep("idle");
+                setMsg(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {!menuLayout && stage === "soft_launch" && canStageRising ? (
+        <button
+          type="button"
+          className="badge emerging"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() =>
+            void post(`/api/listings/${listingId}/stage`, {
+              target: "rising_eligible",
+            }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg("Pushed to Rising");
+                router.refresh();
+              }
+            })
+          }
+        >
+          Push to Rising
+        </button>
+      ) : null}
+      {!menuLayout && stage === "draft" && minted && canStageRising ? (
+        <button
+          type="button"
+          className="badge emerging"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() =>
+            void post(`/api/listings/${listingId}/stage`, {
+              target: "soft_launch",
+            }).then((d) => {
+              if (d && !("error" in d)) {
+                setMsg("Soft-launched to Open Lane");
+                router.refresh();
+              }
+            })
+          }
+        >
+          Soft-launch
+        </button>
+      ) : null}
+      {!menuLayout && showCommunityActions ? (
+        <button
+          type="button"
+          className="badge"
+          style={{
+            cursor: "pointer",
+            background: "transparent",
+            color: "var(--danger)",
+          }}
+          onClick={() =>
+            void post("/api/report", {
+              listingId,
+              reason: "spam",
+            }).then((d) => {
+              if (d && !("error" in d)) setMsg("Reported");
+            })
+          }
+        >
+          Report
+        </button>
+      ) : null}
+      {heldPurchase || pendingPurchase ? (
+        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "0.4rem" }}>
+          <ResumeCryptoPurchaseButton
+            purchaseId={(heldPurchase ?? pendingPurchase)!.purchaseId}
+            chain={chain}
+            network={listingNetwork}
+            status={(heldPurchase ?? pendingPurchase)!.status}
+            allowCancel
+          />
+        </span>
+      ) : null}
+      {msg === "sign_in" ? (
+        <span style={{ fontSize: "0.8rem", maxWidth: "22rem" }}>
+          <Link href={signInHref}>Sign in</Link> to buy, then pay from your
+          wallet. Link wallets anytime under{" "}
+          <Link href="/me/settings">/me/settings</Link>.
+        </span>
+      ) : msg === "already_sold" ? (
+        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+          Already sold or reserved
+        </span>
+      ) : msg ? (
+        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
+          {msg}
+          {lastTxHash ? (
+            <>
+              {" · "}
+              <TxExplorerLink
+                hash={lastTxHash}
+                chain={chain}
+                network={listingNetwork}
+              />
+            </>
+          ) : null}
+          {boughtThisSession ? (
+            <>
+              {" · "}
+              <Link href="/me">View in collection</Link>
+            </>
+          ) : null}
+        </span>
+      ) : boughtThisSession ? (
+        <span style={{ fontSize: "0.8rem" }}>
+          <Link href="/me">View in collection</Link>
+        </span>
+      ) : null}
+    </div>
+  );
+}
