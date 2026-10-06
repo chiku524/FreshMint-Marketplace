@@ -146,42 +146,61 @@ export function CollectionPublishPanel({
     setProgress("Confirm collection re-deploy in your wallet (you pay gas)…");
     const wt = deployIntent.walletTx as EvmWalletTx | BoingWalletTx;
     let txHash: string | null = null;
-    let contractAddress = deployIntent.contractAddress || "";
+    /** Only a wallet-returned AccountId — never the FreshMint provisional placeholder. */
+    let walletContractAddress: string | undefined;
 
     if (wt.chain === "evm") {
       txHash = await sendEvmWalletTx(wt);
     } else if (wt.chain === "boing") {
       const sent = await sendBoingWalletTxDetailed(wt);
-      if (sent.contractAddress) contractAddress = sent.contractAddress;
-      if (!sent.txHash && sent.mempoolAccepted) {
-        setProgress("Wallet accepted deploy — confirming from chain…");
-        const pendingMarker = `pending:boing-accepted:${Date.now().toString(16)}`;
-        let lastError = "onchain_deploy_not_found";
-        for (let attempt = 0; attempt < 6; attempt++) {
-          if (attempt > 0) {
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-          const retrySync = await fetch(
-            `/api/collections/${collectionId}/deploy`,
-            {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "sync",
-                creatorAddress: creatorAddress || undefined,
-                contractAddress: sent.contractAddress || undefined,
-                txHash: pendingMarker,
-              }),
-            },
-          );
-          const retryData = await retrySync.json();
-          if (retrySync.ok && retryData.collection) return;
-          lastError = retryData.error || lastError;
-        }
-        throw new Error(mintPublishErrorMessage(lastError));
+      if (sent.contractAddress) walletContractAddress = sent.contractAddress;
+
+      // Always link from chain after wallet accept (mempool "ok" or real tx id).
+      // Never confirm a provisional placeholder — that recreated the missing-contract loop.
+      const linkTxHash =
+        sent.txHash && /^0x[0-9a-fA-F]{64}$/.test(sent.txHash)
+          ? sent.txHash
+          : `pending:boing-accepted:${Date.now().toString(16)}`;
+      if (!sent.txHash && !sent.mempoolAccepted) {
+        throw new Error(mintPublishErrorMessage("boing_tx_id_required"));
       }
-      txHash = sent.txHash;
+      setProgress("Wallet accepted deploy — linking contract from chain…");
+      let lastError = "onchain_deploy_not_found";
+      for (let attempt = 0; attempt < 12; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        const retrySync = await fetch(
+          `/api/collections/${collectionId}/deploy`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "sync",
+              creatorAddress: creatorAddress || undefined,
+              contractAddress: walletContractAddress || undefined,
+              txHash: linkTxHash,
+            }),
+          },
+        );
+        const retryData = await retrySync.json();
+        if (retrySync.ok && retryData.collection?.contractAddress) {
+          setProgress(
+            `Collection re-deployed · ${String(retryData.collection.contractAddress).slice(0, 10)}…`,
+          );
+          return;
+        }
+        lastError = retryData.error || lastError;
+      }
+      throw new Error(
+        mintPublishErrorMessage(
+          lastError === "onchain_deploy_not_found" ||
+            lastError === "boing_contract_unresolved"
+            ? "Deploy landed in the wallet but FreshMint could not link the contract yet — wait a few seconds and retry Mint & publish"
+            : lastError,
+        ),
+      );
     } else {
       txHash = await maybeSendWalletTx({
         walletTx: deployIntent.walletTx,
@@ -202,7 +221,7 @@ export function CollectionPublishPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         txHash,
-        contractAddress: contractAddress || undefined,
+        contractAddress: walletContractAddress || undefined,
         escrowAddress: deployIntent.escrowAddress,
         creatorAddress: creatorAddress || undefined,
         nftTemplateVersion: deployIntent.nftTemplateVersion,

@@ -26,6 +26,15 @@ describe("formatBoingMintUserMessage", () => {
     );
   });
 
+  it("humanizes unresolved deploy after wallet approve", () => {
+    expect(formatBoingMintUserMessage("boing_contract_unresolved")).toMatch(
+      /could not link/i,
+    );
+    expect(formatBoingMintUserMessage("onchain_deploy_not_found")).toMatch(
+      /could not link/i,
+    );
+  });
+
   it("passes through unrelated errors", () => {
     expect(formatBoingMintUserMessage("listing_failed")).toBe("listing_failed");
   });

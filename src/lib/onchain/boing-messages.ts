@@ -18,10 +18,12 @@ export function formatBoingMintUserMessage(error: string | undefined): string {
     return "This collection’s on-chain contract was not found on Boing. Mint & publish will prompt a re-deploy in your wallet — approve it, then mint again.";
   }
   if (
-    code === "collection_not_deployed" ||
-    code === "onchain_deploy_not_found" ||
-    code === "boing_contract_unresolved"
+    code === "boing_contract_unresolved" ||
+    code === "onchain_deploy_not_found"
   ) {
+    return "Deploy was approved in your wallet, but FreshMint could not link the on-chain contract yet. Wait a few seconds and retry Mint & publish.";
+  }
+  if (code === "collection_not_deployed") {
     return "Collection is not fully deployed on-chain yet. Finish deploy in the create wizard, then retry mint.";
   }
   if (

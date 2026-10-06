@@ -506,46 +506,50 @@ export function CreateWizard() {
       if (sent.contractAddress) contractAddress = sent.contractAddress;
 
       // Boing node returns `{ tx_hash: "ok" }` on mempool accept — not a real
-      // tx id. Link the deploy from chain instead of erroring.
-      if (!sent.txHash && sent.mempoolAccepted) {
-        setDeployNote("Wallet accepted deploy — confirming from chain…");
-        const pendingMarker = `pending:boing-accepted:${Date.now().toString(16)}`;
-        let lastError = "onchain_deploy_not_found";
-        for (let attempt = 0; attempt < 5; attempt++) {
-          if (attempt > 0) {
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-          const sync = await fetch(`/api/collections/${id}/deploy`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "sync",
-              creatorAddress: creatorAddress || undefined,
-              contractAddress: sent.contractAddress || undefined,
-              txHash: pendingMarker,
-            }),
-          });
-          const syncData = await sync.json();
-          if (sync.ok && syncData.collection) {
-            const addr = String(syncData.collection.contractAddress || "");
-            setDeployNote(
-              addr
-                ? `Collection deployed · ${addr.slice(0, 10)}…`
-                : "Collection deployed (synced from chain)",
-            );
-            return;
-          }
-          lastError = syncData.error || lastError;
-        }
-        throw new Error(
-          lastError === "onchain_deploy_not_found"
-            ? "Deploy landed in the wallet but FreshMint could not link it yet — wait a few seconds and retry"
-            : lastError,
-        );
+      // tx id. Always link the deploy from chain; never confirm a provisional
+      // placeholder AddressId (that caused "contract not found" after approve).
+      const linkTxHash =
+        sent.txHash && /^0x[0-9a-fA-F]{64}$/.test(sent.txHash)
+          ? sent.txHash
+          : `pending:boing-accepted:${Date.now().toString(16)}`;
+      if (!sent.txHash && !sent.mempoolAccepted) {
+        throw new Error("boing_tx_id_required");
       }
-
-      txHash = sent.txHash;
+      setDeployNote("Wallet accepted deploy — confirming from chain…");
+      let lastError = "onchain_deploy_not_found";
+      for (let attempt = 0; attempt < 12; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        const sync = await fetch(`/api/collections/${id}/deploy`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync",
+            creatorAddress: creatorAddress || undefined,
+            contractAddress: sent.contractAddress || undefined,
+            txHash: linkTxHash,
+          }),
+        });
+        const syncData = await sync.json();
+        if (sync.ok && syncData.collection) {
+          const addr = String(syncData.collection.contractAddress || "");
+          setDeployNote(
+            addr
+              ? `Collection deployed · ${addr.slice(0, 10)}…`
+              : "Collection deployed (synced from chain)",
+          );
+          return;
+        }
+        lastError = syncData.error || lastError;
+      }
+      throw new Error(
+        lastError === "onchain_deploy_not_found" ||
+          lastError === "boing_contract_unresolved"
+          ? "Deploy landed in the wallet but FreshMint could not link it yet — wait a few seconds and retry"
+          : lastError,
+      );
     } else {
       txHash = await maybeSendWalletTx({
         walletTx: deployIntent.walletTx,

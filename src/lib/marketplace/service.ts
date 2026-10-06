@@ -964,30 +964,92 @@ export async function confirmCollectionDeploy(input: {
     existing.nftTemplateVersion?.trim() ||
     input.nftTemplateVersion?.trim() ||
     "1";
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+
   if (network === "boing") {
     const {
       isProvisionalBoingCollectionAddress,
       normalizeBoingNftTemplateVersion,
+      probeBoingAccount,
       resolveBoingDeployContractAddress,
+      waitForBoingDeployedContract,
     } = await import("@/lib/onchain/boing");
+    const creatorAddress =
+      input.creatorAddress?.trim() ||
+      engine.state.creators
+        .get(input.creatorId)
+        ?.wallets.find((w) => w.chain === "boing")?.address ||
+      "";
+
     if (
       isProvisionalBoingCollectionAddress(input.collectionId, contractAddress)
     ) {
-      const creatorAddress =
-        input.creatorAddress?.trim() ||
-        engine.state.creators
-          .get(input.creatorId)
-          ?.wallets.find((w) => w.chain === "boing")?.address ||
-        "";
       const resolved = await resolveBoingDeployContractAddress({
         creatorAddress,
         collectionId: input.collectionId,
         fallbackAddress: contractAddress,
+        assetName: existing.title.trim().slice(0, 32),
       });
       if (resolved) contractAddress = resolved;
     }
-    // Never mark confirmed while still holding a FreshMint placeholder —
-    // mint would call a non-existent Boing account ("Account not found").
+
+    // Live chains: never confirm a placeholder / unverified AccountId.
+    // Memory/unit tests skip the on-chain wait.
+    if (!memory) {
+      if (
+        isProvisionalBoingCollectionAddress(input.collectionId, contractAddress) ||
+        !creatorAddress
+      ) {
+        if (creatorAddress) {
+          const waited = await waitForBoingDeployedContract({
+            creatorAddress,
+            assetName: existing.title.trim().slice(0, 32),
+            preferredAddress: isProvisionalBoingCollectionAddress(
+              input.collectionId,
+              contractAddress,
+            )
+              ? null
+              : contractAddress,
+            timeoutMs: 45_000,
+            intervalMs: 1_500,
+          });
+          if (waited.ok) {
+            contractAddress = waited.contractAddress;
+          } else {
+            return { ok: false as const, error: waited.error };
+          }
+        } else {
+          return { ok: false as const, error: "boing_account_id_required" };
+        }
+      } else {
+        let probe = await probeBoingAccount(contractAddress);
+        if (probe === "unknown") probe = await probeBoingAccount(contractAddress);
+        if (probe !== "exists") {
+          const waited = await waitForBoingDeployedContract({
+            creatorAddress,
+            assetName: existing.title.trim().slice(0, 32),
+            preferredAddress: contractAddress,
+            timeoutMs: 45_000,
+            intervalMs: 1_500,
+          });
+          if (!waited.ok) {
+            return {
+              ok: false as const,
+              error:
+                probe === "missing"
+                  ? "boing_collection_account_missing"
+                  : waited.error,
+            };
+          }
+          contractAddress = waited.contractAddress;
+        }
+      }
+    }
+
     if (
       isProvisionalBoingCollectionAddress(input.collectionId, contractAddress)
     ) {
@@ -1011,11 +1073,7 @@ export async function confirmCollectionDeploy(input: {
     escrowAddress,
   };
 
-  const { ensureDatabaseReady } = await import("@/lib/db-ready");
-  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
-  const mode = await ensureDatabaseReady();
-
-  if (mode === "memory" || isMemoryMode()) {
+  if (memory) {
     getMemoryEngine().state.collections.set(input.collectionId, next);
     return { ok: true as const, collection: next };
   }
@@ -1312,6 +1370,7 @@ export async function syncCollectionDeployFromChain(input: {
           creatorAddress,
           collectionId: collection.id,
           fallbackAddress: collection.contractAddress,
+          assetName: collection.title.trim().slice(0, 32),
         });
         // Only accept nonce-derived guess when caller supplies evidence of a
         // recent wallet submit (real hash or mempool-accepted pending marker).

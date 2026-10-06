@@ -987,16 +987,21 @@ export async function findBoingNftCollectionDeploy(input: {
 
 /**
  * After a successful wallet deploy, resolve the real contract AccountId.
- * Prefers an explicit address from the wallet, then receipt-adjacent nonce prediction.
+ * Prefers an explicit address from the wallet, then a chain scan for this
+ * creator's NFT deploy, then nonce prediction — only if that account exists.
  */
 export async function resolveBoingDeployContractAddress(input: {
   creatorAddress: string;
   walletResult?: unknown;
   collectionId?: string;
   fallbackAddress?: string | null;
+  assetName?: string | null;
 }): Promise<string | null> {
   const fromWallet = extractBoingContractAddress(input.walletResult);
-  if (fromWallet) return fromWallet;
+  if (fromWallet) {
+    const probe = await probeBoingAccount(fromWallet);
+    if (probe === "exists") return fromWallet;
+  }
 
   const fallback = input.fallbackAddress?.trim();
   if (
@@ -1007,17 +1012,83 @@ export async function resolveBoingDeployContractAddress(input: {
       isProvisionalBoingCollectionAddress(input.collectionId, fallback)
     )
   ) {
-    return normalizeBoingAccountId(fallback);
+    const normalized = normalizeBoingAccountId(fallback);
+    const probe = await probeBoingAccount(normalized);
+    if (probe === "exists") return normalized;
   }
 
   if (!isBoingNativeAccountIdHex(input.creatorAddress)) return null;
   const creator = normalizeBoingAccountId(input.creatorAddress);
+
+  const found = await findBoingNftCollectionDeploy({
+    senderAddress: creator,
+    assetName: input.assetName,
+    lookbackBlocks: 256,
+  });
+  if (found) {
+    const addr = normalizeBoingAccountId(found.contractAddress);
+    const probe = await probeBoingAccount(addr);
+    if (probe === "exists") return addr;
+  }
+
   const acct = await getBoingAccount(creator);
   if (acct && acct.nonce > 0) {
     // Deploy consumed the prior nonce; current nonce is next unused.
-    return predictNonceDerivedContractAddress(creator, acct.nonce - 1);
+    const predicted = predictNonceDerivedContractAddress(creator, acct.nonce - 1);
+    const probe = await probeBoingAccount(predicted);
+    if (probe === "exists") return predicted;
   }
   return null;
+}
+
+/**
+ * Poll until a freshly wallet-deployed collection contract is readable on Boing.
+ */
+export async function waitForBoingDeployedContract(input: {
+  creatorAddress: string;
+  assetName?: string | null;
+  preferredAddress?: string | null;
+  timeoutMs?: number;
+  intervalMs?: number;
+}): Promise<{ ok: true; contractAddress: string } | { ok: false; error: string }> {
+  if (!isBoingNativeAccountIdHex(input.creatorAddress)) {
+    return { ok: false, error: "boing_account_id_required" };
+  }
+  const timeoutMs = input.timeoutMs ?? 90_000;
+  const intervalMs = input.intervalMs ?? 1_500;
+  const started = Date.now();
+  let lastError = "onchain_deploy_not_found";
+
+  while (Date.now() - started < timeoutMs) {
+    const preferred = input.preferredAddress?.trim();
+    if (
+      preferred &&
+      isBoingNativeAccountIdHex(preferred) &&
+      !preferred.startsWith("pending:")
+    ) {
+      const probe = await probeBoingAccount(preferred);
+      if (probe === "exists") {
+        return {
+          ok: true,
+          contractAddress: normalizeBoingAccountId(preferred),
+        };
+      }
+      if (probe === "missing") lastError = "boing_collection_account_missing";
+      else lastError = "boing_account_probe_unknown";
+    }
+
+    const resolved = await resolveBoingDeployContractAddress({
+      creatorAddress: input.creatorAddress,
+      assetName: input.assetName,
+      fallbackAddress: preferred,
+    });
+    if (resolved) {
+      return { ok: true, contractAddress: resolved };
+    }
+    lastError = "onchain_deploy_not_found";
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { ok: false, error: lastError };
 }
 
 export type BoingQaResult = "allow" | "reject" | "unsure";
