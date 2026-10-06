@@ -378,7 +378,12 @@ export async function createListingForUser(input: {
         : input.auctionEndsAt
           ? new Date(input.auctionEndsAt).getTime()
           : null;
-    const cal = await validateDropWindow({ type: input.type, startsAt, endsAt });
+    const cal = await validateDropWindow({
+      type: input.type,
+      startsAt,
+      endsAt,
+      excludeCollectionId: input.collectionId,
+    });
     if (!cal.ok) {
       return { ok: false as const, errors: cal.errors };
     }
@@ -1895,6 +1900,7 @@ export async function updateCollectionDrop(input: {
     type: "open_edition",
     startsAt,
     endsAt,
+    excludeCollectionId: input.collectionId,
   });
   if (!cal.ok) return { ok: false as const, errors: cal.errors };
 

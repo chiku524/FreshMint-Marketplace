@@ -29,7 +29,7 @@ export default async function CalendarPage() {
         Drop calendar
       </h1>
       <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1.25rem" }}>
-        Congestion caps: {cal.caps.maxOeStartsPerHour} OE starts/hour ·{" "}
+        Congestion caps: {cal.caps.maxOeStartsPerHour} collection drops/hour ·{" "}
         {cal.caps.maxAuctionStartsPerHour} timed-drop starts/hour ·{" "}
         {cal.caps.maxConcurrentOeOnRising} concurrent OE on Rising ·{" "}
         {cal.caps.liveAuctionStripSlots} live timed-drop strip slots.

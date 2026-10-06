@@ -127,6 +127,12 @@ function listingErrorMessage(raw: string): string {
   if (raw.startsWith("duplicate_media:")) {
     return "This artwork file was already used on another listing. Use a different file, or continue minting the draft that was kept.";
   }
+  if (raw.includes("oe_hour_capacity_full")) {
+    return "Too many other drops start in that hour. Pick a different start time — pieces in this collection share one slot.";
+  }
+  if (raw.includes("auction_hour_capacity_full")) {
+    return "Too many other auctions start in that hour. Pick a different start time.";
+  }
   return raw;
 }
 
@@ -1085,6 +1091,8 @@ export function CreateWizard() {
                 ? "Drops can last up to seven days"
                 : raw.includes("window_end_before_start")
                   ? "Drop end must be after the start"
+                : raw.includes("oe_hour_capacity_full")
+                  ? "Too many other drops start in that hour. Pick a different start time — this collection counts as one drop."
                   : raw,
           );
         }

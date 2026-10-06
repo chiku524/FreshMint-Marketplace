@@ -472,7 +472,7 @@ export function DocsGuide() {
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
                   Open Lane {cfg.openLaneListingsPerCreatorPerDay}/creator/day · Rising{" "}
                   {cfg.risingEntriesPerCreatorPerWeek}/week · OE starts ≤{" "}
-                  {cfg.calendar.maxOeStartsPerHour}/hour · timed drops ≤{" "}
+                  {cfg.calendar.maxOeStartsPerHour} collection drops/hour · timed drops ≤{" "}
                   {cfg.calendar.maxAuctionStartsPerHour}/hour · ≤{" "}
                   {cfg.maxConcurrentOeOnRising} concurrent OE on Rising
                 </p>
