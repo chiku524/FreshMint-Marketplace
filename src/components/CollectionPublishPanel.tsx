@@ -1,5 +1,6 @@
 "use client";
 
+import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
 import {
   maybeSendWalletTx,
   requestBuyerAddress,
@@ -16,6 +17,19 @@ type DraftPiece = {
   title: string;
   minted: boolean;
 };
+
+function mintPublishErrorMessage(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "mint_failed";
+  if (
+    /account not found|boing_|collection_not_deployed|onchain_deploy/i.test(
+      trimmed,
+    )
+  ) {
+    return formatBoingMintUserMessage(trimmed);
+  }
+  return trimmed;
+}
 
 export function CollectionPublishPanel({
   collectionId,
@@ -75,9 +89,28 @@ export function CollectionPublishPanel({
         setMsg("Nothing left to mint — try Soft-launch minted drafts.");
         return;
       }
-      const creatorAddress = await requestBuyerAddress(
-        network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
-      );
+      const chainVm =
+        network === "solana" ? "solana" : network === "boing" ? "boing" : "evm";
+      const creatorAddress = await requestBuyerAddress(chainVm);
+
+      // Heal Boing deploy rows that never stored the real contract AccountId.
+      if (network === "boing") {
+        setProgress("Checking collection deploy…");
+        try {
+          await fetch(`/api/collections/${collectionId}/deploy`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "sync",
+              creatorAddress: creatorAddress || undefined,
+            }),
+          });
+        } catch {
+          // Prepare still validates; sync is best-effort.
+        }
+      }
+
       setProgress("Preparing mint batches…");
       const prep = await fetch(`/api/collections/${collectionId}/mint`, {
         method: "POST",
@@ -91,7 +124,9 @@ export function CollectionPublishPanel({
       });
       const prepData = await prep.json();
       if (!prep.ok) {
-        throw new Error(prepData.error || "mint_prepare_failed");
+        throw new Error(
+          mintPublishErrorMessage(String(prepData.error || "mint_prepare_failed")),
+        );
       }
       const batches = (prepData.batches ?? []) as Array<{
         listingIds: string[];
@@ -123,12 +158,7 @@ export function CollectionPublishPanel({
               txHash = await sendBoingMintWalletTx(wt);
             } catch (err) {
               const code = err instanceof Error ? err.message : "";
-              if (code === "boing_tx_id_required") {
-                throw new Error(
-                  "Boing wallet did not return a transaction id (mempool ok is not a mint receipt). Wait a moment and retry this batch.",
-                );
-              }
-              throw err;
+              throw new Error(mintPublishErrorMessage(code || "mint_failed"));
             }
           } else {
             txHash =
@@ -160,7 +190,11 @@ export function CollectionPublishPanel({
         });
         const confirmData = await confirm.json();
         if (!confirm.ok) {
-          throw new Error(confirmData.error || "mint_confirm_failed");
+          throw new Error(
+            mintPublishErrorMessage(
+              String(confirmData.error || "mint_confirm_failed"),
+            ),
+          );
         }
       }
       setMsg(
@@ -168,7 +202,11 @@ export function CollectionPublishPanel({
       );
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "mint_failed");
+      setMsg(
+        mintPublishErrorMessage(
+          err instanceof Error ? err.message : "mint_failed",
+        ),
+      );
     } finally {
       setBusy(false);
       setProgress(null);

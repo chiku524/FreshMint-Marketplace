@@ -986,6 +986,13 @@ export async function confirmCollectionDeploy(input: {
       });
       if (resolved) contractAddress = resolved;
     }
+    // Never mark confirmed while still holding a FreshMint placeholder —
+    // mint would call a non-existent Boing account ("Account not found").
+    if (
+      isProvisionalBoingCollectionAddress(input.collectionId, contractAddress)
+    ) {
+      return { ok: false as const, error: "boing_contract_unresolved" };
+    }
     // Stamp deploy-time template: explicit input, else what new deploys use now,
     // else keep existing (defaults to v1 for legacy rows).
     nftTemplateVersion = normalizeBoingNftTemplateVersion(
@@ -1224,21 +1231,56 @@ export async function prepareCollectionPublishMints(input: {
   creatorAddress?: string | null;
 }) {
   const engine = await getDiscoveryEngine();
-  const collection = engine.state.collections.get(input.collectionId);
+  let collection = engine.state.collections.get(input.collectionId);
   if (!collection) return { ok: false as const, error: "collection_not_found" };
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
   }
-  if (!isCollectionDeployReady(collection)) {
-    return { ok: false as const, error: "collection_not_deployed" };
-  }
 
+  const network = resolveNetwork(collection.network, collection.chain);
   const creator =
     input.creatorAddress?.trim() ||
     engine.state.creators
       .get(input.creatorId)
-      ?.wallets.find((w) => w.chain === collection.chain)?.address ||
+      ?.wallets.find((w) => w.chain === collection!.chain)?.address ||
     "";
+
+  // Heal Boing provisional / pending deploy before building mint batches.
+  if (!isCollectionDeployReady(collection) && network === "boing") {
+    const synced = await syncCollectionDeployFromChain({
+      collectionId: input.collectionId,
+      creatorId: input.creatorId,
+      creatorAddress: creator || null,
+    });
+    if (synced.ok && synced.collection) {
+      collection = synced.collection;
+      engine.state.collections.set(input.collectionId, synced.collection);
+    }
+  }
+
+  if (!isCollectionDeployReady(collection)) {
+    return { ok: false as const, error: "collection_not_deployed" };
+  }
+
+  if (network === "boing") {
+    const {
+      isBoingNativeAccountIdHex,
+      normalizeBoingAccountId,
+      probeBoingAccount,
+    } = await import("@/lib/onchain/boing");
+    if (!isBoingNativeAccountIdHex(creator)) {
+      return { ok: false as const, error: "boing_account_id_required" };
+    }
+    const contract = normalizeBoingAccountId(collection.contractAddress!);
+    const contractProbe = await probeBoingAccount(contract);
+    if (contractProbe === "missing") {
+      return { ok: false as const, error: "boing_collection_account_missing" };
+    }
+    const creatorProbe = await probeBoingAccount(normalizeBoingAccountId(creator));
+    if (creatorProbe === "missing") {
+      return { ok: false as const, error: "boing_creator_account_missing" };
+    }
+  }
 
   const items = input.listingIds
     .map((id) => {
@@ -1259,7 +1301,6 @@ export async function prepareCollectionPublishMints(input: {
   }
 
   const { buildCollectionMintBatches } = await import("@/lib/onchain/collection");
-  const network = resolveNetwork(collection.network, collection.chain);
   const batches = buildCollectionMintBatches({
     network,
     chain: collection.chain,

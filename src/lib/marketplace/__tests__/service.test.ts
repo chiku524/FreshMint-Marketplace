@@ -857,6 +857,19 @@ describe("marketplace service (memory mode)", () => {
       }),
     ).toBe(false);
 
+    const rejectProvisional = await confirmCollectionDeploy({
+      collectionId: pendingBoing.collection.id,
+      creatorId: "artist-fresh",
+      txHash: `0x${"ee".repeat(32)}`,
+      contractAddress: provisional,
+      creatorAddress: boingCreator,
+    });
+    // Without a resolvable on-chain AccountId, do not fake-confirm a placeholder.
+    expect(rejectProvisional.ok).toBe(false);
+    if (!rejectProvisional.ok) {
+      expect(rejectProvisional.error).toBe("boing_contract_unresolved");
+    }
+
     const prep = await prepareCollectionDeployForUser({
       collectionId: pendingBoing.collection.id,
       creatorId: "artist-fresh",

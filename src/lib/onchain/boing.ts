@@ -441,6 +441,34 @@ export async function getBoingAccount(accountId: string): Promise<{
   }
 }
 
+/**
+ * Distinguish missing Boing accounts from RPC/edge failures.
+ * Used before mint so we do not send wallet txs to a non-existent contract.
+ */
+export async function probeBoingAccount(
+  accountId: string,
+): Promise<"exists" | "missing" | "unknown"> {
+  const id = normalizeBoingAccountId(accountId);
+  if (!isBoingNativeAccountIdHex(id)) return "missing";
+  try {
+    await boingRpc<{ balance?: string }>("boing_getAccount", [id]);
+    return "exists";
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    if (
+      msg.includes("account not found") ||
+      msg.includes("account_not_found") ||
+      msg.includes("unknown account")
+    ) {
+      return "missing";
+    }
+    return "unknown";
+  }
+}
+
+/** User-facing copy for mint / publish failures involving Boing accounts. */
+export { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
+
 /** Native BOING balance (whole-unit u128 decimal string). */
 export async function getBoingNativeBalance(
   accountId: string,
