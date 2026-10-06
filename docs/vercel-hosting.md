@@ -58,8 +58,9 @@ npm run db:seed   # optional cold-start catalog
 | `NEXT_PUBLIC_EVM_MARKET_ADDRESS` | Optional live Sepolia market | Optional |
 | `BOING_RPC_URL` | Boing JSON-RPC for live `/me` balances + NFT ownership | Optional; defaults to public CF gateway with Fly fallbacks. Prefer `https://boing-testnet-1.fly.dev/` if profile shows edge-blocked balances |
 | `CRON_SECRET` | Bearer auth for `/api/cron/*` | Required for English settle + Friday treasury buy |
-| `TREASURY_FRIDAY_BUDGET_USD` | Optional USD cap for Friday Open Lane buy (default 50) | Optional |
-| `TREASURY_EVM_SIGNER_PRIVATE_KEY` / `TREASURY_SOLANA_SIGNER_SECRET_KEY` | Optional hot wallet for automated Friday pay; address must match public treasury or operator | Optional — Safe/Squads cannot auto-spend |
+| `TREASURY_FRIDAY_BUDGET_USD` | Optional USD **ceiling** on the Friday buy (weekly 0.5% profit is the budget) | Optional |
+| `TREASURY_EVM_SIGNER_PRIVATE_KEY` | Optional EVM hot-wallet key for Friday pay; derived address must match `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS` or `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`. Production env + redeploy. | Optional — Safe cannot auto-spend |
+| `TREASURY_SOLANA_SIGNER_SECRET_KEY` | Optional Solana secret as JSON byte array; pubkey must match `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA` or `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`. Production env + redeploy. | Optional — Squads cannot auto-spend |
 
 ### Google OAuth (production)
 

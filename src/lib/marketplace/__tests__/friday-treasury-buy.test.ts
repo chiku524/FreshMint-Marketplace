@@ -5,9 +5,11 @@ import {
   resetMemoryStoreForTests,
 } from "@/lib/data/memory-store";
 import {
-  DEFAULT_TREASURY_FRIDAY_BUDGET_USD,
-  fridayBudgetUsd,
+  applyFridayBudgetCeiling,
+  fridayBudgetCeilingUsd,
+  fridayProfitWindowMs,
   listingFairSortKey,
+  nativeNeededForFridayBuy,
   runFridayTreasuryBuys,
   selectFridayTreasuryCandidate,
   utcFridayWindowId,
@@ -54,16 +56,18 @@ describe("friday treasury window + copy", () => {
     expect(utcFridayWindowId(THURSDAY, true)).toBe("2026-10-02");
   });
 
-  it("defaults the spend cap to $50", () => {
-    expect(DEFAULT_TREASURY_FRIDAY_BUDGET_USD).toBe(50);
-    expect(fridayBudgetUsd()).toBe(50);
-    process.env.TREASURY_FRIDAY_BUDGET_USD = "25";
-    expect(fridayBudgetUsd()).toBe(25);
+  it("uses weekly profit as the spend cap (optional env is a ceiling only)", () => {
+    expect(fridayBudgetCeilingUsd()).toBeNull();
+    expect(applyFridayBudgetCeiling(12.34)).toBe(12.34);
+    expect(applyFridayBudgetCeiling(0)).toBe(0);
+    process.env.TREASURY_FRIDAY_BUDGET_USD = "10";
+    expect(applyFridayBudgetCeiling(12.34)).toBe(10);
   });
 
   it("keeps Friday copy in the existing product voice", () => {
     expect(TREASURY_FRIDAY_COPY.home).toMatch(/Every Friday/i);
-    expect(TREASURY_FRIDAY_COPY.home).toMatch(/treasury/);
+    expect(TREASURY_FRIDAY_COPY.home).toMatch(/last week/i);
+    expect(TREASURY_FRIDAY_COPY.docs).not.toMatch(/\$50/);
     expect(TREASURY_FRIDAY_COPY.open).toMatch(/Fridays/);
   });
 });
@@ -135,17 +139,20 @@ describe("runFridayTreasuryBuys (memory)", () => {
     const first = await runFridayTreasuryBuys({
       now: FRIDAY,
       skipBalanceFetch: true,
+      weekProfitUsd: 80,
       balances: { ethereum: 10n ** 18n, solana: 10n ** 9n, boing: 10n ** 18n },
     });
     expect(first.alreadyRan).toBe(false);
     expect(first.status).toBe("queued");
     expect(first.listingId).toBeTruthy();
     expect(first.signerAvailable).toBe(false);
+    expect(first.weekProfitUsd).toBe(80);
     expect(first.reason).toMatch(/no_treasury_signer/i);
 
     const second = await runFridayTreasuryBuys({
       now: FRIDAY,
       skipBalanceFetch: true,
+      weekProfitUsd: 80,
       balances: { ethereum: 10n ** 18n },
     });
     expect(second.alreadyRan).toBe(true);
@@ -158,8 +165,47 @@ describe("runFridayTreasuryBuys (memory)", () => {
     const result = await runFridayTreasuryBuys({
       now: FRIDAY,
       skipBalanceFetch: true,
+      weekProfitUsd: 80,
       balances: { ethereum: 0n, solana: 0n, boing: 0n },
     });
     expect(result.status).toBe("skipped_no_funds");
+  });
+
+  it("skips when that week's treasury profit is zero", async () => {
+    mint("listing-fresh-1");
+    const result = await runFridayTreasuryBuys({
+      now: FRIDAY,
+      skipBalanceFetch: true,
+      weekProfitUsd: 0,
+      balances: { ethereum: 10n ** 18n },
+    });
+    expect(result.status).toBe("skipped_no_profit");
+  });
+});
+
+describe("friday native quote", () => {
+  it("quotes purchase + gas reserve on Ethereum and Solana", () => {
+    const eth = nativeNeededForFridayBuy({
+      amountUsd: 30,
+      chain: "evm",
+      network: "ethereum",
+    });
+    expect(eth.symbol).toBe("ETH");
+    expect(eth.gasReserve).toBe(1_000_000_000_000_000n);
+    expect(eth.total).toBe(eth.purchase + eth.gasReserve);
+
+    const sol = nativeNeededForFridayBuy({
+      amountUsd: 30,
+      chain: "solana",
+      network: "solana",
+    });
+    expect(sol.symbol).toBe("SOL");
+    expect(sol.gasReserve).toBe(1_000_000n);
+  });
+
+  it("spans previous Friday 00:00 through this Friday", () => {
+    const w = fridayProfitWindowMs("2026-10-09", FRIDAY);
+    expect(new Date(w.startMs).toISOString()).toBe("2026-10-02T00:00:00.000Z");
+    expect(w.endMs).toBe(FRIDAY);
   });
 });

@@ -59,12 +59,12 @@ Covered services: **buy now**, **timed listing**, **English auction**, **Dutch a
 
 ### Friday treasury buys
 
-Every **Friday 16:15 UTC**, Vercel Cron hits `GET /api/cron/friday-treasury-buy` (`CRON_SECRET`). If the listing-chain treasury native balance covers a live Open Lane buy-now work (not the treasury’s own listings, not auctions/open editions), the job records that Friday’s window (`TreasuryFridayBuy.windowId` = UTC date) and:
+Every **Friday 16:15 UTC**, Vercel Cron hits `GET /api/cron/friday-treasury-buy` (`CRON_SECRET`). Budget is **last week’s treasury profit** (0.5% sale fees + Featured boosts). If that profit is positive and the listing-chain treasury native balance covers a live Open Lane buy-now work (not the treasury’s own listings, not auctions/open editions), the job records that Friday’s window (`TreasuryFridayBuy.windowId` = UTC date) and:
 
 1. **Signer present** (`TREASURY_EVM_SIGNER_PRIVATE_KEY` / `TREASURY_SOLANA_SIGNER_SECRET_KEY` whose address matches the public treasury or operator): pays native via the existing settlement address, then `purchaseListing` (same path as collectors). NFT transfer may still be `pending_transfer` until escrow is signed.
 2. **No matching signer** (typical: EVM Safe / Solana Squads): **queued intent only** — does not reserve the listing. Fully automated on-chain spend is blocked until a hot wallet that *is* the treasury/operator, or a Safe/Squads execution path, exists.
 
-Spend cap: `TREASURY_FRIDAY_BUDGET_USD` (default **$50**). Selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Idempotent per Friday. Skip/no-op when funds are too low or nothing is eligible.
+Spend cap: **that UTC week’s treasury profit** — sum of `Purchase.feeTreasuryUsd` (0.5% of settled sales) plus `$15` per Featured boost in the window (previous Friday 00:00 UTC through this Friday). Skip when profit is 0. Optional `TREASURY_FRIDAY_BUDGET_USD` is a ceiling on that profit, not a default. Selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Native check is list-price quote + gas reserve (0.001 ETH on Ethereum, 0.0001 ETH on Base/Arbitrum/Optimism, 0.001 SOL). Idempotent per Friday.
 
 Collectors see the policy on home, Open Lane, listing (buy-now), collection pages, and `/docs#fees`.
 

@@ -6,9 +6,11 @@
  * - Eligible: published, minted, not delisted, unsold buy-now (fixed / live timed
  *   window), not an open edition, not the treasury’s own listing/wallets.
  * - Order: SHA-256(windowId + listingId) — deterministic, not newest-first.
- * - Cap: `TREASURY_FRIDAY_BUDGET_USD` (default $50). First candidate whose
- *   list price fits the cap and whose chain treasury native balance covers the
- *   quoted amount.
+ * - Cap: that UTC week's treasury profit (0.5% sale fees + Featured boosts
+ *   from previous Friday 00:00 through this Friday). Skip when profit ≤ 0.
+ *   Optional `TREASURY_FRIDAY_BUDGET_USD` is a ceiling on that profit, not a
+ *   default. Native balance on the listing network must cover list price + gas
+ *   reserve.
  * - On-chain pay: only if `TREASURY_EVM_SIGNER_PRIVATE_KEY` /
  *   `TREASURY_SOLANA_SIGNER_SECRET_KEY` derives the platform treasury or
  *   operator address. Safe/Squads treasuries cannot be spent with a single key;
@@ -27,6 +29,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { prisma } from "@/lib/db";
 import { getNetwork, rpcUrlFor, type NetworkId } from "@/lib/chains/registry";
 import type { Listing } from "@/lib/discovery/types";
+import { FEATURED_BOOST_USD } from "@/lib/fees/featured-boost";
 import { platformFeeRecipients } from "@/lib/fees/platform";
 import { listingIsMinted, settlementAddressFor } from "@/lib/marketplace/crypto-purchase";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
@@ -36,14 +39,28 @@ import { expireStalePendingPurchases, listClosedPrimarySaleIds } from "@/lib/mar
 import { purchaseReservesSupply } from "@/lib/marketplace/lifecycle";
 import { quoteNativeFromUsd } from "@/lib/onchain/fx";
 
-export const DEFAULT_TREASURY_FRIDAY_BUDGET_USD = 50;
 export const TREASURY_FRIDAY_MAX_WORKS = 1;
+
+/**
+ * Extra native the signer must hold besides the USD-quoted purchase.
+ * Balance checks use listing-chain treasury/operator; the send is a simple
+ * native transfer (`21000` gas EVM / `SystemProgram.transfer` Solana).
+ */
+export const FRIDAY_BUY_GAS_RESERVE: Record<NetworkId, bigint> = {
+  ethereum: 1_000_000_000_000_000n, // 0.001 ETH
+  base: 100_000_000_000_000n, // 0.0001 ETH
+  arbitrum: 100_000_000_000_000n,
+  optimism: 100_000_000_000_000n,
+  solana: 1_000_000n, // 0.001 SOL
+  boing: 0n,
+};
 
 export type FridayTreasuryBuyStatus =
   | "purchased"
   | "queued"
   | "skipped_no_funds"
   | "skipped_no_listings"
+  | "skipped_no_profit"
   | "skipped_not_friday"
   | "skipped_error";
 
@@ -64,13 +81,100 @@ export type FridayTreasuryBuyRecord = {
 export type FridayTreasuryBuyResult = FridayTreasuryBuyRecord & {
   alreadyRan: boolean;
   signerAvailable: boolean;
+  weekProfitUsd: number;
 };
 
-export function fridayBudgetUsd(): number {
+/** Optional ceiling on weekly profit. Unset = no extra cap. */
+export function fridayBudgetCeilingUsd(): number | null {
   const raw = process.env.TREASURY_FRIDAY_BUDGET_USD?.trim();
-  const n = raw ? Number(raw) : DEFAULT_TREASURY_FRIDAY_BUDGET_USD;
-  if (!Number.isFinite(n) || n <= 0) return DEFAULT_TREASURY_FRIDAY_BUDGET_USD;
-  return Math.min(n, 10_000);
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+export function applyFridayBudgetCeiling(weekProfitUsd: number): number {
+  const profit = Math.max(0, weekProfitUsd);
+  const ceiling = fridayBudgetCeilingUsd();
+  if (ceiling == null) return profit;
+  return Math.min(profit, ceiling);
+}
+
+/** Previous Friday 00:00 UTC → this Friday (through `now`, not past end-of-day). */
+export function fridayProfitWindowMs(
+  windowId: string,
+  now = Date.now(),
+): { startMs: number; endMs: number } {
+  const fridayStart = Date.parse(`${windowId}T00:00:00.000Z`);
+  const startMs = fridayStart - 7 * 24 * 60 * 60 * 1000;
+  const fridayEnd = fridayStart + 24 * 60 * 60 * 1000;
+  return { startMs, endMs: Math.min(now, fridayEnd) };
+}
+
+function roundUsd(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function nativeNeededForFridayBuy(input: {
+  amountUsd: number;
+  chain: Listing["chain"];
+  network: NetworkId;
+}): { purchase: bigint; gasReserve: bigint; total: bigint; symbol: string } {
+  const quote = quoteNativeFromUsd(input.amountUsd, input.chain);
+  const gasReserve = FRIDAY_BUY_GAS_RESERVE[input.network] ?? 0n;
+  return {
+    purchase: quote.baseUnits,
+    gasReserve,
+    total: quote.baseUnits + gasReserve,
+    symbol: quote.symbol,
+  };
+}
+
+export async function computeWeekTreasuryProfitUsd(input: {
+  windowId: string;
+  now?: number;
+  memory?: boolean;
+}): Promise<number> {
+  const now = input.now ?? Date.now();
+  const { startMs, endMs } = fridayProfitWindowMs(input.windowId, now);
+  let fees = 0;
+  let boosts = 0;
+
+  if (input.memory) {
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    for (const p of getMemoryPurchases()) {
+      const status = p.status ?? "completed";
+      if (status !== "completed" && status !== "pending_transfer") continue;
+      const at = p.soldAt ?? 0;
+      if (at < startMs || at >= endMs) continue;
+      fees += Number(p.feeTreasuryUsd ?? 0);
+    }
+    const { getDiscoveryEngine } = await import("@/lib/marketplace/service");
+    const engine = await getDiscoveryEngine();
+    for (const listing of engine.state.listings.values()) {
+      const boosted = listing.featuredBoostedAt;
+      if (boosted != null && boosted >= startMs && boosted < endMs) {
+        boosts += FEATURED_BOOST_USD;
+      }
+    }
+  } else {
+    const feeAgg = await prisma.purchase.aggregate({
+      _sum: { feeTreasuryUsd: true },
+      where: {
+        status: { in: ["completed", "pending_transfer"] },
+        createdAt: { gte: new Date(startMs), lt: new Date(endMs) },
+      },
+    });
+    fees = Number(feeAgg._sum.feeTreasuryUsd ?? 0);
+    const boosted = await prisma.listing.count({
+      where: {
+        featuredBoostedAt: { gte: new Date(startMs), lt: new Date(endMs) },
+      },
+    });
+    boosts = boosted * FEATURED_BOOST_USD;
+  }
+
+  return roundUsd(fees + boosts);
 }
 
 /** UTC Friday date for `now`, or null when it is not Friday (unless `force`). */
@@ -181,9 +285,13 @@ export function selectFridayTreasuryCandidate(input: {
 
   let sawUnaffordable = false;
   for (const row of eligible) {
-    const quote = quoteNativeFromUsd(row.amountUsd, row.listing.chain);
+    const needed = nativeNeededForFridayBuy({
+      amountUsd: row.amountUsd,
+      chain: row.listing.chain,
+      network: row.network,
+    });
     const bal = input.nativeBalance(row.network);
-    if (bal == null || bal < quote.baseUnits) {
+    if (bal == null || bal < needed.total) {
       sawUnaffordable = true;
       continue;
     }
@@ -432,6 +540,8 @@ export async function runFridayTreasuryBuys(input?: {
   /** Injected balances (tests). Missing networks fall through to RPC unless skipFetch. */
   balances?: Partial<Record<NetworkId, bigint | null>>;
   skipBalanceFetch?: boolean;
+  /** Injected weekly treasury profit in USD (tests). */
+  weekProfitUsd?: number;
 }): Promise<FridayTreasuryBuyResult> {
   const now = input?.now ?? Date.now();
   const force = Boolean(input?.force);
@@ -452,6 +562,7 @@ export async function runFridayTreasuryBuys(input?: {
       createdAt: now,
       alreadyRan: false,
       signerAvailable,
+      weekProfitUsd: 0,
     };
   }
 
@@ -461,8 +572,28 @@ export async function runFridayTreasuryBuys(input?: {
   const memory = mode === "memory" || isMemoryMode();
 
   const existing = await loadExisting(memory, windowId);
+  const weekProfitUsd =
+    input?.weekProfitUsd != null
+      ? roundUsd(input.weekProfitUsd)
+      : await computeWeekTreasuryProfitUsd({ windowId, now, memory });
   if (existing) {
-    return { ...existing, alreadyRan: true, signerAvailable };
+    return { ...existing, alreadyRan: true, signerAvailable, weekProfitUsd };
+  }
+
+  const budgetUsd = applyFridayBudgetCeiling(weekProfitUsd);
+  if (!(budgetUsd > 0)) {
+    const row = await persistBuy(memory, {
+      windowId,
+      status: "skipped_no_profit",
+      listingId: null,
+      purchaseId: null,
+      amountUsd: null,
+      chain: null,
+      network: null,
+      reason: `week_profit_usd=${weekProfitUsd}`,
+      paymentTxHash: null,
+    });
+    return { ...row, alreadyRan: false, signerAvailable, weekProfitUsd };
   }
 
   const { getDiscoveryEngine, purchaseListing } = await import(
@@ -508,7 +639,7 @@ export async function runFridayTreasuryBuys(input?: {
     creators: engine.state.creators,
     soldIds: taken,
     windowId,
-    budgetUsd: fridayBudgetUsd(),
+    budgetUsd,
     treasuryAddrs: treasuryAddressSet(),
     nativeBalance: (network) => {
       if (network in injected) {
@@ -534,7 +665,7 @@ export async function runFridayTreasuryBuys(input?: {
       reason: picked.reason,
       paymentTxHash: null,
     });
-    return { ...row, alreadyRan: false, signerAvailable };
+    return { ...row, alreadyRan: false, signerAvailable, weekProfitUsd };
   }
 
   const { listing, amountUsd, network } = picked.candidate;
@@ -546,7 +677,7 @@ export async function runFridayTreasuryBuys(input?: {
   let purchaseId: string | null = null;
   let status: FridayTreasuryBuyStatus = "queued";
   let reason =
-    "intent_recorded_no_treasury_signer — Safe/Squads cannot be spent with a single key";
+    `intent_recorded_no_treasury_signer — Safe/Squads cannot be spent with a single key; week_profit_usd=${weekProfitUsd}`;
 
   const canPayThisChain =
     (getNetwork(network).vm === "evm" && loadTreasuryEvmSigner()) ||
@@ -604,5 +735,5 @@ export async function runFridayTreasuryBuys(input?: {
     reason,
     paymentTxHash,
   });
-  return { ...row, alreadyRan: false, signerAvailable };
+  return { ...row, alreadyRan: false, signerAvailable, weekProfitUsd };
 }

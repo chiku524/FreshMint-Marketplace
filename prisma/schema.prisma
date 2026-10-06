@@ -443,7 +443,7 @@ model TreasuryFridayBuy {
   id            String   @id @default(cuid())
   /// UTC Friday calendar date (YYYY-MM-DD)
   windowId      String   @unique
-  /// purchased | queued | skipped_no_funds | skipped_no_listings | skipped_not_friday | skipped_error
+  /// purchased | queued | skipped_no_funds | skipped_no_listings | skipped_no_profit | skipped_not_friday | skipped_error
   status        String
   listingId     String?
   purchaseId    String?
