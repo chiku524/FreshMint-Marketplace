@@ -136,6 +136,76 @@ describe("marketplace service (memory mode)", () => {
     expect("softLaunchBlocked" in result && result.softLaunchBlocked).toBe(true);
   });
 
+  it("reuses the creator's own draft on duplicate media retry", async () => {
+    const media = `retry-media-${Date.now()}`;
+    const first = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "First Draft",
+      description: "kept after partial batch",
+      type: "single",
+      chain: "evm",
+      priceUsd: 10,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: media,
+      publishSoftLaunch: false,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const retry = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Retry Title",
+      description: "updated on retry",
+      type: "single",
+      chain: "evm",
+      priceUsd: 11,
+      medium: "digital",
+      styleTags: ["retry"],
+      mediaContent: media,
+      publishSoftLaunch: false,
+    });
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.listing.id).toBe(first.listing.id);
+    expect(retry.listing.title).toBe("Retry Title");
+    expect("reused" in retry && retry.reused).toBe(true);
+  });
+
+  it("still blocks another creator from copying the same media", async () => {
+    const media = `foreign-media-${Date.now()}`;
+    const first = await createListingForUser({
+      creatorId: "artist-fresh",
+      title: "Original",
+      description: "original artwork copy check",
+      type: "single",
+      chain: "evm",
+      priceUsd: 10,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: media,
+    });
+    expect(first.ok).toBe(true);
+
+    const stolen = await createListingForUser({
+      creatorId: "artist-nova",
+      title: "Copy",
+      description: "attempted duplicate artwork",
+      type: "single",
+      chain: "evm",
+      priceUsd: 10,
+      medium: "digital",
+      styleTags: [],
+      mediaContent: media,
+    });
+    expect(stolen.ok).toBe(false);
+    if (!stolen.ok) {
+      expect(stolen.errors.some((e) => e.startsWith("duplicate_media:"))).toBe(
+        true,
+      );
+    }
+  });
+
   it("rejects duplicate collection slugs and stores a unique slug", async () => {
     const first = await createCollectionForUser({
       creatorId: "artist-fresh",

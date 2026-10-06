@@ -113,6 +113,194 @@ export function hashMedia(content: string): string {
   return hashTextMedia(content);
 }
 
+type CreateListingReuseInput = {
+  creatorId: string;
+  title: string;
+  description: string;
+  type: ListingType;
+  chain: Chain;
+  network: NetworkId;
+  priceUsd?: number | null;
+  medium: string;
+  styleTags: string[];
+  mediaHash: string;
+  mediaUrl: string | null;
+  metadataComplete?: boolean;
+  originalMedia?: boolean;
+  oeStartsAt?: string | null;
+  oeEndsAt?: string | null;
+  auctionStartsAt?: string | null;
+  auctionEndsAt?: string | null;
+  saleMode?: "fixed" | "timed_window" | "english" | string | null;
+  startingBidUsd?: number | null;
+  reserveUsd?: number | null;
+  collectionId?: string | null;
+  isCollectionHero?: boolean;
+  traits?: { trait_type: string; value: string }[];
+  maxSupply?: number | null;
+  publishSoftLaunch?: boolean;
+};
+
+/**
+ * Reuse an existing same-creator listing on create/mint retry so partial
+ * batches do not fail with duplicate_media after drafts were already kept.
+ */
+async function reuseDraftListingForCreate(opts: {
+  engine: DiscoveryEngine;
+  existing: Listing;
+  input: CreateListingReuseInput;
+}): Promise<
+  | { ok: true; listing: Listing; errors: string[]; reused: true }
+  | {
+      ok: true;
+      listing: Listing;
+      errors: string[];
+      softLaunchBlocked: true;
+      reused: true;
+    }
+> {
+  const { engine, existing, input } = opts;
+  const traits = parseTraits(input.traits ?? []);
+  const maxSupply =
+    input.maxSupply != null && input.maxSupply > 0 ? input.maxSupply : null;
+  const saleMode =
+    (input.saleMode as string | undefined) ??
+    (input.type === "auction" ? "timed_window" : "fixed");
+
+  // Only refresh editable fields while still a draft — don't rewrite live works.
+  if (existing.stage === "draft") {
+    const next: Listing = {
+      ...existing,
+      title: input.title,
+      description: input.description,
+      type: input.type,
+      chain: input.chain,
+      network: input.network,
+      priceUsd: input.priceUsd ?? null,
+      medium: input.medium,
+      styleTags: input.styleTags,
+      mediaUrl: input.mediaUrl ?? existing.mediaUrl,
+      metadataComplete: input.metadataComplete ?? existing.metadataComplete,
+      originalMedia: input.originalMedia ?? existing.originalMedia,
+      oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt).getTime() : null,
+      oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt).getTime() : null,
+      auctionStartsAt: input.auctionStartsAt
+        ? new Date(input.auctionStartsAt).getTime()
+        : null,
+      auctionEndsAt: input.auctionEndsAt
+        ? new Date(input.auctionEndsAt).getTime()
+        : null,
+      saleMode,
+      startingBidUsd: input.startingBidUsd ?? null,
+      reserveUsd: input.reserveUsd ?? null,
+      collectionId: input.collectionId ?? existing.collectionId,
+      isCollectionHero: Boolean(
+        input.isCollectionHero ?? existing.isCollectionHero,
+      ),
+      traits,
+      maxSupply,
+    };
+
+    if (await inMemoryMode()) {
+      engine.state.listings.set(existing.id, next);
+      if (
+        input.collectionId &&
+        existing.collectionId !== input.collectionId
+      ) {
+        const attached = attachListingToCollectionState(
+          engine.state.collections,
+          input.collectionId,
+          existing.id,
+          Boolean(input.isCollectionHero),
+          input.creatorId,
+        );
+        if (!attached.ok) {
+          engine.state.listings.set(existing.id, existing);
+          return {
+            ok: true as const,
+            listing: existing,
+            errors: attached.errors,
+            reused: true as const,
+          };
+        }
+      }
+    } else {
+      await prisma.listing.update({
+        where: { id: existing.id },
+        data: {
+          title: next.title,
+          description: next.description,
+          type: next.type,
+          chain: next.chain,
+          network: next.network,
+          priceUsd: next.priceUsd,
+          medium: next.medium,
+          styleTagsJson: JSON.stringify(next.styleTags),
+          mediaUrl: next.mediaUrl,
+          metadataComplete: next.metadataComplete,
+          originalMedia: next.originalMedia,
+          oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt) : null,
+          oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt) : null,
+          auctionStartsAt: input.auctionStartsAt
+            ? new Date(input.auctionStartsAt)
+            : null,
+          auctionEndsAt: input.auctionEndsAt
+            ? new Date(input.auctionEndsAt)
+            : null,
+          saleMode,
+          startingBidUsd: next.startingBidUsd,
+          reserveUsd: next.reserveUsd,
+          collectionId: next.collectionId,
+          isCollectionHero: next.isCollectionHero,
+          traitsJson: JSON.stringify(traits),
+          maxSupply: next.maxSupply,
+        },
+      });
+      if (
+        input.collectionId &&
+        existing.collectionId !== input.collectionId
+      ) {
+        await syncCollectionMembership({
+          collectionId: input.collectionId,
+          listingId: existing.id,
+          creatorId: input.creatorId,
+          isHero: Boolean(input.isCollectionHero),
+        });
+      }
+      engine.state.listings.set(existing.id, next);
+    }
+
+    if (input.publishSoftLaunch) {
+      const staged = await transitionListingStage(existing.id, "soft_launch");
+      if (staged.ok) {
+        return { ...staged, reused: true as const };
+      }
+      const draftListing = engine.state.listings.get(existing.id) ?? next;
+      return {
+        ok: true as const,
+        listing: draftListing,
+        errors: staged.errors,
+        softLaunchBlocked: true as const,
+        reused: true as const,
+      };
+    }
+
+    return {
+      ok: true as const,
+      listing: engine.state.listings.get(existing.id) ?? next,
+      errors: [] as string[],
+      reused: true as const,
+    };
+  }
+
+  return {
+    ok: true as const,
+    listing: existing,
+    errors: [] as string[],
+    reused: true as const,
+  };
+}
+
 export async function createListingForUser(input: {
   creatorId: string;
   title: string;
@@ -141,6 +329,8 @@ export async function createListingForUser(input: {
   traits?: { trait_type: string; value: string }[];
   maxSupply?: number | null;
   publishSoftLaunch?: boolean;
+  /** Secondary resale must copy origin media; skip anti-dupe for that path. */
+  allowDuplicateMedia?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
   const network = resolveNetwork(input.network, input.chain);
@@ -191,6 +381,55 @@ export async function createListingForUser(input: {
     const cal = await validateDropWindow({ type: input.type, startsAt, endsAt });
     if (!cal.ok) {
       return { ok: false as const, errors: cal.errors };
+    }
+  }
+
+  // Idempotent create/mint retry: same creator + exact media already in this
+  // collection (draft or minted) — return that row instead of failing with
+  // duplicate_media after a partial batch kept successful drafts.
+  let skipDuplicateCheck = Boolean(input.allowDuplicateMedia);
+  if (!input.allowDuplicateMedia) {
+    const sameMedia = [...engine.state.listings.values()].filter(
+      (l) => !l.delisted && l.mediaHash === mediaHash,
+    );
+    const foreign = sameMedia.find((l) => l.creatorId !== input.creatorId);
+    if (foreign) {
+      return {
+        ok: false as const,
+        errors: [`duplicate_media:${foreign.id}`],
+      };
+    }
+    const ownCompatible = sameMedia.filter(
+      (l) =>
+        l.creatorId === input.creatorId &&
+        (!input.collectionId ||
+          !l.collectionId ||
+          l.collectionId === input.collectionId),
+    );
+    const reusable =
+      (input.collectionId
+        ? ownCompatible.find((l) => l.collectionId === input.collectionId)
+        : null) ??
+      ownCompatible.find((l) => l.stage === "draft" && !l.collectionId) ??
+      ownCompatible.find((l) => l.stage === "draft") ??
+      ownCompatible[0];
+    if (reusable) {
+      return reuseDraftListingForCreate({
+        engine,
+        existing: reusable,
+        input: {
+          ...input,
+          mediaHash,
+          mediaUrl,
+          chain,
+          network,
+        },
+      });
+    }
+    // Same creator already used this media in another collection — allow a
+    // new draft here; still block cross-creator copies via foreign check above.
+    if (sameMedia.some((l) => l.creatorId === input.creatorId)) {
+      skipDuplicateCheck = true;
     }
   }
 
@@ -252,9 +491,41 @@ export async function createListingForUser(input: {
     tokenId: null,
   };
 
-  // Validate against current inventory duplicates / quality.
-  const validation = engine.createListing(draft);
+  // Validate quality / rate limits. Duplicate media: block other creators;
+  // own published copies are allowed only via allowDuplicateMedia (resale)
+  // or when reusing / placing the same media in another collection.
+  const validation = engine.createListing(draft, {
+    skipDuplicateCheck,
+  });
   if (!validation.ok) {
+    const dupError = validation.errors.find((e) =>
+      e.startsWith("duplicate_media:"),
+    );
+    if (dupError && !input.allowDuplicateMedia) {
+      const matchedId = dupError.slice("duplicate_media:".length);
+      const matched = engine.state.listings.get(matchedId);
+      if (
+        matched &&
+        matched.creatorId === input.creatorId &&
+        (!input.collectionId ||
+          !matched.collectionId ||
+          matched.collectionId === input.collectionId)
+      ) {
+        engine.state.listings.delete(draft.id);
+        return reuseDraftListingForCreate({
+          engine,
+          existing: matched,
+          input: {
+            ...input,
+            mediaHash,
+            mediaUrl,
+            chain,
+            network,
+          },
+        });
+      }
+    }
+    engine.state.listings.delete(draft.id);
     return { ok: false as const, errors: validation.errors };
   }
 

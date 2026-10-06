@@ -122,6 +122,13 @@ function uploadErrorMessage(code: string | undefined, fallback = "upload_failed"
   return code || fallback;
 }
 
+function listingErrorMessage(raw: string): string {
+  if (raw.startsWith("duplicate_media:")) {
+    return "This artwork file was already used on another listing. Use a different file, or continue minting the draft that was kept.";
+  }
+  return raw;
+}
+
 function makeHttpError(
   message: string,
   status: number,
@@ -1152,12 +1159,11 @@ export function CreateWizard() {
               });
               const data = await res.json();
               if (!res.ok) {
-                throw makeHttpError(
+                const raw =
                   (data.errors && data.errors.join(", ")) ||
-                    data.error ||
-                    "listing_failed",
-                  res.status,
-                );
+                  data.error ||
+                  "listing_failed";
+                throw makeHttpError(listingErrorMessage(String(raw)), res.status);
               }
               const lid = String(data.listing?.id ?? data.id ?? "");
               if (!lid) throw makeHttpError("listing_failed", 502);
@@ -1179,10 +1185,16 @@ export function CreateWizard() {
       if (listingFail.length) {
         const sample = listingFail
           .slice(0, 2)
-          .map((f) => ("error" in f ? f.error.message : "listing_failed"))
+          .map((f) =>
+            listingErrorMessage(
+              "error" in f ? f.error.message : "listing_failed",
+            ),
+          )
           .join("; ");
         throw new Error(
-          `Created ${listingOk.length} of ${pieces.length} listings — ${listingFail.length} failed${sample ? ` (${sample})` : ""}. Fix and retry mint; successful drafts were kept.`,
+          listingOk.length === 0
+            ? `Could not create listings (${sample || "unknown error"}). Fix the files or media conflicts and try again — nothing new was saved.`
+            : `Created ${listingOk.length} of ${pieces.length} listings — ${listingFail.length} failed${sample ? ` (${sample})` : ""}. Successful drafts were kept; retry mint to continue with those plus any fixed files.`,
         );
       }
       const listingIds = listingOk
