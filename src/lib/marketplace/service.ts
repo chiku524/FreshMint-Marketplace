@@ -1287,7 +1287,7 @@ export async function prepareCollectionPublishMints(input: {
     let contractProbe = await probeExists(contract);
 
     // DB may say deploy-ready while the stored AccountId is wrong/dead — heal.
-    if (contractProbe === "missing" && creator) {
+    if (contractProbe !== "exists" && creator) {
       const found = await findBoingNftCollectionDeploy({
         senderAddress: creator,
         assetName: collection.title.trim().slice(0, 32),
@@ -1396,24 +1396,58 @@ export async function confirmCollectionMintBatch(input: {
   const mode = await ensureDatabaseReady();
   const memory = mode === "memory" || isMemoryMode();
 
+  let mintTxHash = input.txHash;
+  const tokenIds = input.tokenIds ?? [];
+  const contractAddress =
+    input.contractAddress?.trim() || collection.contractAddress || null;
+  /** True after mempool-ok path already verified token owners on-chain. */
+  let boingOwnershipVerified = false;
+
   if (network === "boing") {
     const {
       isBoingMempoolPlaceholderTxId,
       isProvisionalBoingCollectionAddress,
+      waitForBoingNftTokensMinted,
       waitForBoingTransactionReceipt,
     } = await import("@/lib/onchain/boing");
-    // Mempool `"ok"` / pending markers are not receipt keys — do not confirm mint.
     if (
-      isBoingMempoolPlaceholderTxId(input.txHash) ||
-      input.txHash.startsWith("simulated-mint:")
+      !contractAddress ||
+      isProvisionalBoingCollectionAddress(collection.id, contractAddress)
     ) {
-      if (input.txHash.startsWith("simulated-mint:") && memory) {
-        // Allow simulated confirms in memory/dev flows only.
-      } else {
-        return { ok: false as const, error: "boing_tx_id_required" };
+      return { ok: false as const, error: "boing_collection_account_missing" };
+    }
+
+    if (mintTxHash.startsWith("simulated-mint:")) {
+      if (!memory) {
+        return { ok: false as const, error: "simulated_mint_not_allowed" };
       }
+    } else if (isBoingMempoolPlaceholderTxId(mintTxHash)) {
+      // Wallet returned mempool `"ok"` — wait for tokens on-chain, then stamp
+      // a stable sync hash (pending: markers are not gallery-visible).
+      const provisionalTokenIds =
+        tokenIds.length > 0
+          ? tokenIds
+          : input.listingIds.map((id, i) => {
+              const listing = engine.state.listings.get(id);
+              return listing?.tokenId ?? String(i + 1);
+            });
+      const minted = await waitForBoingNftTokensMinted({
+        collection: contractAddress,
+        tokenIds: provisionalTokenIds,
+        timeoutMs: 90_000,
+        intervalMs: 1_500,
+      });
+      if (!minted.ok) {
+        return { ok: false as const, error: minted.error };
+      }
+      boingOwnershipVerified = true;
+      mintTxHash = `0x${createHash("sha256")
+        .update(
+          `boing-mint-sync:${collection.id}:${contractAddress}:${provisionalTokenIds.join(",")}`,
+        )
+        .digest("hex")}`;
     } else {
-      const receipt = await waitForBoingTransactionReceipt(input.txHash, {
+      const receipt = await waitForBoingTransactionReceipt(mintTxHash, {
         timeoutMs: 45_000,
         intervalMs: 1_200,
       });
@@ -1421,21 +1455,9 @@ export async function confirmCollectionMintBatch(input: {
         return { ok: false as const, error: receipt.error };
       }
     }
-    const contractCandidate =
-      input.contractAddress?.trim() || collection.contractAddress || null;
-    if (
-      !contractCandidate ||
-      isProvisionalBoingCollectionAddress(collection.id, contractCandidate)
-    ) {
-      return { ok: false as const, error: "boing_collection_account_missing" };
-    }
-  } else if (input.txHash.startsWith("simulated-mint:") && !memory) {
+  } else if (mintTxHash.startsWith("simulated-mint:") && !memory) {
     return { ok: false as const, error: "simulated_mint_not_allowed" };
   }
-
-  const contractAddress =
-    input.contractAddress?.trim() || collection.contractAddress || null;
-  const tokenIds = input.tokenIds ?? [];
 
   const mintedDraftIds: string[] = [];
   const skippedUnverified: Array<{ listingId: string; error: string }> = [];
@@ -1448,7 +1470,13 @@ export async function confirmCollectionMintBatch(input: {
 
     // Post-receipt safeguard: Boing token must resolve an owner on-chain
     // before we stamp mint fields / soft-launch (skip when RPC unknown).
-    if (network === "boing" && !memory && !input.txHash.startsWith("simulated-mint:")) {
+    // Mempool-ok path already waited for ownership above.
+    if (
+      network === "boing" &&
+      !memory &&
+      !boingOwnershipVerified &&
+      !mintTxHash.startsWith("simulated-mint:")
+    ) {
       const { getBoingNftOwner } = await import("@/lib/onchain/boing");
       const ownerProbe = await getBoingNftOwner({
         collection: contractAddress!,
@@ -1467,7 +1495,7 @@ export async function confirmCollectionMintBatch(input: {
 
     const next = {
       ...listing,
-      mintTxHash: input.txHash,
+      mintTxHash,
       tokenId,
       contractAddress: contractAddress ?? listing.contractAddress,
     };
@@ -1477,7 +1505,7 @@ export async function confirmCollectionMintBatch(input: {
       await prisma.listing.update({
         where: { id: listingId },
         data: {
-          mintTxHash: input.txHash,
+          mintTxHash,
           tokenId,
           ...(contractAddress ? { contractAddress } : {}),
         },
@@ -1540,7 +1568,7 @@ export async function confirmCollectionMintBatch(input: {
 
   return {
     ok: true as const,
-    txHash: input.txHash,
+    txHash: mintTxHash,
     softLaunched,
     softLaunchErrors,
     skippedUnverified,

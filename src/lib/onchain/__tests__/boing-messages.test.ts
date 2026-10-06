@@ -20,6 +20,12 @@ describe("formatBoingMintUserMessage", () => {
     );
   });
 
+  it("humanizes mempool-ok mint without receipt id", () => {
+    expect(formatBoingMintUserMessage("boing_tx_id_required")).toMatch(
+      /mempool|not readable on-chain/i,
+    );
+  });
+
   it("passes through unrelated errors", () => {
     expect(formatBoingMintUserMessage("listing_failed")).toBe("listing_failed");
   });

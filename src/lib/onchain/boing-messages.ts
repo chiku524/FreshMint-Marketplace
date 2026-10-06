@@ -30,11 +30,17 @@ export function formatBoingMintUserMessage(error: string | undefined): string {
   ) {
     return "Connect your Boing Express wallet (32-byte account id) and ensure the collection has a real contract address.";
   }
-  if (code === "boing_tx_id_required") {
-    return "Boing wallet did not return a transaction id (mempool ok is not a mint receipt). Wait a moment and retry this batch.";
+  if (
+    code === "boing_tx_id_required" ||
+    code === "boing_tx_id_not_receipt_fetchable"
+  ) {
+    return "Boing accepted the mint into the mempool, but tokens are not readable on-chain yet. Wait a few seconds and retry this batch.";
   }
-  if (code === "boing_token_not_on_chain") {
-    return "Mint receipt landed, but the token is not readable on Boing yet. Wait a moment and retry Mint & publish.";
+  if (
+    code === "boing_token_not_on_chain" ||
+    code === "boing_receipt_timeout"
+  ) {
+    return "Mint was submitted, but the token is not readable on Boing yet. Wait a moment and retry Mint & publish.";
   }
   if (code === "simulated_mint_not_allowed") {
     return "Wallet mint is required — simulated mint hashes are not accepted on live chains.";

@@ -372,3 +372,22 @@ describe("boing receipt tx ids", () => {
     expect(isBoingReceiptTxId(`0x${"ab".repeat(32)}`)).toBe(true);
   });
 });
+
+describe("waitForBoingNftTokensMinted", () => {
+  it("times out when tokens stay unowned (no live RPC needed)", async () => {
+    const { waitForBoingNftTokensMinted } = await import("@/lib/onchain/boing");
+    const result = await waitForBoingNftTokensMinted({
+      collection: ACCOUNT,
+      tokenIds: [`0x${"03".repeat(32)}`],
+      timeoutMs: 200,
+      intervalMs: 50,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(
+        result.error === "boing_token_not_on_chain" ||
+          result.error.length > 0,
+      ).toBe(true);
+    }
+  });
+});

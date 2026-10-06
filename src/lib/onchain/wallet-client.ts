@@ -330,13 +330,17 @@ export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
 }
 
 /**
- * Mint confirms require a receipt-fetchable 32-byte tx id.
- * Mempool `{ tx_hash: "ok" }` is not a real id — do not confirm on it.
+ * Prefer a real 32-byte tx id. When Boing only returns mempool `{ tx_hash: "ok" }`,
+ * return a pending marker so confirm can wait for on-chain token ownership
+ * (same pattern as deploy sync) instead of failing the mint immediately.
  */
 export async function sendBoingMintWalletTx(tx: BoingWalletTx): Promise<string> {
   const sent = await sendBoingWalletTxDetailed(tx);
   if (sent.txHash && /^0x[0-9a-fA-F]{64}$/.test(sent.txHash.trim())) {
     return sent.txHash.trim().toLowerCase();
+  }
+  if (sent.mempoolAccepted) {
+    return pendingBoingAcceptedTxHash();
   }
   throw new Error("boing_tx_id_required");
 }

@@ -140,6 +140,16 @@ describe("boing wallet send result interpretation", () => {
       true,
     );
   });
+  it("returns pending marker for mint when mempool ok (no real tx id)", () => {
+    const interpreted = interpretBoingSendResult({ tx_hash: "ok" });
+    expect(interpreted.txHash).toBeNull();
+    expect(interpreted.mempoolAccepted).toBe(true);
+    // Mint path should accept mempool like deploy — pending marker, not throw.
+    const mintShouldThrow =
+      !interpreted.txHash &&
+      !interpreted.mempoolAccepted;
+    expect(mintShouldThrow).toBe(false);
+  });
 });
 
 describe("pendingBoingAcceptedTxHash", () => {

@@ -1323,6 +1323,13 @@ export function CreateWizard() {
                   confirm.status,
                 );
               }
+              // Prefer sync hash from mempool-ok confirm over pending: marker.
+              if (
+                typeof confirmData.txHash === "string" &&
+                confirmData.txHash.length >= 8
+              ) {
+                txHash = confirmData.txHash;
+              }
             },
             { retries: 3, baseDelayMs: 400, maxDelayMs: 4_000 },
           );

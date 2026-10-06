@@ -687,6 +687,63 @@ export async function waitForBoingTransactionReceipt(
   return { ok: false, error: "boing_receipt_timeout" };
 }
 
+/**
+ * When the wallet only returns mempool `"ok"` (no receipt-fetchable tx id),
+ * wait until reference-NFT token ids resolve owners on-chain before confirming mint.
+ * Polls the first token until owned, then verifies the full set once.
+ */
+export async function waitForBoingNftTokensMinted(input: {
+  collection: string;
+  tokenIds: string[];
+  timeoutMs?: number;
+  intervalMs?: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const tokenIds = input.tokenIds.map((t) => t.trim()).filter(Boolean);
+  if (!tokenIds.length) {
+    return { ok: false, error: "boing_token_not_on_chain" };
+  }
+  const collection = normalizeBoingAccountId(input.collection);
+  if (!isBoingNativeAccountIdHex(collection)) {
+    return { ok: false, error: "boing_collection_required" };
+  }
+  const timeoutMs = input.timeoutMs ?? 90_000;
+  const intervalMs = input.intervalMs ?? 1_500;
+  const started = Date.now();
+  let lastError = "boing_token_not_on_chain";
+  const firstId = tokenIds[0]!;
+
+  while (Date.now() - started < timeoutMs) {
+    const first = await getBoingNftOwner({ collection, tokenId: firstId });
+    if (!first.ok) {
+      lastError = first.error;
+    } else if (!first.owner) {
+      lastError = "boing_token_not_on_chain";
+    } else {
+      // First token landed — verify the rest of the batch.
+      let allOwned = true;
+      for (let i = 1; i < tokenIds.length; i++) {
+        const probe = await getBoingNftOwner({
+          collection,
+          tokenId: tokenIds[i]!,
+        });
+        if (!probe.ok) {
+          allOwned = false;
+          lastError = probe.error;
+          break;
+        }
+        if (!probe.owner) {
+          allOwned = false;
+          lastError = "boing_token_not_on_chain";
+          break;
+        }
+      }
+      if (allOwned) return { ok: true };
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { ok: false, error: lastError };
+}
+
 export async function verifyBoingTx(txHash: string): Promise<boolean> {
   if (isBoingMempoolPlaceholderTxId(txHash)) return false;
   try {
