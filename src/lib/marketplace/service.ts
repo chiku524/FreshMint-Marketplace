@@ -1040,20 +1040,17 @@ export async function prepareCollectionDeployForUser(input: {
   collectionId: string;
   creatorId: string;
   creatorAddress?: string | null;
+  /**
+   * When true on Boing: if the stored contract AccountId is missing on-chain,
+   * clear the fake "confirmed" deploy and return a fresh wallet deploy intent.
+   */
+  forceRedeploy?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
-  const collection = engine.state.collections.get(input.collectionId);
+  let collection = engine.state.collections.get(input.collectionId);
   if (!collection) return { ok: false as const, error: "collection_not_found" };
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
-  }
-  if (isCollectionDeployReady(collection)) {
-    return {
-      ok: true as const,
-      collection,
-      deployIntent: null,
-      alreadyDeployed: true as const,
-    };
   }
 
   const network = resolveNetwork(collection.network, collection.chain);
@@ -1064,6 +1061,44 @@ export async function prepareCollectionDeployForUser(input: {
       .get(input.creatorId)
       ?.wallets.find((w) => w.chain === chain)?.address ||
     "";
+
+  if (isCollectionDeployReady(collection)) {
+    if (input.forceRedeploy && network === "boing" && collection.contractAddress) {
+      const { probeBoingAccount, normalizeBoingAccountId } = await import(
+        "@/lib/onchain/boing"
+      );
+      let probe = await probeBoingAccount(
+        normalizeBoingAccountId(collection.contractAddress),
+      );
+      if (probe === "unknown") {
+        probe = await probeBoingAccount(
+          normalizeBoingAccountId(collection.contractAddress),
+        );
+      }
+      if (probe === "exists") {
+        return {
+          ok: true as const,
+          collection,
+          deployIntent: null,
+          alreadyDeployed: true as const,
+        };
+      }
+      // Dead / unreachable AccountId marked confirmed — clear so we can re-deploy.
+      const cleared = await clearCollectionDeployState({
+        collectionId: collection.id,
+        creatorId: input.creatorId,
+      });
+      if (!cleared.ok) return cleared;
+      collection = cleared.collection;
+    } else {
+      return {
+        ok: true as const,
+        collection,
+        deployIntent: null,
+        alreadyDeployed: true as const,
+      };
+    }
+  }
 
   const { buildCollectionDeployIntent } = await import("@/lib/onchain/collection");
   const deployIntent = buildCollectionDeployIntent({
@@ -1107,6 +1142,49 @@ export async function prepareCollectionDeployForUser(input: {
   };
 }
 
+/** Clear a falsely confirmed deploy so the owner can wallet-deploy again. */
+async function clearCollectionDeployState(input: {
+  collectionId: string;
+  creatorId: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, error: "collection_not_found" };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const { provisionalBoingCollectionAddress } = await import("@/lib/onchain/boing");
+  const network = resolveNetwork(existing.network, existing.chain);
+  const next: Collection = {
+    ...existing,
+    deployStatus: "pending_wallet",
+    deployTxHash: null,
+    contractAddress:
+      network === "boing"
+        ? provisionalBoingCollectionAddress(existing.id)
+        : null,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(existing.id, next);
+  } else {
+    await prisma.collection.update({
+      where: { id: existing.id },
+      data: {
+        deployStatus: "pending_wallet",
+        deployTxHash: null,
+        contractAddress: next.contractAddress,
+      },
+    });
+    engine.state.collections.set(existing.id, next);
+  }
+  return { ok: true as const, collection: next };
+}
+
 /**
  * Heal false "not deployed" when the collection already exists on-chain
  * (wallet succeeded but DB confirm never ran / stored a provisional address).
@@ -1124,9 +1202,6 @@ export async function syncCollectionDeployFromChain(input: {
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
   }
-  if (isCollectionDeployReady(collection)) {
-    return { ok: true as const, collection, synced: false as const };
-  }
 
   const network = resolveNetwork(collection.network, collection.chain);
   const chain = vmFromNetwork(network);
@@ -1136,6 +1211,63 @@ export async function syncCollectionDeployFromChain(input: {
       .get(input.creatorId)
       ?.wallets.find((w) => w.chain === chain)?.address ||
     "";
+
+  // Confirmed in DB but AccountId gone / never on-chain — try heal, else signal redeploy.
+  if (isCollectionDeployReady(collection) && network === "boing") {
+    const {
+      findBoingNftCollectionDeploy,
+      normalizeBoingAccountId,
+      probeBoingAccount,
+    } = await import("@/lib/onchain/boing");
+    const stored = normalizeBoingAccountId(collection.contractAddress!);
+    let probe = await probeBoingAccount(stored);
+    if (probe === "unknown") probe = await probeBoingAccount(stored);
+    if (probe === "exists") {
+      return { ok: true as const, collection, synced: false as const };
+    }
+    if (creatorAddress) {
+      const found = await findBoingNftCollectionDeploy({
+        senderAddress: creatorAddress,
+        assetName: collection.title.trim().slice(0, 32),
+        lookbackBlocks: 256,
+      });
+      if (found) {
+        const healed = normalizeBoingAccountId(found.contractAddress);
+        let healedProbe = await probeBoingAccount(healed);
+        if (healedProbe === "unknown") {
+          healedProbe = await probeBoingAccount(healed);
+        }
+        if (healedProbe === "exists") {
+          const syncTxHash = `0x${createHash("sha256")
+            .update(
+              `boing-sync:${collection.id}:${healed}:${found.blockHeight}`,
+            )
+            .digest("hex")}`;
+          const confirmed = await confirmCollectionDeploy({
+            collectionId: input.collectionId,
+            creatorId: input.creatorId,
+            txHash: syncTxHash,
+            contractAddress: healed,
+            escrowAddress: collection.escrowAddress,
+            creatorAddress,
+            nftTemplateVersion: collection.nftTemplateVersion,
+          });
+          if (confirmed.ok) {
+            return {
+              ok: true as const,
+              collection: confirmed.collection,
+              synced: true as const,
+            };
+          }
+        }
+      }
+    }
+    return { ok: false as const, error: "boing_collection_account_missing" };
+  }
+
+  if (isCollectionDeployReady(collection)) {
+    return { ok: true as const, collection, synced: false as const };
+  }
 
   let contractAddress = input.contractAddress?.trim() || null;
   let txHash = input.txHash?.trim() || collection.deployTxHash || null;
@@ -1163,6 +1295,7 @@ export async function syncCollectionDeployFromChain(input: {
       const found = await findBoingNftCollectionDeploy({
         senderAddress: creatorAddress,
         assetName: collection.title.trim().slice(0, 32),
+        lookbackBlocks: 256,
       });
       if (found) {
         contractAddress = found.contractAddress;
@@ -1291,10 +1424,12 @@ export async function prepareCollectionPublishMints(input: {
       const found = await findBoingNftCollectionDeploy({
         senderAddress: creator,
         assetName: collection.title.trim().slice(0, 32),
+        lookbackBlocks: 256,
       });
       if (found) {
         const healed = normalizeBoingAccountId(found.contractAddress);
-        if (healed !== contract) {
+        let healedProbe = await probeExists(healed);
+        if (healedProbe === "exists") {
           const syncTxHash = `0x${createHash("sha256")
             .update(
               `boing-sync:${collection.id}:${healed}:${found.blockHeight}`,
@@ -1307,6 +1442,7 @@ export async function prepareCollectionPublishMints(input: {
             contractAddress: healed,
             escrowAddress: collection.escrowAddress,
             creatorAddress: creator,
+            nftTemplateVersion: collection.nftTemplateVersion,
           });
           if (confirmed.ok) {
             collection = confirmed.collection;

@@ -15,7 +15,7 @@ export function formatBoingMintUserMessage(error: string | undefined): string {
     if (code.includes("creator")) {
       return "Boing wallet account not found on-chain. Open Boing Express, unlock the same wallet you linked, then retry.";
     }
-    return "This collection’s on-chain contract was not found on Boing. Re-deploy the collection (or sync deploy from the create wizard), then retry Mint & publish.";
+    return "This collection’s on-chain contract was not found on Boing. Mint & publish will prompt a re-deploy in your wallet — approve it, then mint again.";
   }
   if (
     code === "collection_not_deployed" ||

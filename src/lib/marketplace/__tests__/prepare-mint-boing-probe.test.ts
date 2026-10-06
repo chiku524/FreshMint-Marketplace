@@ -143,4 +143,33 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
     expect(prepared.batches.length).toBeGreaterThan(0);
     expect(findBoingNftCollectionDeploy).toHaveBeenCalled();
   });
+
+  it("forceRedeploy clears a dead confirmed contract and returns a wallet intent", async () => {
+    const { prepareCollectionDeployForUser, syncCollectionDeployFromChain } =
+      await import("@/lib/marketplace/service");
+    const ctx = await readyBoingCollection();
+    probeBoingAccount.mockResolvedValue("missing");
+    findBoingNftCollectionDeploy.mockResolvedValue(null);
+
+    const synced = await syncCollectionDeployFromChain({
+      collectionId: ctx.collectionId,
+      creatorId: "artist-fresh",
+      creatorAddress: ctx.creator,
+    });
+    expect(synced.ok).toBe(false);
+    if (!synced.ok) {
+      expect(synced.error).toBe("boing_collection_account_missing");
+    }
+
+    const prep = await prepareCollectionDeployForUser({
+      collectionId: ctx.collectionId,
+      creatorId: "artist-fresh",
+      creatorAddress: ctx.creator,
+      forceRedeploy: true,
+    });
+    expect(prep.ok).toBe(true);
+    if (!prep.ok) return;
+    expect(prep.alreadyDeployed).toBe(false);
+    expect(prep.deployIntent?.walletTx).toBeTruthy();
+  });
 });

@@ -27,6 +27,7 @@ const syncSchema = z.object({
 const prepareSchema = z.object({
   action: z.literal("prepare"),
   creatorAddress: z.string().min(1).optional(),
+  forceRedeploy: z.boolean().optional(),
 });
 
 async function creatorAddressForCollection(
@@ -91,6 +92,7 @@ export async function POST(
       collectionId: id,
       creatorId: user.id,
       creatorAddress,
+      forceRedeploy: prepareBody.data.forceRedeploy,
     });
     if (!result.ok) {
       return NextResponse.json(result, { status: 400 });

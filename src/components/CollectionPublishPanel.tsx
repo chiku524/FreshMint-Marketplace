@@ -5,6 +5,7 @@ import {
   maybeSendWalletTx,
   requestBuyerAddress,
   sendBoingMintWalletTx,
+  sendBoingWalletTxDetailed,
   sendEvmWalletTx,
   type BoingWalletTx,
   type EvmWalletTx,
@@ -29,6 +30,15 @@ function mintPublishErrorMessage(raw: string): string {
     return formatBoingMintUserMessage(trimmed);
   }
   return trimmed;
+}
+
+function isMissingContractError(raw: string): boolean {
+  const t = raw.trim().toLowerCase();
+  return (
+    t === "boing_collection_account_missing" ||
+    t.includes("contract was not found") ||
+    (t.includes("account not found") && !t.includes("creator"))
+  );
 }
 
 export function CollectionPublishPanel({
@@ -80,6 +90,134 @@ export function CollectionPublishPanel({
     }
   }
 
+  /** Sync or force wallet re-deploy when the stored Boing contract AccountId is dead. */
+  async function ensureBoingCollectionDeploy(
+    creatorAddress: string | null,
+  ): Promise<void> {
+    setProgress("Checking collection deploy…");
+    const sync = await fetch(`/api/collections/${collectionId}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "sync",
+        creatorAddress: creatorAddress || undefined,
+      }),
+    });
+    const syncData = await sync.json().catch(() => ({}));
+    if (sync.ok) return;
+
+    const syncErr = String(syncData.error || "");
+    if (
+      syncErr !== "boing_collection_account_missing" &&
+      syncErr !== "onchain_deploy_not_found"
+    ) {
+      // Soft fail — mint prepare still validates.
+      return;
+    }
+
+    setProgress("Collection contract missing on Boing — preparing re-deploy…");
+    const prep = await fetch(`/api/collections/${collectionId}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "prepare",
+        forceRedeploy: true,
+        creatorAddress: creatorAddress || undefined,
+      }),
+    });
+    const prepData = await prep.json();
+    if (!prep.ok) {
+      throw new Error(
+        mintPublishErrorMessage(String(prepData.error || "deploy_prepare_failed")),
+      );
+    }
+    if (prepData.alreadyDeployed || !prepData.deployIntent?.walletTx) {
+      return;
+    }
+
+    const deployIntent = prepData.deployIntent as {
+      contractAddress?: string;
+      escrowAddress?: string;
+      nftTemplateVersion?: string;
+      walletTx: unknown;
+    };
+    setProgress("Confirm collection re-deploy in your wallet (you pay gas)…");
+    const wt = deployIntent.walletTx as EvmWalletTx | BoingWalletTx;
+    let txHash: string | null = null;
+    let contractAddress = deployIntent.contractAddress || "";
+
+    if (wt.chain === "evm") {
+      txHash = await sendEvmWalletTx(wt);
+    } else if (wt.chain === "boing") {
+      const sent = await sendBoingWalletTxDetailed(wt);
+      if (sent.contractAddress) contractAddress = sent.contractAddress;
+      if (!sent.txHash && sent.mempoolAccepted) {
+        setProgress("Wallet accepted deploy — confirming from chain…");
+        const pendingMarker = `pending:boing-accepted:${Date.now().toString(16)}`;
+        let lastError = "onchain_deploy_not_found";
+        for (let attempt = 0; attempt < 6; attempt++) {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+          const retrySync = await fetch(
+            `/api/collections/${collectionId}/deploy`,
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "sync",
+                creatorAddress: creatorAddress || undefined,
+                contractAddress: sent.contractAddress || undefined,
+                txHash: pendingMarker,
+              }),
+            },
+          );
+          const retryData = await retrySync.json();
+          if (retrySync.ok && retryData.collection) return;
+          lastError = retryData.error || lastError;
+        }
+        throw new Error(mintPublishErrorMessage(lastError));
+      }
+      txHash = sent.txHash;
+    } else {
+      txHash = await maybeSendWalletTx({
+        walletTx: deployIntent.walletTx,
+        listingId: collectionId,
+        action: "mint",
+      });
+    }
+
+    if (!txHash) {
+      throw new Error(
+        "Wallet required to re-deploy the collection contract on Boing",
+      );
+    }
+
+    const confirm = await fetch(`/api/collections/${collectionId}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        txHash,
+        contractAddress: contractAddress || undefined,
+        escrowAddress: deployIntent.escrowAddress,
+        creatorAddress: creatorAddress || undefined,
+        nftTemplateVersion: deployIntent.nftTemplateVersion,
+      }),
+    });
+    const confirmData = await confirm.json();
+    if (!confirm.ok) {
+      throw new Error(
+        mintPublishErrorMessage(
+          String(confirmData.error || "deploy_confirm_failed"),
+        ),
+      );
+    }
+  }
+
   async function mintAndPublishRemaining() {
     setBusy(true);
     setMsg(null);
@@ -93,26 +231,12 @@ export function CollectionPublishPanel({
         network === "solana" ? "solana" : network === "boing" ? "boing" : "evm";
       const creatorAddress = await requestBuyerAddress(chainVm);
 
-      // Heal Boing deploy rows that never stored the real contract AccountId.
       if (network === "boing") {
-        setProgress("Checking collection deploy…");
-        try {
-          await fetch(`/api/collections/${collectionId}/deploy`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "sync",
-              creatorAddress: creatorAddress || undefined,
-            }),
-          });
-        } catch {
-          // Prepare still validates; sync is best-effort.
-        }
+        await ensureBoingCollectionDeploy(creatorAddress);
       }
 
       setProgress("Preparing mint batches…");
-      const prep = await fetch(`/api/collections/${collectionId}/mint`, {
+      let prep = await fetch(`/api/collections/${collectionId}/mint`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -122,7 +246,29 @@ export function CollectionPublishPanel({
           creatorAddress: creatorAddress || undefined,
         }),
       });
-      const prepData = await prep.json();
+      let prepData = await prep.json();
+
+      // If prepare still sees a dead contract, force re-deploy once then retry.
+      if (
+        !prep.ok &&
+        network === "boing" &&
+        isMissingContractError(String(prepData.error || ""))
+      ) {
+        await ensureBoingCollectionDeploy(creatorAddress);
+        setProgress("Preparing mint batches…");
+        prep = await fetch(`/api/collections/${collectionId}/mint`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "prepare",
+            listingIds,
+            creatorAddress: creatorAddress || undefined,
+          }),
+        });
+        prepData = await prep.json();
+      }
+
       if (!prep.ok) {
         throw new Error(
           mintPublishErrorMessage(String(prepData.error || "mint_prepare_failed")),

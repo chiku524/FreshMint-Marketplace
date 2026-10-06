@@ -4,11 +4,11 @@ import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
 describe("formatBoingMintUserMessage", () => {
   it("humanizes Account not found and collection/creator missing codes", () => {
     expect(formatBoingMintUserMessage("Account not found")).toMatch(
-      /contract was not found/i,
+      /re-deploy/i,
     );
     expect(
       formatBoingMintUserMessage("boing_collection_account_missing"),
-    ).toMatch(/contract was not found/i);
+    ).toMatch(/re-deploy/i);
     expect(
       formatBoingMintUserMessage("boing_creator_account_missing"),
     ).toMatch(/wallet account not found/i);
