@@ -3,6 +3,7 @@ import { CollectionEditModal } from "@/components/CollectionEditModal";
 import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
+import { FollowButton } from "@/components/FollowButton";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
@@ -114,23 +115,37 @@ export default async function CollectionDetailPage({
           </>
         }
         actions={
-          isOwner ? (
-            <>
-              <CollectionEditModal
-                collectionId={collection.id}
-                description={collection.description ?? ""}
-                imageUrl={collection.imageUrl}
-                bannerUrl={collection.bannerUrl}
-                websiteUrl={collection.websiteUrl}
-                twitterUrl={collection.twitterUrl}
-                discordUrl={collection.discordUrl}
-                instagramUrl={collection.instagramUrl}
+          <>
+            {!isOwner ? (
+              <FollowButton
+                artistId={collection.creatorId}
+                initiallyFollowing={
+                  user != null &&
+                  (engine.state.follows
+                    .get(user.id)
+                    ?.followedArtistIds.includes(collection.creatorId) ??
+                    false)
+                }
               />
-              <Link href="/create" className="badge featured">
-                Add works
-              </Link>
-            </>
-          ) : null
+            ) : null}
+            {isOwner ? (
+              <>
+                <CollectionEditModal
+                  collectionId={collection.id}
+                  description={collection.description ?? ""}
+                  imageUrl={collection.imageUrl}
+                  bannerUrl={collection.bannerUrl}
+                  websiteUrl={collection.websiteUrl}
+                  twitterUrl={collection.twitterUrl}
+                  discordUrl={collection.discordUrl}
+                  instagramUrl={collection.instagramUrl}
+                />
+                <Link href="/create" className="badge featured">
+                  Add works
+                </Link>
+              </>
+            ) : null}
+          </>
         }
       />
 

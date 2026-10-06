@@ -122,7 +122,7 @@ export default async function CreatorProfilePage({
           </div>
         </div>
         <div style={{ display: "grid", gap: "0.45rem", justifyItems: "end" }}>
-          <FollowButton artistId={id} initiallyFollowing={following} />
+          <FollowButton artistId={id} initiallyFollowing={following} label="Follow artist" />
           {user?.id === id ? (
             <Link href="/me/settings" className="badge" style={{ fontSize: "0.82rem" }}>
               Edit profile photo

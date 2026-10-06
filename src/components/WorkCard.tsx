@@ -21,6 +21,7 @@ import { saleModeBadge } from "@/lib/marketplace/sale-mode";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
 import { CreatorAvatar } from "./CreatorAvatar";
+import { FollowButton } from "./FollowButton";
 import { SaveButton } from "./SaveButton";
 
 const MENU_HOVER_MS = 500;
@@ -312,6 +313,7 @@ export function WorkCard({
         </p>
         {showActions ? (
           <div className="work-tile__caption-actions">
+            <FollowButton artistId={listing.creatorId} compact />
             <SaveButton listingId={listing.id} compact />
           </div>
         ) : null}

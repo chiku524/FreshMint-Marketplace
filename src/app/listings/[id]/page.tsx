@@ -273,6 +273,7 @@ export default async function ListingDetailPage({
             <FollowButton
               artistId={listing.creatorId}
               initiallyFollowing={following}
+              label="Follow creator"
             />
           </div>
           {listing.type === "auction" && saleMode === "timed_window" ? (

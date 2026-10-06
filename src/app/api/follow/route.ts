@@ -1,5 +1,9 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { followArtist, unfollowArtist } from "@/lib/marketplace/service";
+import {
+  followArtist,
+  getDiscoveryEngine,
+  unfollowArtist,
+} from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -7,6 +11,22 @@ const schema = z.object({
   artistId: z.string().min(1),
   unfollow: z.boolean().optional(),
 });
+
+export async function GET(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ following: false });
+  }
+  const artistId = req.nextUrl.searchParams.get("artistId")?.trim();
+  if (!artistId) {
+    return NextResponse.json({ error: "invalid_query" }, { status: 400 });
+  }
+  const engine = await getDiscoveryEngine();
+  const following =
+    engine.state.follows.get(user.id)?.followedArtistIds.includes(artistId) ??
+    false;
+  return NextResponse.json({ following });
+}
 
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();

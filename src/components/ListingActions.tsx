@@ -78,7 +78,6 @@ function stepLabel(step: BuyStep, crossChain: boolean): string {
 
 export function ListingActions({
   listingId,
-  creatorId,
   priceUsd,
   stage,
   sold = false,
@@ -692,28 +691,13 @@ export function ListingActions({
     settleQuote?.formatted ??
     `$${priceUsd}`;
 
+  const menuLayout = layout === "menu";
+
   return (
     <div
-      className={`listing-actions${layout === "menu" ? " listing-actions--menu" : ""}`}
+      className={`listing-actions${menuLayout ? " listing-actions--menu" : ""}`}
     >
-      {creatorId ? (
-        <button
-          type="button"
-          className="badge emerging"
-          style={{ cursor: "pointer", background: "transparent" }}
-          onClick={() =>
-            void post("/api/follow", { artistId: creatorId }).then((d) => {
-              if (d && !("error" in d)) {
-                setMsg("Following");
-                router.refresh();
-              }
-            })
-          }
-        >
-          Follow
-        </button>
-      ) : null}
-      {showSave ? (
+      {!menuLayout && showSave ? (
         <button
           type="button"
           className="badge"
@@ -730,7 +714,8 @@ export function ListingActions({
           Save
         </button>
       ) : null}
-      {sessionUserId &&
+      {!menuLayout &&
+      sessionUserId &&
       stage !== "draft" &&
       (curatorScore ?? 0) >= DISCOVERY_CONFIG.nominationStakePoints ? (
         <button
@@ -758,7 +743,7 @@ export function ListingActions({
         >
           Nominate
         </button>
-      ) : sessionUserId && stage !== "draft" ? (
+      ) : !menuLayout && sessionUserId && stage !== "draft" ? (
         <span
           className="badge"
           title={`Need ${DISCOVERY_CONFIG.nominationStakePoints}+ curator points to nominate`}
@@ -780,7 +765,7 @@ export function ListingActions({
         </span>
       ) : null}
       {canBuy && !confirmBuy ? (
-        layout === "menu" ? (
+        menuLayout ? (
           <Link href={`/listings/${listingId}`} className="badge featured">
             Buy{priceUsd != null ? ` $${priceUsd}` : ""}
           </Link>
@@ -833,7 +818,7 @@ export function ListingActions({
           );
         })()
       ) : null}
-      {canBuy && confirmBuy && layout !== "menu" ? (
+      {canBuy && confirmBuy && !menuLayout ? (
         <div
           style={{
             width: "100%",
@@ -1058,7 +1043,7 @@ export function ListingActions({
           </div>
         </div>
       ) : null}
-      {stage === "soft_launch" && canStageRising ? (
+      {!menuLayout && stage === "soft_launch" && canStageRising ? (
         <button
           type="button"
           className="badge emerging"
@@ -1077,7 +1062,7 @@ export function ListingActions({
           Push to Rising
         </button>
       ) : null}
-      {stage === "draft" && minted && canStageRising ? (
+      {!menuLayout && stage === "draft" && minted && canStageRising ? (
         <button
           type="button"
           className="badge emerging"
@@ -1096,25 +1081,27 @@ export function ListingActions({
           Soft-launch
         </button>
       ) : null}
-      <button
-        type="button"
-        className="badge"
-        style={{
-          cursor: "pointer",
-          background: "transparent",
-          color: "var(--danger)",
-        }}
-        onClick={() =>
-          void post("/api/report", {
-            listingId,
-            reason: "spam",
-          }).then((d) => {
-            if (d && !("error" in d)) setMsg("Reported");
-          })
-        }
-      >
-        Report
-      </button>
+      {!menuLayout ? (
+        <button
+          type="button"
+          className="badge"
+          style={{
+            cursor: "pointer",
+            background: "transparent",
+            color: "var(--danger)",
+          }}
+          onClick={() =>
+            void post("/api/report", {
+              listingId,
+              reason: "spam",
+            }).then((d) => {
+              if (d && !("error" in d)) setMsg("Reported");
+            })
+          }
+        >
+          Report
+        </button>
+      ) : null}
       {heldPurchase || pendingPurchase ? (
         <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "0.4rem" }}>
           <ResumeCryptoPurchaseButton

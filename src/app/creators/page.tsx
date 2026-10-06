@@ -197,7 +197,7 @@ export default async function CreatorsIndexPage({
                       </p>
                     </div>
                   </div>
-                  <FollowButton artistId={row.id} initiallyFollowing={following} />
+                  <FollowButton artistId={row.id} initiallyFollowing={following} label="Follow artist" />
                 </li>
               );
             })}
