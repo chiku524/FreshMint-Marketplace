@@ -1273,7 +1273,11 @@ export function CreateWizard() {
               );
             }
           } else if (!txHash) {
-            txHash = `simulated-mint:${id}:${b}:${Date.now()}`;
+            throw new Error(
+              network === "boing"
+                ? "Boing wallet mint required — connect Boing Express and retry. Simulated mint hashes are not allowed."
+                : `Wallet mint required for batch ${b + 1} of ${batches.length}. Connect your wallet and retry.`,
+            );
           }
           await retryWithBackoff(
             async () => {

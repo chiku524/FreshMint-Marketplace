@@ -174,7 +174,13 @@ export function CollectionPublishPanel({
             );
           }
         } else if (!txHash) {
-          txHash = `simulated-mint:${collectionId}:${b}:${Date.now()}`;
+          // Never invent simulated mint hashes for live chains — that would
+          // mark drafts as minted without an on-chain receipt.
+          throw new Error(
+            network === "boing"
+              ? mintPublishErrorMessage("boing_tx_id_required")
+              : `Wallet mint required for batch ${b + 1}. Connect the ${network} wallet and retry.`,
+          );
         }
         const confirm = await fetch(`/api/collections/${collectionId}/mint`, {
           method: "POST",

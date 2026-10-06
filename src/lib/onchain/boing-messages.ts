@@ -30,5 +30,11 @@ export function formatBoingMintUserMessage(error: string | undefined): string {
   if (code === "boing_tx_id_required") {
     return "Boing wallet did not return a transaction id (mempool ok is not a mint receipt). Wait a moment and retry this batch.";
   }
+  if (code === "boing_token_not_on_chain") {
+    return "Mint receipt landed, but the token is not readable on Boing yet. Wait a moment and retry Mint & publish.";
+  }
+  if (code === "simulated_mint_not_allowed") {
+    return "Wallet mint is required — simulated mint hashes are not accepted on live chains.";
+  }
   return raw || "mint_failed";
 }

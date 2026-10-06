@@ -19,6 +19,34 @@ export function canManageListing(
   return actorId === listing.creatorId || actorId === listingSellerId(listing);
 }
 
+/**
+ * Minted on-chain with a real contract + tx — not drafts, simulations, or
+ * mempool placeholders. Used for collection gallery visibility.
+ */
+export function listingIsOnChainMinted(listing: {
+  tokenId?: string | null;
+  contractAddress?: string | null;
+  mintTxHash?: string | null;
+}): boolean {
+  const tokenId = listing.tokenId?.trim();
+  const contract = listing.contractAddress?.trim();
+  const tx = listing.mintTxHash?.trim();
+  if (!tokenId || !contract || !tx) return false;
+  if (contract.startsWith("pending:")) return false;
+  const txLower = tx.toLowerCase();
+  if (
+    txLower.startsWith("simulated-mint:") ||
+    txLower.startsWith("pending:") ||
+    txLower === "ok" ||
+    txLower === "0xok" ||
+    txLower === "accepted" ||
+    txLower === "success"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /** Minted or has artwork → stable public item page even when unlisted. */
 export function listingHasPublicSurface(listing: {
   mediaUrl?: string | null;
@@ -26,17 +54,14 @@ export function listingHasPublicSurface(listing: {
   contractAddress?: string | null;
   mintTxHash?: string | null;
 }): boolean {
-  if (listing.mediaUrl) return true;
-  return Boolean(
-    listing.tokenId && listing.contractAddress && listing.mintTxHash,
-  );
+  if (listingIsOnChainMinted(listing)) return true;
+  return Boolean(listing.mediaUrl);
 }
 
 /**
- * Which collection artworks appear on `/collections/[idOrSlug]`.
- * Owners see drafts + cancelled; buyers/anonymous see soft-launch+ (and
- * cancelled pieces that still have a public NFT surface). Soft-launched /
- * listed items are never hidden by traction/sample capping.
+ * Which collection artworks appear on `/collections/[idOrSlug]` Items grid.
+ * Everyone (owner and buyer) only sees pieces that reached on-chain mint.
+ * Unminted drafts stay off the gallery — owners manage them via Finish publishing.
  */
 export function listingVisibleOnCollectionPage(
   listing: {
@@ -47,11 +72,12 @@ export function listingVisibleOnCollectionPage(
     contractAddress?: string | null;
     mintTxHash?: string | null;
   },
-  isOwner: boolean,
+  _isOwner: boolean,
 ): boolean {
-  if (isOwner) return true;
+  if (!listingIsOnChainMinted(listing)) return false;
+  // Still-private drafts (even if mint fields were set) stay out of the gallery
+  // until soft-launch / public stage.
   if (listing.stage === "draft") return false;
-  if (listing.delisted && !listingHasPublicSurface(listing)) return false;
   return true;
 }
 

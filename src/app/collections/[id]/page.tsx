@@ -48,16 +48,19 @@ export default async function CollectionDetailPage({
   const allInCollection = [...engine.state.listings.values()]
     .filter((l) => l.collectionId === collection.id)
     .sort((a, b) => b.createdAt - a.createdAt);
-  // Owners: drafts + cancelled. Buyers: soft-launch+ and public cancelled.
+  // Gallery: on-chain minted works only (owners and buyers).
   const pieces = allInCollection.filter((l) =>
     listingVisibleOnCollectionPage(l, isOwner),
   );
+  // Owner publish rail still needs unminted / unlaunched drafts.
+  const ownerDrafts = isOwner
+    ? allInCollection.filter((l) => l.stage === "draft" && !l.delisted)
+    : [];
 
   const hero =
     pieces.find((l) => l.id === collection.heroListingId) ??
     pieces[0] ??
-    allInCollection.find((l) => l.id === collection.heroListingId) ??
-    allInCollection[0];
+    null;
   const coverUrl = hero?.mediaUrl ?? null;
   const floorUsd = deriveCollectionFloorUsd(pieces);
   const volumeUsd = volumes.get(collection.id) ?? 0;
@@ -66,12 +69,7 @@ export default async function CollectionDetailPage({
     collection.description?.trim() ||
     hero?.description?.trim() ||
     `Creator-owned set on ${network}. Collectors pay crypto and receive the NFT at purchase.`;
-  const publicItemCount = allInCollection.filter((l) =>
-    listingVisibleOnCollectionPage(l, false),
-  ).length;
-  const headerItemCount = isOwner
-    ? pieces.length || collection.totalItems || 0
-    : publicItemCount || collection.totalItems || 0;
+  const headerItemCount = pieces.length || 0;
 
   return (
     <div className="page-wrap collection-detail">
@@ -154,15 +152,13 @@ export default async function CollectionDetailPage({
           <CollectionPublishPanel
             collectionId={collection.id}
             network={network}
-            drafts={pieces
-              .filter((l) => l.stage === "draft")
-              .map((l) => ({
-                id: l.id,
-                title: l.title,
-                minted: Boolean(
-                  l.tokenId && l.contractAddress && l.mintTxHash,
-                ),
-              }))}
+            drafts={ownerDrafts.map((l) => ({
+              id: l.id,
+              title: l.title,
+              minted: Boolean(
+                l.tokenId && l.contractAddress && l.mintTxHash,
+              ),
+            }))}
           />
           {canUpdateFeeRecipients && collection.contractAddress ? (
             <UpdateFeeRecipientsButton
@@ -206,12 +202,20 @@ export default async function CollectionDetailPage({
           ) : (
             <p className="collection-detail__empty">
               {isOwner ? (
-                <>
-                  No pieces yet.{" "}
-                  <Link href="/create">Add a drop to this collection</Link>.
-                </>
+                ownerDrafts.length > 0 ? (
+                  <>
+                    No on-chain pieces yet. Use <strong>Mint &amp; publish
+                    remaining</strong> above to mint drafts, or{" "}
+                    <Link href="/create">add more works</Link>.
+                  </>
+                ) : (
+                  <>
+                    No pieces yet.{" "}
+                    <Link href="/create">Add a drop to this collection</Link>.
+                  </>
+                )
               ) : (
-                "No pieces in this collection yet."
+                "No on-chain pieces in this collection yet."
               )}
             </p>
           )

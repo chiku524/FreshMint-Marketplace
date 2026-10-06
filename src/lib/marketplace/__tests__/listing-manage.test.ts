@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canManageListing,
   listingHasPublicSurface,
+  listingIsOnChainMinted,
   listingSellerId,
   listingVisibleOnCollectionPage,
 } from "@/lib/marketplace/listing-manage";
@@ -47,32 +48,61 @@ describe("listing-manage helpers", () => {
     ).toBe(false);
   });
 
-  it("shows all collection pieces to owner; hides drafts from buyers", () => {
-    const draft = { stage: "draft", delisted: false, mediaUrl: "/a.png" };
-    const soft = { stage: "soft_launch", delisted: false, mediaUrl: "/b.png" };
-    const cancelledPublic = {
-      stage: "soft_launch",
-      delisted: true,
-      mediaUrl: "/c.png",
-    };
-    const cancelledEmpty = {
-      stage: "soft_launch",
-      delisted: true,
-      mediaUrl: null,
+  it("shows only on-chain minted works on the collection gallery", () => {
+    const unmintedDraft = {
+      stage: "draft",
+      delisted: false,
+      mediaUrl: "/a.png",
       tokenId: null,
       contractAddress: null,
       mintTxHash: null,
     };
+    const softUnminted = {
+      stage: "soft_launch",
+      delisted: false,
+      mediaUrl: "/b.png",
+      tokenId: null,
+      contractAddress: null,
+      mintTxHash: null,
+    };
+    const onChain = {
+      stage: "soft_launch",
+      delisted: false,
+      mediaUrl: "/c.png",
+      tokenId: "1",
+      contractAddress: "0xabc",
+      mintTxHash: "0x" + "ab".repeat(32),
+    };
+    const simulated = {
+      stage: "soft_launch",
+      delisted: false,
+      mediaUrl: "/d.png",
+      tokenId: "1",
+      contractAddress: "0xabc",
+      mintTxHash: "simulated-mint:col:0",
+    };
+    const cancelledOnChain = {
+      stage: "soft_launch",
+      delisted: true,
+      mediaUrl: "/e.png",
+      tokenId: "2",
+      contractAddress: "0xabc",
+      mintTxHash: "0x" + "cd".repeat(32),
+    };
 
-    expect(listingVisibleOnCollectionPage(draft, true)).toBe(true);
-    expect(listingVisibleOnCollectionPage(soft, true)).toBe(true);
-    expect(listingVisibleOnCollectionPage(cancelledPublic, true)).toBe(true);
-    expect(listingVisibleOnCollectionPage(cancelledEmpty, true)).toBe(true);
+    expect(listingIsOnChainMinted(unmintedDraft)).toBe(false);
+    expect(listingIsOnChainMinted(onChain)).toBe(true);
+    expect(listingIsOnChainMinted(simulated)).toBe(false);
 
-    expect(listingVisibleOnCollectionPage(draft, false)).toBe(false);
-    expect(listingVisibleOnCollectionPage(soft, false)).toBe(true);
-    expect(listingVisibleOnCollectionPage(cancelledPublic, false)).toBe(true);
-    expect(listingVisibleOnCollectionPage(cancelledEmpty, false)).toBe(false);
+    // Owner and buyer both only see on-chain gallery items.
+    expect(listingVisibleOnCollectionPage(unmintedDraft, true)).toBe(false);
+    expect(listingVisibleOnCollectionPage(unmintedDraft, false)).toBe(false);
+    expect(listingVisibleOnCollectionPage(softUnminted, true)).toBe(false);
+    expect(listingVisibleOnCollectionPage(softUnminted, false)).toBe(false);
+    expect(listingVisibleOnCollectionPage(onChain, true)).toBe(true);
+    expect(listingVisibleOnCollectionPage(onChain, false)).toBe(true);
+    expect(listingVisibleOnCollectionPage(simulated, false)).toBe(false);
+    expect(listingVisibleOnCollectionPage(cancelledOnChain, false)).toBe(true);
   });
 });
 
