@@ -91,6 +91,7 @@ export function ListingActions({
   pendingPurchase = null,
   layout = "inline",
   showSave = true,
+  showCommunityActions = true,
   isSecondary = false,
   creatorRoyaltyBps = null,
   /** Hide Buy now while an English auction is live (use Place bid instead). */
@@ -117,6 +118,8 @@ export function ListingActions({
   layout?: "inline" | "menu";
   /** When false, Save lives on the WorkCard caption instead. */
   showSave?: boolean;
+  /** When false, Save / Nominate / Report are omitted (use ListingMoreActionsModal). */
+  showCommunityActions?: boolean;
   suppressBuy?: boolean;
 }) {
   const router = useRouter();
@@ -697,7 +700,7 @@ export function ListingActions({
     <div
       className={`listing-actions${menuLayout ? " listing-actions--menu" : ""}`}
     >
-      {!menuLayout && showSave ? (
+      {!menuLayout && showCommunityActions && showSave ? (
         <button
           type="button"
           className="badge"
@@ -715,6 +718,7 @@ export function ListingActions({
         </button>
       ) : null}
       {!menuLayout &&
+      showCommunityActions &&
       sessionUserId &&
       stage !== "draft" &&
       (curatorScore ?? 0) >= DISCOVERY_CONFIG.nominationStakePoints ? (
@@ -743,7 +747,10 @@ export function ListingActions({
         >
           Nominate
         </button>
-      ) : !menuLayout && sessionUserId && stage !== "draft" ? (
+      ) : !menuLayout &&
+        showCommunityActions &&
+        sessionUserId &&
+        stage !== "draft" ? (
         <span
           className="badge"
           title={`Need ${DISCOVERY_CONFIG.nominationStakePoints}+ curator points to nominate`}
@@ -753,10 +760,10 @@ export function ListingActions({
         </span>
       ) : null}
       {uniqueSold ? <span className="badge featured">Sold</span> : null}
-      {dropState === "upcoming" ? (
+      {showCommunityActions && dropState === "upcoming" ? (
         <span className="badge emerging">Drop scheduled</span>
       ) : null}
-      {dropState === "ended" && !uniqueSold ? (
+      {showCommunityActions && dropState === "ended" && !uniqueSold ? (
         <span className="badge">Drop ended</span>
       ) : null}
       {!minted && !uniqueSold && priceUsd != null ? (
@@ -1081,7 +1088,7 @@ export function ListingActions({
           Soft-launch
         </button>
       ) : null}
-      {!menuLayout ? (
+      {!menuLayout && showCommunityActions ? (
         <button
           type="button"
           className="badge"

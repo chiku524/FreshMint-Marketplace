@@ -14,6 +14,7 @@ import { appBaseUrl } from "@/lib/auth/paths";
 import { rootSiteMetadata, siteJsonLdGraph } from "@/lib/seo/site";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
+import "./listing-action-modals.css";
 
 /** Apostrophic Labs Contra — freeware; “Contraa” maps to this face. */
 const contra = localFont({

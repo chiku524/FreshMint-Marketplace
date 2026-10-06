@@ -20,11 +20,14 @@ export function OfferPanel({
   listPriceUsd,
   isSeller,
   sessionUserId,
+  embedded = false,
 }: {
   listingId: string;
   listPriceUsd?: number | null;
   isSeller: boolean;
   sessionUserId?: string | null;
+  /** When true, omit page heading (dialog provides the title). */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -120,13 +123,22 @@ export function OfferPanel({
   const openOffers = offers.filter((o) => o.status === "open");
 
   return (
-    <div className="fm-listing-form" style={{ marginTop: "0.85rem" }}>
-      <h3
-        className="display"
-        style={{ margin: "0 0 0.35rem", fontSize: "1.05rem" }}
-      >
-        Offers
-      </h3>
+    <div
+      className={
+        embedded
+          ? "listing-offer-panel listing-offer-panel--embedded"
+          : "fm-listing-form"
+      }
+      style={embedded ? undefined : { marginTop: "0.85rem" }}
+    >
+      {embedded ? null : (
+        <h3
+          className="display"
+          style={{ margin: "0 0 0.35rem", fontSize: "1.05rem" }}
+        >
+          Offers
+        </h3>
+      )}
       <p className="fm-form-note" style={{ margin: "0 0 0.65rem" }}>
         Make an offer below the list price. Sellers can accept; the buyer then
         pays in crypto through FreshMint (0.5% treasury fee from the offer

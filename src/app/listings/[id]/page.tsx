@@ -2,8 +2,9 @@ import { FollowButton } from "@/components/FollowButton";
 import { BidPanel } from "@/components/BidPanel";
 import { ListingActions } from "@/components/ListingActions";
 import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
-import { ManageListingPanel } from "@/components/ManageListingPanel";
-import { OfferPanel } from "@/components/OfferPanel";
+import { ListingMoreActionsModal } from "@/components/ListingMoreActionsModal";
+import { ManageListingModal } from "@/components/ManageListingModal";
+import { OfferModal } from "@/components/OfferModal";
 import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { ResaleListButton } from "@/components/ResaleListButton";
 import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
@@ -414,68 +415,93 @@ export default async function ListingDetailPage({
               />
             ) : null}
 
-            {!listing.delisted ? (
-              <ListingActions
-                listingId={listing.id}
-                creatorId={listing.creatorId}
-                priceUsd={
-                  englishAwardAmount != null
-                    ? englishAwardAmount
-                    : saleMode === "dutch"
-                      ? dutchCurrentPriceUsd({
-                          startingBidUsd: listing.startingBidUsd,
-                          priceUsd: listing.priceUsd,
-                          reserveUsd: listing.reserveUsd,
-                          auctionStartsAt: listing.auctionStartsAt,
-                          auctionEndsAt: listing.auctionEndsAt,
-                        })
-                      : listing.priceUsd
-                }
-                stage={listing.stage}
-                sold={
-                  (isSold && !pendingPurchase) ||
-                  (saleMode === "english" &&
-                    (englishSettle.settleLabel === "unsold" ||
-                      englishSettle.settleLabel === "payment_expired_unsold" ||
-                      (Boolean(auctionEnded) && !reserveMet))) ||
-                  (saleMode === "english" &&
-                    Boolean(auctionEnded) &&
-                    englishAwardAmount != null &&
-                    user?.id !== englishAwardBidderId &&
-                    !pendingPurchase)
-                }
-                listingType={listing.type}
-                chain={listing.chain}
-                network={listing.network}
-                isSecondary={Boolean(listing.isSecondary)}
-                creatorRoyaltyBps={listing.creatorRoyaltyBps ?? null}
-                dropState={drop.state}
-                repeatable={cap == null || cap > 1}
-                minted={minted}
-                canStageRising={canUserStageListing(user, listing)}
-                suppressBuy={saleMode === "english" && auctionLive}
-                pendingPurchase={
-                  pendingPurchase
-                    ? {
-                        purchaseId: pendingPurchase.id,
-                        status: pendingPurchase.status ?? "pending_payment",
-                      }
-                    : null
-                }
-              />
-            ) : null}
+            <div className="listing-detail__cta-group">
+              {!listing.delisted ? (
+                <ListingActions
+                  listingId={listing.id}
+                  creatorId={listing.creatorId}
+                  priceUsd={
+                    englishAwardAmount != null
+                      ? englishAwardAmount
+                      : saleMode === "dutch"
+                        ? dutchCurrentPriceUsd({
+                            startingBidUsd: listing.startingBidUsd,
+                            priceUsd: listing.priceUsd,
+                            reserveUsd: listing.reserveUsd,
+                            auctionStartsAt: listing.auctionStartsAt,
+                            auctionEndsAt: listing.auctionEndsAt,
+                          })
+                        : listing.priceUsd
+                  }
+                  stage={listing.stage}
+                  sold={
+                    (isSold && !pendingPurchase) ||
+                    (saleMode === "english" &&
+                      (englishSettle.settleLabel === "unsold" ||
+                        englishSettle.settleLabel === "payment_expired_unsold" ||
+                        (Boolean(auctionEnded) && !reserveMet))) ||
+                    (saleMode === "english" &&
+                      Boolean(auctionEnded) &&
+                      englishAwardAmount != null &&
+                      user?.id !== englishAwardBidderId &&
+                      !pendingPurchase)
+                  }
+                  listingType={listing.type}
+                  chain={listing.chain}
+                  network={listing.network}
+                  isSecondary={Boolean(listing.isSecondary)}
+                  creatorRoyaltyBps={listing.creatorRoyaltyBps ?? null}
+                  dropState={drop.state}
+                  repeatable={cap == null || cap > 1}
+                  minted={minted}
+                  canStageRising={canUserStageListing(user, listing)}
+                  suppressBuy={saleMode === "english" && auctionLive}
+                  showSave={false}
+                  showCommunityActions={false}
+                  pendingPurchase={
+                    pendingPurchase
+                      ? {
+                          purchaseId: pendingPurchase.id,
+                          status: pendingPurchase.status ?? "pending_payment",
+                        }
+                      : null
+                  }
+                />
+              ) : null}
 
-            {(saleMode === "fixed" || saleMode === "timed_window") &&
-            minted &&
-            !isSold &&
-            !listing.delisted ? (
-              <OfferPanel
+              {(saleMode === "fixed" || saleMode === "timed_window") &&
+              minted &&
+              !isSold &&
+              !listing.delisted ? (
+                <OfferModal
+                  listingId={listing.id}
+                  listPriceUsd={listing.priceUsd}
+                  isSeller={user?.id === sellerId || user?.id === listing.creatorId}
+                  sessionUserId={user?.id ?? null}
+                />
+              ) : null}
+
+              {isManager ? (
+                <ManageListingModal
+                  listingId={listing.id}
+                  saleMode={saleMode}
+                  startingBidUsd={listing.startingBidUsd}
+                  reserveUsd={listing.reserveUsd}
+                  priceUsd={listing.priceUsd}
+                  delisted={Boolean(listing.delisted)}
+                  stage={listing.stage}
+                  alreadyBoosted={listing.featuredBoostedAt != null}
+                  defaultNetwork={listing.network}
+                  showBoost={user?.id === listing.creatorId}
+                  hasBids={listing.currentHighBidUsd != null}
+                />
+              ) : null}
+
+              <ListingMoreActionsModal
                 listingId={listing.id}
-                listPriceUsd={listing.priceUsd}
-                isSeller={user?.id === sellerId || user?.id === listing.creatorId}
-                sessionUserId={user?.id ?? null}
+                stage={listing.stage}
               />
-            ) : null}
+            </div>
 
             {collectorCanList && completedPurchase ? (
               <div className="fm-listing-form" style={{ marginTop: "0.85rem" }}>
@@ -495,22 +521,6 @@ export default async function ListingDetailPage({
               </div>
             ) : null}
           </div>
-
-          {isManager ? (
-            <ManageListingPanel
-              listingId={listing.id}
-              saleMode={saleMode}
-              startingBidUsd={listing.startingBidUsd}
-              reserveUsd={listing.reserveUsd}
-              priceUsd={listing.priceUsd}
-              delisted={Boolean(listing.delisted)}
-              stage={listing.stage}
-              alreadyBoosted={listing.featuredBoostedAt != null}
-              defaultNetwork={listing.network}
-              showBoost={user?.id === listing.creatorId}
-              hasBids={listing.currentHighBidUsd != null}
-            />
-          ) : null}
 
           {publishLifecycle ? (
             <div className="listing-detail__publish-status">

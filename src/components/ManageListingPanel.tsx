@@ -21,6 +21,7 @@ export function ManageListingPanel({
   defaultNetwork,
   showBoost,
   hasBids,
+  embedded = false,
 }: {
   listingId: string;
   saleMode: SaleMode | string;
@@ -33,6 +34,8 @@ export function ManageListingPanel({
   defaultNetwork?: string;
   showBoost?: boolean;
   hasBids?: boolean;
+  /** When true, omit page heading (dialog provides the title). */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [price, setPrice] = useState(
@@ -129,10 +132,18 @@ export function ManageListingPanel({
   }
 
   return (
-    <section className="listing-detail__owner-rail fm-listing-form">
-      <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.15rem" }}>
-        Manage listing
-      </h2>
+    <section
+      className={
+        embedded
+          ? "listing-manage-panel listing-manage-panel--embedded"
+          : "listing-detail__owner-rail fm-listing-form"
+      }
+    >
+      {embedded ? null : (
+        <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.15rem" }}>
+          Manage listing
+        </h2>
+      )}
       <p className="fm-form-note" style={{ margin: "0 0 0.65rem" }}>
         {delisted
           ? "Not listed for sale. Relist to appear in discovery again."
