@@ -4705,9 +4705,9 @@ select.fm-field {
   border-top: 1px solid var(--line);
 }
 
-.profile-collections-gallery {
+.profile-collections-gallery-stack {
   display: grid;
-  gap: 1.15rem;
+  gap: 2.25rem;
 }
 
 .profile-collections-gallery__card {
@@ -4721,13 +4721,25 @@ select.fm-field {
   background: var(--bg-lift);
 }
 
+.profile-collections-gallery__card--stack {
+  text-decoration: none;
+}
+
 .profile-collections-gallery__card:hover,
-.profile-collections-gallery__card:focus-visible {
+.profile-collections-gallery__card:focus-within {
   border-color: color-mix(in srgb, var(--emergent) 35%, transparent);
+}
+
+.profile-collections-gallery__cover-link {
+  display: block;
+  min-height: 12rem;
+  color: inherit;
+  text-decoration: none;
 }
 
 .profile-collections-gallery__cover {
   min-height: 12rem;
+  height: 100%;
   background: var(--bg-mid) center / cover no-repeat;
 }
 
@@ -4744,10 +4756,36 @@ select.fm-field {
   font-size: 1.35rem;
 }
 
+.profile-collections-gallery__body h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.profile-collections-gallery__body h3 a:hover,
+.profile-collections-gallery__body h3 a:focus-visible {
+  color: var(--emergent);
+}
+
 .profile-collections-gallery__body p {
   margin: 0;
   color: var(--ink-muted);
   font-size: 0.88rem;
+}
+
+.profile-collections-gallery__open {
+  margin-top: 0.25rem !important;
+}
+
+.profile-collections-gallery__open a {
+  color: var(--emergent);
+  text-decoration: none;
+  font-size: 0.86rem;
+}
+
+.profile-collections-gallery__samples {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.55rem;
 }
 
 .profile-works-list__item {

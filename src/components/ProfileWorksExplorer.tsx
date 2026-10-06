@@ -18,6 +18,9 @@ export type ProfileCollectionItem = {
   totalItems: number;
   chain: string;
   coverUrl?: string | null;
+  volumeUsd?: number | null;
+  /** Optional minted sample works for gallery drill-in (not the main grid). */
+  sampleListings?: Listing[];
 };
 
 export type ProfileWorkItem = {
@@ -68,6 +71,11 @@ function priceLabel(listing: Listing, bucket?: string) {
   }
   if (listing.priceUsd != null) return `$${listing.priceUsd}`;
   return "timed drop";
+}
+
+function formatVolume(volumeUsd: number | null | undefined) {
+  if (volumeUsd == null || !(volumeUsd > 0)) return null;
+  return `$${Math.round(volumeUsd).toLocaleString()} volume`;
 }
 
 function WorksLayout({
@@ -165,9 +173,11 @@ function WorksLayout({
 function CollectionsLayout({
   view,
   collections,
+  creatorName,
 }: {
   view: ProfileViewId;
   collections: ProfileCollectionItem[];
+  creatorName?: string;
 }) {
   if (collections.length === 0) return null;
 
@@ -186,10 +196,15 @@ function CollectionsLayout({
             />
             <span>
               <strong className="display">{collection.title}</strong>
-              <em>{collection.chain}</em>
+              <em>
+                {collection.chain}
+                {formatVolume(collection.volumeUsd)
+                  ? ` · ${formatVolume(collection.volumeUsd)}`
+                  : ""}
+              </em>
             </span>
             <span className="collections-row__count">
-              {collection.totalItems} items
+              {collection.totalItems} minted
             </span>
           </Link>
         ))}
@@ -199,25 +214,62 @@ function CollectionsLayout({
 
   if (view === "gallery") {
     return (
-      <div className="profile-collections-gallery">
-        {collections.map((collection) => (
-          <Link
-            key={collection.id}
-            href={collectionHref(collection)}
-            className="profile-collections-gallery__card"
-          >
-            <div
-              className="profile-collections-gallery__cover"
-              style={coverStyle(collection.coverUrl, collection.id)}
-            />
-            <div className="profile-collections-gallery__body">
-              <h3 className="display">{collection.title}</h3>
-              <p>
-                {collection.chain} · {collection.totalItems} items
-              </p>
-            </div>
-          </Link>
-        ))}
+      <div className="profile-collections-gallery-stack">
+        {collections.map((collection) => {
+          const samples = collection.sampleListings ?? [];
+          return (
+            <section
+              key={collection.id}
+              className="collections-gallery-block profile-collections-gallery-block"
+            >
+              <div className="profile-collections-gallery__card profile-collections-gallery__card--stack">
+                <Link
+                  href={collectionHref(collection)}
+                  className="profile-collections-gallery__cover-link"
+                >
+                  <div
+                    className="profile-collections-gallery__cover"
+                    style={coverStyle(collection.coverUrl, collection.id)}
+                  />
+                </Link>
+                <div className="profile-collections-gallery__body">
+                  <h3 className="display">
+                    <Link href={collectionHref(collection)}>
+                      {collection.title}
+                    </Link>
+                  </h3>
+                  <p>
+                    {collection.chain} · {collection.totalItems} minted
+                    {formatVolume(collection.volumeUsd)
+                      ? ` · ${formatVolume(collection.volumeUsd)}`
+                      : ""}
+                  </p>
+                  <p className="profile-collections-gallery__open">
+                    <Link href={collectionHref(collection)}>Open collection</Link>
+                  </p>
+                </div>
+              </div>
+              {samples.length > 0 ? (
+                <div className="profile-collections-gallery__samples">
+                  <p className="profile-catalog__hint">
+                    Recent minted pieces — open the collection for the full set.
+                  </p>
+                  <PuzzleRail>
+                    {samples.map((listing) => (
+                      <WorkCard
+                        key={listing.id}
+                        listing={listing}
+                        creatorName={creatorName}
+                        showActions
+                        trackImpression={false}
+                      />
+                    ))}
+                  </PuzzleRail>
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
       </div>
     );
   }
@@ -256,8 +308,16 @@ function CollectionsLayout({
               <p className="collections-card__byline">{collection.chain}</p>
               <dl className="collections-card__stats">
                 <div>
-                  <dt>Items</dt>
+                  <dt>Minted</dt>
                   <dd>{collection.totalItems}</dd>
+                </div>
+                <div>
+                  <dt>Volume</dt>
+                  <dd>
+                    {collection.volumeUsd != null && collection.volumeUsd > 0
+                      ? `$${Math.round(collection.volumeUsd).toLocaleString()}`
+                      : "—"}
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -269,50 +329,49 @@ function CollectionsLayout({
 }
 
 /**
- * Public creator profile catalog: keeps Collections vs Works as separate
- * sections, with a shared gallery / grid / list presentation toggle.
+ * Public creator profile catalog: minted/published collections are primary.
+ * Gallery / grid / list apply to collections; NFT tiles are gallery drill-in only.
  */
 export function ProfileWorksExplorer({
   collections,
-  works,
   initialView = "grid",
-  emptyWorks,
+  creatorName,
+  emptyCollections,
 }: {
   collections: ProfileCollectionItem[];
-  works: ProfileWorkItem[];
   initialView?: ProfileViewId;
-  emptyWorks?: ReactNode;
+  creatorName?: string;
+  emptyCollections?: ReactNode;
 }) {
   const { view, select } = useProfileViewMode(initialView);
 
   return (
     <div className="profile-catalog">
       <div className="profile-catalog__toolbar">
-        <p className="profile-catalog__hint">
-          Switch how collections and listings appear on this profile.
-        </p>
+        <div>
+          <h2 className="display me-section__title" style={{ marginBottom: "0.35rem" }}>
+            Collections ({collections.length})
+          </h2>
+          <p className="profile-catalog__hint">
+            Minted collections on this profile. Open a set to browse pieces.
+          </p>
+        </div>
         <ProfileViewToggle view={view} onChange={select} />
       </div>
 
-      {collections.length > 0 ? (
-        <section className="me-section profile-catalog__section">
-          <h2 className="display me-section__title">
-            Collections ({collections.length})
-          </h2>
-          <CollectionsLayout view={view} collections={collections} />
-        </section>
-      ) : null}
-
-      <section className="me-section profile-catalog__section">
-        <h2 className="display me-section__title">Works ({works.length})</h2>
-        {works.length === 0
-          ? (emptyWorks ?? (
-              <p style={{ color: "var(--ink-muted)" }}>No public listings yet.</p>
-            ))
-          : (
-              <WorksLayout view={view} items={works} />
-            )}
-      </section>
+      {collections.length === 0
+        ? (emptyCollections ?? (
+            <p style={{ color: "var(--ink-muted)" }}>
+              No minted collections yet.
+            </p>
+          ))
+        : (
+            <CollectionsLayout
+              view={view}
+              collections={collections}
+              creatorName={creatorName}
+            />
+          )}
     </div>
   );
 }

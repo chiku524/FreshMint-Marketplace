@@ -4,7 +4,11 @@ import { ProfileWorksExplorer } from "@/components/ProfileWorksExplorer";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingCreator } from "@/lib/discovery";
-import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
+import { aggregateCollectionVolumesUsd } from "@/lib/marketplace/collections-browse";
+import {
+  collectionVisibleOnCreatorProfile,
+  mintedPublishedListingsInCollection,
+} from "@/lib/marketplace/profile-collections";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
 import {
@@ -18,6 +22,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+const GALLERY_SAMPLE_LIMIT = 6;
 
 export async function generateMetadata({
   params,
@@ -48,37 +54,49 @@ export default async function CreatorProfilePage({
   if (!creator) notFound();
 
   const emerging = isEmergingCreator(creator);
-  const works = [...engine.state.listings.values()]
-    .filter((l) => l.creatorId === id && !l.delisted && l.stage !== "draft")
-    .sort((a, b) => b.createdAt - a.createdAt);
-  const collections = [...engine.state.collections.values()].filter(
+  const volumes = await aggregateCollectionVolumesUsd();
+  const allListings = [...engine.state.listings.values()];
+  const ownedCollections = [...engine.state.collections.values()].filter(
     (c) => c.creatorId === id,
   );
 
+  const collectionItems = ownedCollections
+    .flatMap((collection) => {
+      const inCollection = allListings.filter(
+        (l) => l.collectionId === collection.id,
+      );
+      if (!collectionVisibleOnCreatorProfile(inCollection)) return [];
+
+      const minted = mintedPublishedListingsInCollection(inCollection);
+      const heroId = collection.heroListingId;
+      const hero =
+        minted.find((l) => l.id === heroId) ??
+        minted.find((l) => l.mediaUrl) ??
+        minted[0] ??
+        null;
+
+      return [
+        {
+          id: collection.id,
+          title: collection.title,
+          slug: collection.slug,
+          totalItems: minted.length,
+          chain: getNetwork(
+            resolveNetwork(collection.network, collection.chain),
+          ).label,
+          coverUrl: collection.imageUrl || hero?.mediaUrl || null,
+          volumeUsd: volumes.get(collection.id) ?? 0,
+          sampleListings: minted.slice(0, GALLERY_SAMPLE_LIMIT),
+          sortAt: hero?.createdAt ?? 0,
+        },
+      ];
+    })
+    .sort((a, b) => b.sortAt - a.sortAt);
+
   const user = await getSessionUser();
-  const soldIds = await listClosedPrimarySaleIds();
   const following =
     user != null &&
     (engine.state.follows.get(user.id)?.followedArtistIds.includes(id) ?? false);
-
-  const collectionItems = collections.map((collection) => {
-    const heroId = collection.heroListingId;
-    const hero =
-      (heroId ? engine.state.listings.get(heroId) : null) ??
-      [...engine.state.listings.values()].find(
-        (l) => l.collectionId === collection.id && l.mediaUrl,
-      ) ??
-      null;
-    return {
-      id: collection.id,
-      title: collection.title,
-      slug: collection.slug,
-      totalItems: collection.totalItems,
-      chain: getNetwork(resolveNetwork(collection.network, collection.chain))
-        .label,
-      coverUrl: collection.imageUrl || hero?.mediaUrl || null,
-    };
-  });
 
   return (
     <div className="page-wrap">
@@ -176,15 +194,19 @@ export default async function CreatorProfilePage({
 
       <ProfileWorksExplorer
         initialView={initialView}
+        creatorName={creator.displayName}
         collections={collectionItems}
-        works={works.map((listing) => ({
-          listing,
-          emerging: emerging.emerging,
-          creatorName: creator.displayName,
-          creatorAvatarUrl: creator.avatarUrl,
-          showActions: true,
-          sold: soldIds.has(listing.id),
-        }))}
+        emptyCollections={
+          <p style={{ color: "var(--ink-muted)" }}>
+            No minted collections yet.
+            {user?.id === id ? (
+              <>
+                {" "}
+                <Link href="/create">Publish a collection</Link>.
+              </>
+            ) : null}
+          </p>
+        }
       />
     </div>
   );
