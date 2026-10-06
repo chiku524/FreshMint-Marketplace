@@ -19,21 +19,21 @@ export function TxExplorerLink({
   if (!hash) return null;
   const href = txExplorerUrl({ hash, network, chain });
   const text = label ?? shortTxHash(hash);
+  const classes = ["tx-explorer-link", className].filter(Boolean).join(" ");
   if (!href) {
     return (
-      <span className={className} title={hash}>
+      <span className={classes} title={hash}>
         {text}
       </span>
     );
   }
   return (
     <a
-      className={className}
+      className={classes}
       href={href}
       target="_blank"
       rel="noreferrer"
       title={hash}
-      style={{ color: "var(--accent-soft)" }}
     >
       {text}
     </a>

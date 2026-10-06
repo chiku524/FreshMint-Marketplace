@@ -33,6 +33,7 @@ import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketpla
 import { lazySettleEnglishAuction } from "@/lib/marketplace/english-auction";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { shortTxHash } from "@/lib/onchain/explorer";
 import { listingPageMetadata } from "@/lib/seo/site";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -178,6 +179,23 @@ export default async function ListingDetailPage({
         `,
       };
 
+  const displayPriceUsd =
+    saleMode === "dutch"
+      ? (dutchCurrentPriceUsd({
+          startingBidUsd: listing.startingBidUsd,
+          priceUsd: listing.priceUsd,
+          reserveUsd: listing.reserveUsd,
+          auctionStartsAt: listing.auctionStartsAt,
+          auctionEndsAt: listing.auctionEndsAt,
+        }) ?? listing.priceUsd)
+      : listing.priceUsd;
+  const priceLabel =
+    displayPriceUsd != null
+      ? `$${displayPriceUsd}`
+      : saleMode === "dutch" || listing.priceUsd != null
+        ? "$—"
+        : "Timed listing";
+
   return (
     <div className="page-wrap">
       <PageViewTracker listingId={listing.id} />
@@ -192,7 +210,7 @@ export default async function ListingDetailPage({
       <div className="listing-detail-grid">
         <div className="work-media listing-detail__media" style={mediaStyle} />
 
-        <div>
+        <div className="listing-detail__info">
           <div className="listing-detail__badges">
             {emerging ? <span className="badge emerging">Emerging</span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
@@ -215,33 +233,37 @@ export default async function ListingDetailPage({
             {drop.state === "ended" ? <span className="badge">Drop ended</span> : null}
           </div>
           <h1 className="display listing-detail__title">{listing.title}</h1>
-          <p className="listing-detail__byline">
-            by{" "}
-            <Link href={`/creators/${listing.creatorId}`}>
-              {creator?.displayName ?? listing.creatorId}
-            </Link>
-            {listing.priceUsd != null || saleMode === "dutch"
-              ? ` · $${
-                  saleMode === "dutch"
-                    ? (dutchCurrentPriceUsd({
-                        startingBidUsd: listing.startingBidUsd,
-                        priceUsd: listing.priceUsd,
-                        reserveUsd: listing.reserveUsd,
-                        auctionStartsAt: listing.auctionStartsAt,
-                        auctionEndsAt: listing.auctionEndsAt,
-                      }) ?? listing.priceUsd ?? "—")
-                    : listing.priceUsd
-                }`
-              : " · timed listing"}
-            {" · "}
-            {listing.medium}
-            {collection ? (
-              <>
-                {" · "}
-                <Link href={collectionHref(collection)}>{collection.title}</Link>
-              </>
-            ) : null}
-          </p>
+          <div className="listing-detail__meta">
+            <p className="listing-detail__byline">
+              by{" "}
+              <Link
+                href={`/creators/${listing.creatorId}`}
+                className="listing-detail__artist"
+              >
+                {creator?.displayName ?? listing.creatorId}
+              </Link>
+            </p>
+            <p className="listing-detail__facts">
+              <span className="listing-detail__price">{priceLabel}</span>
+              <span className="listing-detail__sep" aria-hidden="true">
+                ·
+              </span>
+              <span className="listing-detail__medium">{listing.medium}</span>
+              {collection ? (
+                <>
+                  <span className="listing-detail__sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <Link
+                    href={collectionHref(collection)}
+                    className="listing-detail__collection"
+                  >
+                    {collection.title}
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          </div>
           <p className="listing-detail__desc">
             {listing.description || "No description yet."}
           </p>
@@ -252,40 +274,66 @@ export default async function ListingDetailPage({
             />
           ) : null}
           {minted || listing.tokenId ? (
-            <p className="listing-detail__chain">
+            <div className="listing-detail__chain">
               {listing.tokenId ? (
-                <span>
-                  Token {listing.tokenId}
-                  {listing.contractAddress
-                    ? ` · ${listing.contractAddress.slice(0, 8)}…`
-                    : ""}
-                </span>
+                <p
+                  className="listing-detail__token"
+                  title={
+                    listing.contractAddress
+                      ? `${listing.tokenId} · ${listing.contractAddress}`
+                      : listing.tokenId
+                  }
+                >
+                  <span className="listing-detail__token-label">Token</span>{" "}
+                  <code className="listing-detail__token-id">
+                    {shortTxHash(listing.tokenId, 12)}
+                  </code>
+                  {listing.contractAddress ? (
+                    <span className="listing-detail__contract">
+                      {" · "}
+                      {shortTxHash(listing.contractAddress, 8)}
+                    </span>
+                  ) : null}
+                </p>
               ) : null}
               {listing.mintTxHash ? (
-                <span style={{ display: "block", marginTop: "0.35rem" }}>
+                <p className="listing-detail__chain-links">
                   <TxExplorerLink
                     hash={listing.mintTxHash}
                     chain={listing.chain}
                     network={listing.network}
                     label="View mint tx"
+                    className="listing-detail__chain-link"
                   />
                   {explorerToken ? (
                     <>
-                      {" · "}
-                      <a href={explorerToken} target="_blank" rel="noreferrer">
+                      <span className="listing-detail__sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <a
+                        href={explorerToken}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="listing-detail__chain-link"
+                      >
                         Token ↗
                       </a>
                     </>
                   ) : null}
-                </span>
+                </p>
               ) : explorerToken ? (
-                <span style={{ display: "block", marginTop: "0.35rem" }}>
-                  <a href={explorerToken} target="_blank" rel="noreferrer">
+                <p className="listing-detail__chain-links">
+                  <a
+                    href={explorerToken}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="listing-detail__chain-link"
+                  >
                     Explorer ↗
                   </a>
-                </span>
+                </p>
               ) : null}
-            </p>
+            </div>
           ) : null}
           {listing.styleTags.length > 0 ? (
             <p className="listing-detail__tags">
