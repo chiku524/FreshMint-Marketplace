@@ -1,15 +1,19 @@
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { FollowButton } from "@/components/FollowButton";
-import { PuzzleRail } from "@/components/PuzzleRail";
-import { WorkCard } from "@/components/WorkCard";
+import { ProfileWorksExplorer } from "@/components/ProfileWorksExplorer";
 import { getSessionUser } from "@/lib/auth/session";
+import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingCreator } from "@/lib/discovery";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
-import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
-import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
+import {
+  PROFILE_VIEW_COOKIE,
+  resolveProfileView,
+} from "@/lib/profile-view";
 import { creatorPageMetadata } from "@/lib/seo/site";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -28,10 +32,17 @@ export async function generateMetadata({
 
 export default async function CreatorProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const viewQuery = typeof sp.view === "string" ? sp.view : null;
+  const viewCookie = (await cookies()).get(PROFILE_VIEW_COOKIE)?.value;
+  const initialView = resolveProfileView(viewQuery, viewCookie);
+
   const engine = await getDiscoveryEngine();
   const creator = engine.state.creators.get(id);
   if (!creator) notFound();
@@ -49,6 +60,25 @@ export default async function CreatorProfilePage({
   const following =
     user != null &&
     (engine.state.follows.get(user.id)?.followedArtistIds.includes(id) ?? false);
+
+  const collectionItems = collections.map((collection) => {
+    const heroId = collection.heroListingId;
+    const hero =
+      (heroId ? engine.state.listings.get(heroId) : null) ??
+      [...engine.state.listings.values()].find(
+        (l) => l.collectionId === collection.id && l.mediaUrl,
+      ) ??
+      null;
+    return {
+      id: collection.id,
+      title: collection.title,
+      slug: collection.slug,
+      totalItems: collection.totalItems,
+      chain: getNetwork(resolveNetwork(collection.network, collection.chain))
+        .label,
+      coverUrl: collection.imageUrl || hero?.mediaUrl || null,
+    };
+  });
 
   return (
     <div className="page-wrap">
@@ -144,44 +174,18 @@ export default async function CreatorProfilePage({
         </div>
       </div>
 
-      {collections.length ? (
-        <section style={{ marginBottom: "2rem" }}>
-          <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.4rem" }}>
-            Collections ({collections.length})
-          </h2>
-          <p style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", margin: 0 }}>
-            {collections.map((collection) => (
-              <Link
-                key={collection.id}
-                href={collectionHref(collection)}
-                className="badge"
-              >
-                {collection.title} · {collection.totalItems}
-              </Link>
-            ))}
-          </p>
-        </section>
-      ) : null}
-
-      <h2 className="display" style={{ margin: "0 0 1rem", fontSize: "1.4rem" }}>
-        Works ({works.length})
-      </h2>
-      {works.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>No public listings yet.</p>
-      ) : (
-        <PuzzleRail>
-          {works.map((listing) => (
-            <WorkCard
-              key={listing.id}
-              listing={listing}
-              emerging={emerging.emerging}
-              creatorName={creator.displayName}
-              showActions
-              sold={soldIds.has(listing.id)}
-            />
-          ))}
-        </PuzzleRail>
-      )}
+      <ProfileWorksExplorer
+        initialView={initialView}
+        collections={collectionItems}
+        works={works.map((listing) => ({
+          listing,
+          emerging: emerging.emerging,
+          creatorName: creator.displayName,
+          creatorAvatarUrl: creator.avatarUrl,
+          showActions: true,
+          sold: soldIds.has(listing.id),
+        }))}
+      />
     </div>
   );
 }
