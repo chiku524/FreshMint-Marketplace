@@ -1,5 +1,6 @@
 "use client";
 
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -85,10 +86,11 @@ export function ResaleListButton({
       {error ? (
         <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
       ) : (
-        <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-          Buy-now secondary listing. Platform 0.5% + creator royalty (default 5%) come from the
-          listed price.
-        </p>
+        <PlatformFeeBreakdown
+          priceUsd={Number(price) > 0 ? Number(price) : defaultPriceUsd}
+          compact
+          isSecondary
+        />
       )}
     </form>
   );

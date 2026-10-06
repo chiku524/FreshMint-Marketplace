@@ -186,7 +186,7 @@ export function DocsGuide() {
               Treasury fee
             </h2>
             <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
-              Every primary sale takes{" "}
+              Every NFT sale on FreshMint takes{" "}
               <strong style={{ color: "var(--ink)" }}>
                 {PLATFORM_FEE_PERCENT.total}%
               </strong>{" "}
@@ -194,7 +194,9 @@ export function DocsGuide() {
               <strong style={{ color: "var(--ink)" }}>
                 {PLATFORM_FEE_PERCENT.sellerNet}%
               </strong>
-              . Quote is in USD; you pay the native amount shown at checkout.
+              . That includes buy now, timed listings, English and Dutch auctions,
+              accepted offers, collection packages, and resales. Quote is in USD;
+              you pay the native amount shown at checkout.
             </p>
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
               That cut funds community events, future updates, and running the

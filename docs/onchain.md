@@ -45,14 +45,17 @@ Creates stay on FreshMint; **primary buys are crypto-only** with ownership at pu
 - Confirm deploy: `POST /api/collections/[id]/deploy`. Confirm mint batches: `POST /api/collections/[id]/mint`.
 - Buy: `POST /api/purchase` (crypto fields), confirm steps: `POST /api/purchase/confirm`, quote: `POST /api/purchase/quote`.
 
-## Platform fees (primary sales)
+## Platform fees (all FreshMint NFT sales)
 
-Every purchase takes a **0.5%** treasury fee from the listed price (buyer still pays the listed amount):
+Every NFT sale that settles on FreshMint takes a **0.5%** treasury fee from the
+sale amount (buyer still pays the listed / bid / offer / package price):
 
 | Share | BPS | Recipient |
 |-------|-----|-----------|
 | 0.5%  | 50  | Marketplace treasury — community, events, and future updates (EVM + Solana settlement addresses; BTC recorded for ops) |
 | 99.5% | —   | Seller |
+
+Covered services: **buy now**, **timed listing**, **English auction**, **Dutch auction**, **accepted offers**, **collection packages**, **resale** (resale also deducts creator royalty). Creator mint/deploy gas is network gas, not this fee. Featured boost remains a separate **$15 USD** promotional payment to the same treasury.
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 
@@ -65,7 +68,7 @@ npm run wallets:deploy-squads
 
 Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_TREASURY_BTC`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
-Platform sales record the 0.5% split on each `Purchase` row. Primary checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
+Platform sales record the 0.5% split on each `Purchase` row. Checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout (0.5% on-chain to treasury); marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
 
 ## Featured boost
 

@@ -1,9 +1,10 @@
 "use client";
 
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import { resolveBuyAuthCta } from "@/lib/marketplace/buy-auth-cta";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { resolveBuyAuthCta } from "@/lib/marketplace/buy-auth-cta";
 
 type Offer = {
   id: string;
@@ -128,7 +129,8 @@ export function OfferPanel({
       </h3>
       <p className="fm-form-note" style={{ margin: "0 0 0.65rem" }}>
         Make an offer below the list price. Sellers can accept; the buyer then
-        pays in crypto.
+        pays in crypto through FreshMint (0.5% treasury fee from the offer
+        amount).
       </p>
 
       {!isSeller ? (
@@ -152,6 +154,10 @@ export function OfferPanel({
                 required
               />
             </label>
+            <PlatformFeeBreakdown
+              priceUsd={Number(amount) > 0 ? Number(amount) : null}
+              compact
+            />
             <button
               type="submit"
               className="fm-btn fm-btn--primary"

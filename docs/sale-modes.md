@@ -13,6 +13,8 @@ Legacy `type === "auction"` with missing `saleMode` resolves to **`timed_window`
 
 `type` stays `auction` for timed listing, English, and Dutch so Timed / Auctions discovery keeps working. Badges use `saleMode`. Happy path is Buy now; English/Dutch are advanced options in create + listing “Advanced selling”.
 
+All of these sale modes settle on FreshMint. The same **0.5% treasury / 99.5% seller** split applies (see `docs/onchain.md`).
+
 ## English auction
 
 - In-app USD bids (`Bid` rows). No on-chain English auction contracts.

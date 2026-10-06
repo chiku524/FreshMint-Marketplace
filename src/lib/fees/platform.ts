@@ -1,14 +1,33 @@
 /**
- * FreshMint platform fees on primary sales.
- * Buyer pays the listed price; proceeds are split:
+ * FreshMint platform fees on **every NFT marketplace sale** that settles
+ * through FreshMint (not creator gas, not the optional $15 Featured boost).
+ *
+ * Buyer pays the listed / bid / offer / package price; proceeds are split:
  *   0.5% → marketplace treasury (community, events, future updates)
  *   99.5% → seller
+ *
+ * Native checkout pays the listing-chain treasury address (`platformFeeRecipients`);
+ * seller net is recorded on the Purchase for payout.
  */
 export const PLATFORM_FEE_BPS = {
   treasury: 50,
   operator: 0,
   total: 50,
 } as const;
+
+/** NFT sale services that always take {@link PLATFORM_FEE_BPS} to treasury. */
+export const NFT_MARKETPLACE_SALE_SERVICES = [
+  "buy_now",
+  "timed_listing",
+  "english_auction",
+  "dutch_auction",
+  "offer_accept",
+  "collection_package",
+  "resale",
+] as const;
+
+export type NftMarketplaceSaleService =
+  (typeof NFT_MARKETPLACE_SALE_SERVICES)[number];
 
 export const PLATFORM_FEE_PERCENT = {
   treasury: 0.5,

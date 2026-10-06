@@ -21,6 +21,7 @@ import {
   toWeb3JsLegacyTransaction,
 } from "@metaplex-foundation/umi-web3js-adapters";
 import { rpcUrlFor } from "@/lib/chains/registry";
+import { PLATFORM_FEE_BPS } from "@/lib/fees/platform";
 import type { Chain } from "@/lib/discovery/types";
 import type { MintIntent } from "./evm";
 
@@ -121,10 +122,13 @@ export function buildSolanaPurchaseIntent(input: {
     mode: "memo_fallback";
   };
 } {
-  // Legacy memo-only buy intent. Primary marketplace settlement uses
-  // PLATFORM_FEE_BPS (0.5% treasury) via splitSaleProceeds — not this path.
-  // Mirrors optional on-chain EVM buy() 2.5% (1.5% treasury + 1% operator).
-  const feeBps = { treasury: 150, operator: 100, total: 250 };
+  // Legacy memo-only buy intent. Live settlement uses PLATFORM_FEE_BPS
+  // (0.5% treasury) via splitSaleProceeds — keep the memo in lockstep.
+  const feeBps = {
+    treasury: PLATFORM_FEE_BPS.treasury,
+    operator: PLATFORM_FEE_BPS.operator,
+    total: PLATFORM_FEE_BPS.total,
+  };
   const memo = JSON.stringify({
     kind: "freshmint_buy",
     listingId: input.listingId,

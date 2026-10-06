@@ -1,5 +1,6 @@
 "use client";
 
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -180,8 +181,13 @@ export function BidPanel({
       {live ? (
         <>
           <p className="fm-form-note" style={{ marginBottom: "0.65rem" }}>
-            Open bidding in USD. Min next bid ${minBidUsd}.
+            Open bidding in USD. Min next bid ${minBidUsd}. Winning bid settles
+            on FreshMint with a 0.5% treasury fee.
           </p>
+          <PlatformFeeBreakdown
+            priceUsd={Number(amount) > 0 ? Number(amount) : minBidUsd}
+            compact
+          />
           <div className="fm-form-actions">
             <input
               type="number"

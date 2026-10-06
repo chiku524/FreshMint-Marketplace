@@ -75,7 +75,7 @@ const STEPS: Step[] = [
     realm: "chain",
     x: 760,
     y: 228,
-    body: `Pay native (or bridge via Relay) at the listed USD quote. FreshMint takes ${PLATFORM_FEE_PERCENT.total}% for the treasury; the seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%. A 1/1 sells once.`,
+    body: `Pay native (or bridge via Relay) at the listed USD quote. FreshMint takes ${PLATFORM_FEE_PERCENT.total}% of every NFT sale for the treasury (buy now, auctions, offers, packages, resale); the seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%. A 1/1 sells once.`,
   },
   {
     id: "own",
