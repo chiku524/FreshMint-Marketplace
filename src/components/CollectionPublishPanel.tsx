@@ -1,6 +1,11 @@
 "use client";
 
+import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
+import {
+  buildCollectionPublishLifecycle,
+  type PublishPhaseId,
+} from "@/lib/marketplace/publish-status";
 import {
   maybeSendWalletTx,
   requestBuyerAddress,
@@ -11,7 +16,7 @@ import {
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type DraftPiece = {
   id: string;
@@ -45,23 +50,61 @@ export function CollectionPublishPanel({
   collectionId,
   network,
   drafts,
+  deployStatus = "none",
+  contractAddress = null,
+  liveCount = 0,
 }: {
   collectionId: string;
   network: string;
   drafts: DraftPiece[];
+  deployStatus?: string | null;
+  contractAddress?: string | null;
+  liveCount?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [busyPhase, setBusyPhase] = useState<PublishPhaseId | null>(null);
+  const [failedPhase, setFailedPhase] = useState<PublishPhaseId | null>(null);
 
   const mintedDrafts = drafts.filter((d) => d.minted);
   const unmintedDrafts = drafts.filter((d) => !d.minted);
+
+  const lifecycle = useMemo(
+    () =>
+      buildCollectionPublishLifecycle({
+        deployStatus,
+        contractAddress,
+        draftCount: drafts.length,
+        mintedDraftCount: mintedDrafts.length,
+        unmintedDraftCount: unmintedDrafts.length,
+        liveCount,
+        busyPhase: busy ? busyPhase : null,
+        failedPhase,
+        progressNote: progress ?? (failedPhase ? msg : null),
+      }),
+    [
+      deployStatus,
+      contractAddress,
+      drafts.length,
+      mintedDrafts.length,
+      unmintedDrafts.length,
+      liveCount,
+      busy,
+      busyPhase,
+      failedPhase,
+      progress,
+      msg,
+    ],
+  );
 
   if (drafts.length === 0) return null;
 
   async function softLaunchMinted() {
     setBusy(true);
+    setBusyPhase("live");
+    setFailedPhase(null);
     setMsg(null);
     setProgress("Publishing minted drafts…");
     try {
@@ -83,9 +126,11 @@ export function CollectionPublishPanel({
       );
       router.refresh();
     } catch (err) {
+      setFailedPhase("live");
       setMsg(err instanceof Error ? err.message : "publish_failed");
     } finally {
       setBusy(false);
+      setBusyPhase(null);
       setProgress(null);
     }
   }
@@ -94,6 +139,7 @@ export function CollectionPublishPanel({
   async function ensureBoingCollectionDeploy(
     creatorAddress: string | null,
   ): Promise<void> {
+    setBusyPhase("deploy");
     setProgress("Checking collection deploy…");
     const sync = await fetch(`/api/collections/${collectionId}/deploy`, {
       method: "POST",
@@ -239,7 +285,9 @@ export function CollectionPublishPanel({
 
   async function mintAndPublishRemaining() {
     setBusy(true);
+    setFailedPhase(null);
     setMsg(null);
+    let phase: PublishPhaseId = "mint";
     try {
       const listingIds = unmintedDrafts.map((d) => d.id);
       if (!listingIds.length) {
@@ -251,9 +299,13 @@ export function CollectionPublishPanel({
       const creatorAddress = await requestBuyerAddress(chainVm);
 
       if (network === "boing") {
+        phase = "deploy";
+        setBusyPhase("deploy");
         await ensureBoingCollectionDeploy(creatorAddress);
       }
 
+      phase = "mint";
+      setBusyPhase("mint");
       setProgress("Preparing mint batches…");
       let prep = await fetch(`/api/collections/${collectionId}/mint`, {
         method: "POST",
@@ -273,7 +325,11 @@ export function CollectionPublishPanel({
         network === "boing" &&
         isMissingContractError(String(prepData.error || ""))
       ) {
+        phase = "deploy";
+        setBusyPhase("deploy");
         await ensureBoingCollectionDeploy(creatorAddress);
+        phase = "mint";
+        setBusyPhase("mint");
         setProgress("Preparing mint batches…");
         prep = await fetch(`/api/collections/${collectionId}/mint`, {
           method: "POST",
@@ -373,13 +429,18 @@ export function CollectionPublishPanel({
       );
       router.refresh();
     } catch (err) {
-      setMsg(
-        mintPublishErrorMessage(
-          err instanceof Error ? err.message : "mint_failed",
-        ),
+      const text = mintPublishErrorMessage(
+        err instanceof Error ? err.message : "mint_failed",
       );
+      setMsg(text);
+      if (isMissingContractError(text) || /deploy|contract/i.test(text)) {
+        setFailedPhase("deploy");
+      } else {
+        setFailedPhase(phase);
+      }
     } finally {
       setBusy(false);
+      setBusyPhase(null);
       setProgress(null);
     }
   }
@@ -389,7 +450,13 @@ export function CollectionPublishPanel({
       <h3 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.15rem" }}>
         Finish publishing
       </h3>
-      <p className="fm-form-note" style={{ margin: "0 0 0.75rem" }}>
+      <PublishLifecycleStatus
+        snapshot={lifecycle}
+        title="Where you are"
+        compact
+        testId="collection-publish-lifecycle"
+      />
+      <p className="fm-form-note" style={{ margin: "0.75rem 0" }}>
         {drafts.length} draft{drafts.length === 1 ? "" : "s"} still private
         {mintedDrafts.length
           ? ` · ${mintedDrafts.length} minted and ready to list`

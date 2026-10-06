@@ -1,8 +1,10 @@
 import { FollowButton } from "@/components/FollowButton";
 import { BidPanel } from "@/components/BidPanel";
 import { ListingActions } from "@/components/ListingActions";
+import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
 import { ManageListingPanel } from "@/components/ManageListingPanel";
 import { OfferPanel } from "@/components/OfferPanel";
+import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { ResaleListButton } from "@/components/ResaleListButton";
 import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import {
@@ -16,6 +18,7 @@ import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingListing } from "@/lib/discovery";
 import { getSessionUser } from "@/lib/auth/session";
+import { listListingActivity } from "@/lib/marketplace/activity";
 import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import { canUserStageListing, stageLabel } from "@/lib/marketplace/lifecycle";
 import {
@@ -25,6 +28,7 @@ import {
   listingHasPublicSurface,
   listingSellerId,
 } from "@/lib/marketplace/listing-manage";
+import { buildListingPublishLifecycle } from "@/lib/marketplace/publish-status";
 import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { lazySettleEnglishAuction } from "@/lib/marketplace/english-auction";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
@@ -146,6 +150,20 @@ export default async function ListingDetailPage({
       : listing.contractAddress
         ? net.explorerAddress(listing.contractAddress)
         : null;
+
+  const activity = await listListingActivity(listing.id, 40);
+  const publishLifecycle =
+    isManager && (listing.stage === "draft" || !minted)
+      ? buildListingPublishLifecycle({
+          stage: listing.stage,
+          delisted: listing.delisted,
+          tokenId: listing.tokenId,
+          contractAddress: listing.contractAddress,
+          mintTxHash: listing.mintTxHash,
+          collectionDeployStatus: collection?.deployStatus,
+          collectionContractAddress: collection?.contractAddress,
+        })
+      : null;
 
   const mediaStyle = media
     ? {
@@ -446,6 +464,15 @@ export default async function ListingDetailPage({
             />
           ) : null}
 
+          {publishLifecycle ? (
+            <div className="listing-detail__publish-status">
+              <PublishLifecycleStatus
+                snapshot={publishLifecycle}
+                title="Creation status"
+              />
+            </div>
+          ) : null}
+
           <dl className="listing-detail__signals">
             <dt>Saves</dt>
             <dd>{listing.signals.saves}</dd>
@@ -460,6 +487,8 @@ export default async function ListingDetailPage({
           </dl>
         </div>
       </div>
+
+      <ListingActivityTimeline events={activity} />
     </div>
   );
 }

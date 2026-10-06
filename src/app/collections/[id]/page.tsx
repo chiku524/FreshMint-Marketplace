@@ -4,11 +4,13 @@ import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
 import { FollowButton } from "@/components/FollowButton";
+import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
 import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
+import { listCollectionActivity } from "@/lib/marketplace/activity";
 import { formatBytes, COLLECTION_MEDIA_CAP_BYTES } from "@/lib/marketplace/drops";
 import { aggregateCollectionVolumesUsd } from "@/lib/marketplace/collections-browse";
 import { deriveCollectionFloorUsd } from "@/lib/marketplace/home-discovery";
@@ -99,6 +101,10 @@ export default async function CollectionDetailPage({
     hero?.description?.trim() ||
     `Creator-owned set on ${network}. Collectors pay crypto and receive the NFT at purchase.`;
   const headerItemCount = pieces.length || 0;
+  const collectionActivity = await listCollectionActivity(collection.id, 30);
+  const liveCount = allInCollection.filter(
+    (l) => l.stage !== "draft" && !l.delisted,
+  ).length;
 
   return (
     <div className="page-wrap collection-detail">
@@ -186,6 +192,9 @@ export default async function CollectionDetailPage({
           <CollectionPublishPanel
             collectionId={collection.id}
             network={network}
+            deployStatus={collection.deployStatus ?? "none"}
+            contractAddress={collection.contractAddress}
+            liveCount={liveCount}
             drafts={ownerDrafts.map((l) => ({
               id: l.id,
               title: l.title,
@@ -213,6 +222,7 @@ export default async function CollectionDetailPage({
 
       <CollectionDetailTabs
         itemCount={pieces.length}
+        activityCount={collectionActivity.length}
         items={
           pieces.length ? (
             <div className="collection-items-grid">
@@ -253,6 +263,13 @@ export default async function CollectionDetailPage({
               )}
             </p>
           )
+        }
+        activity={
+          <ListingActivityTimeline
+            events={collectionActivity}
+            showListingLinks
+            emptyLabel="No mint, list, offer, or sale activity in this collection yet."
+          />
         }
         about={
           <dl className="collection-about">

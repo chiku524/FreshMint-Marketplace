@@ -2,18 +2,23 @@
 
 import { useState, type ReactNode } from "react";
 
-type TabId = "items" | "about";
+type TabId = "items" | "activity" | "about";
 
 export function CollectionDetailTabs({
   items,
+  activity,
   about,
   itemCount,
+  activityCount,
 }: {
   items: ReactNode;
+  activity?: ReactNode;
   about: ReactNode;
   itemCount: number;
+  activityCount?: number;
 }) {
   const [tab, setTab] = useState<TabId>("items");
+  const hasActivity = activity != null;
 
   return (
     <div className="collection-tabs">
@@ -28,6 +33,20 @@ export function CollectionDetailTabs({
           Items
           <span className="collection-tabs__count">{itemCount}</span>
         </button>
+        {hasActivity ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "activity"}
+            className={tab === "activity" ? "is-active" : undefined}
+            onClick={() => setTab("activity")}
+          >
+            Activity
+            {typeof activityCount === "number" ? (
+              <span className="collection-tabs__count">{activityCount}</span>
+            ) : null}
+          </button>
+        ) : null}
         <button
           type="button"
           role="tab"
@@ -45,6 +64,15 @@ export function CollectionDetailTabs({
       >
         {items}
       </div>
+      {hasActivity ? (
+        <div
+          role="tabpanel"
+          className="collection-tabs__panel"
+          hidden={tab !== "activity"}
+        >
+          {activity}
+        </div>
+      ) : null}
       <div
         role="tabpanel"
         className="collection-tabs__panel"

@@ -3,6 +3,7 @@
 import { CreateLivePreview } from "@/components/CreateLivePreview";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { PublishConfetti } from "@/components/PublishConfetti";
+import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { TraitEditor } from "@/components/TraitEditor";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { WizardShell } from "@/components/WizardShell";
@@ -33,6 +34,10 @@ import {
   validateCollectionTitleFormat,
   type CollectionTitleIssue,
 } from "@/lib/marketplace/collection-title";
+import {
+  buildCollectionPublishLifecycle,
+  wizardBusyPhase,
+} from "@/lib/marketplace/publish-status";
 import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
 import { isExplorableTxHash } from "@/lib/onchain/explorer";
 import {
@@ -270,6 +275,51 @@ export function CreateWizard() {
   const usedBytes =
     (selected?.mediaBytes ?? 0) + pieces.reduce((sum, item) => sum + item.size, 0);
   const piecesBytes = pieces.reduce((sum, item) => sum + item.size, 0);
+
+  const reviewLifecycle = useMemo(() => {
+    const busy = wizardBusyPhase({
+      listProgress: Boolean(listProgress),
+      deployNote,
+      mintProgress: Boolean(mintProgress),
+      published: Boolean(published),
+    });
+    const deployReady = selected ? isDeployReadyOption(selected) : false;
+    return buildCollectionPublishLifecycle({
+      deployStatus: published
+        ? "confirmed"
+        : deployReady
+          ? "confirmed"
+          : deployNote
+            ? "pending_wallet"
+            : (selected?.deployStatus ?? "none"),
+      contractAddress: selected?.contractAddress ?? null,
+      draftCount: pieces.length || 1,
+      mintedDraftCount: published ? pieces.length || 1 : 0,
+      unmintedDraftCount: published ? 0 : pieces.length || 1,
+      liveCount: published ? pieces.length || 1 : 0,
+      busyPhase: busy,
+      failedPhase:
+        error && /deploy|contract not found|onchain_deploy/i.test(error)
+          ? "deploy"
+          : error && /mint/i.test(error)
+            ? "mint"
+            : null,
+      progressNote:
+        mintProgress
+          ? `Minting batch ${mintProgress.current} of ${mintProgress.total}…`
+          : listProgress
+            ? `Creating listings ${listProgress.current} of ${listProgress.total}…`
+            : deployNote || error || null,
+    });
+  }, [
+    listProgress,
+    deployNote,
+    mintProgress,
+    published,
+    selected,
+    pieces.length,
+    error,
+  ]);
 
 
   useEffect(() => {
@@ -2383,6 +2433,11 @@ export function CreateWizard() {
               Minting at publish is required to sell. Unminted drafts stay off
               the market and show as “Not minted yet” to collectors.
             </p>
+            <PublishLifecycleStatus
+              snapshot={reviewLifecycle}
+              title="Draft → deploy → mint → live"
+              testId="create-publish-lifecycle"
+            />
             <ol className="create-wizard__mint-checklist" aria-label="Mint checklist">
               <li>
                 <strong>Deploy collection</strong> — confirmed on your mint network
