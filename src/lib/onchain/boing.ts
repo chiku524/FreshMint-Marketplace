@@ -1,1 +1,1 @@
-@file:///tmp/boing_for_mcp.txt
+$file:/agent/repos/FreshMint-Marketplace/src/lib/onchain/boing.ts
