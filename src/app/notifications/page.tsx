@@ -1,13 +1,12 @@
 import { NotificationInbox } from "@/components/NotificationInbox";
 import { getSessionUser } from "@/lib/auth/session";
+import { noIndexMetadata } from "@/lib/seo/site";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Notifications — FreshMint Marketplace",
-};
+export const metadata = noIndexMetadata("Notifications");
 
 export default async function NotificationsPage() {
   const user = await getSessionUser();

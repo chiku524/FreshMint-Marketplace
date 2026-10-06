@@ -16,10 +16,38 @@ import {
 } from "@/lib/marketplace/listing-manage";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { collectionPageMetadata } from "@/lib/seo/site";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id: idOrSlug } = await params;
+  const engine = await getDiscoveryEngine();
+  const surface = engine.getCollectionSurface(idOrSlug);
+  if (!surface) return collectionPageMetadata(null);
+  const { collection } = surface;
+  const heroId = collection.heroListingId;
+  const hero = heroId ? engine.state.listings.get(heroId) : null;
+  const cover =
+    [...engine.state.listings.values()].find((l) => l.collectionId === collection.id)
+      ?.mediaUrl ?? null;
+  return collectionPageMetadata({
+    id: collection.id,
+    title: collection.title,
+    slug: collection.slug,
+    description: collection.description,
+    imageUrl: collection.imageUrl,
+    bannerUrl: collection.bannerUrl,
+    coverUrl: hero?.mediaUrl ?? cover,
+  });
+}
 
 export default async function CollectionDetailPage({
   params,

@@ -20,7 +20,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Creators — FreshMint Marketplace",
+  title: "Creators",
   description:
     "Browse creators by 7-day sales volume, newest first listings, or all-time primary volume.",
 };

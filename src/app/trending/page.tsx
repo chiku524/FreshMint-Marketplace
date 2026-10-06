@@ -9,7 +9,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Most viewed — FreshMint Marketplace",
+  title: "Most viewed",
   description:
     "Public works ordered by recorded page views, saves, and unique viewers.",
 };

@@ -1,31 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="field" x1="12" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#163528"/>
-      <stop offset="0.55" stop-color="#0c1a14"/>
-      <stop offset="1" stop-color="#07110d"/>
+    <linearGradient id="fm-icon-field" x1="10" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1a3a2c"/>
+      <stop offset="0.5" stop-color="#0d1c15"/>
+      <stop offset="1" stop-color="#08110d"/>
     </linearGradient>
-    <radialGradient id="wash" cx="32" cy="28" r="28" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7ed9a8" stop-opacity="0.28"/>
-      <stop offset="0.55" stop-color="#4db884" stop-opacity="0.1"/>
+    <radialGradient id="fm-icon-wash" cx="32" cy="26" r="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7ed9a8" stop-opacity="0.22"/>
       <stop offset="1" stop-color="#07110d" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="leafR" x1="38" y1="14" x2="46" y2="32" gradientUnits="userSpaceOnUse">
+    <linearGradient id="fm-icon-leafR" x1="26" y1="14" x2="40" y2="40" gradientUnits="userSpaceOnUse">
       <stop stop-color="#7ed9a8"/>
       <stop offset="1" stop-color="#4db884"/>
     </linearGradient>
-    <linearGradient id="leafL" x1="16" y1="14" x2="30" y2="32" gradientUnits="userSpaceOnUse">
+    <linearGradient id="fm-icon-leafL" x1="24" y1="14" x2="38" y2="40" gradientUnits="userSpaceOnUse">
       <stop stop-color="#4db884"/>
       <stop offset="1" stop-color="#2f8a5e"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="18" fill="url(#field)"/>
-  <rect width="64" height="64" rx="18" fill="url(#wash)"/>
-  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="17.25" stroke="#4db884" stroke-opacity="0.22"/>
-  <path d="M32 58c.2-9 .6-17 1.2-28" stroke="#3d6b52" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M33.2 30C38 24 44 18 50 13C51.5 14.8 51.2 16.5 50 17.2C52 18.5 52.2 20.2 50.8 21.2C53 22.8 53 24.8 51.2 26C48 28.5 41 32 33.2 30Z" fill="url(#leafR)"/>
-  <path d="M33.2 30C28.5 24 22.5 18 16.5 13.5C15 15.3 15.3 17 16.5 17.7C14.5 19 14.3 20.7 15.7 21.7C13.5 23.3 13.5 25.3 15.3 26.5C18.5 29 26 32 33.2 30Z" fill="url(#leafL)"/>
-  <circle cx="33.2" cy="30.4" r="2.1" fill="#3d6b52"/>
-  <path d="M33.2 30C40 23.5 46.5 17.5 51.5 13.5" stroke="#0e2418" stroke-width="1.25" stroke-linecap="round" opacity="0.45"/>
-  <path d="M33.2 30C26.5 23.5 20 18 15 14" stroke="#0e2418" stroke-width="1.15" stroke-linecap="round" opacity="0.4"/>
+  <rect width="64" height="64" rx="16" fill="url(#fm-icon-field)"/>
+  <rect width="64" height="64" rx="16" fill="url(#fm-icon-wash)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="15.25" stroke="#4db884" stroke-opacity="0.28"/>
+  <path d="M32 56C32.05 51 32.08 46.5 32 42" stroke="#3d6b52" stroke-width="2.35" stroke-linecap="round"/>
+  <g transform="translate(32 42) rotate(-50) scale(1) translate(-32 -42)">
+    <path d="M32 42C25.6 40.6 21.6 29.4 26.2 18.2C28.8 13.4 31.15 11.5 32 11.3C32.85 11.5 35.2 13.4 37.8 18.2C42.4 29.4 38.4 40.6 32 42Z" fill="url(#fm-icon-leafL)"/>
+    <path d="M32 40.8C32 33.5 32 22.5 32 14.8" stroke="#0e2418" stroke-width="1.1" stroke-linecap="round" opacity="0.42"/>
+    <path d="M32 33.5C29.2 32.2 27.4 31.2 26.2 30.4M32 25.5C29.6 24.4 28.2 23.5 27.2 22.8" stroke="#0e2418" stroke-width="0.7" stroke-linecap="round" opacity="0.3"/>
+    <path d="M32 33.5C34.8 32.2 36.6 31.2 37.8 30.4M32 25.5C34.4 24.4 35.8 23.5 36.8 22.8" stroke="#0e2418" stroke-width="0.7" stroke-linecap="round" opacity="0.3"/>
+  </g>
+  <g transform="translate(32 42) rotate(50) scale(1) translate(-32 -42)">
+    <path d="M32 42C25.6 40.6 21.6 29.4 26.2 18.2C28.8 13.4 31.15 11.5 32 11.3C32.85 11.5 35.2 13.4 37.8 18.2C42.4 29.4 38.4 40.6 32 42Z" fill="url(#fm-icon-leafR)"/>
+    <path d="M32 40.8C32 33.5 32 22.5 32 14.8" stroke="#0e2418" stroke-width="1.1" stroke-linecap="round" opacity="0.42"/>
+    <path d="M32 33.5C29.2 32.2 27.4 31.2 26.2 30.4M32 25.5C29.6 24.4 28.2 23.5 27.2 22.8" stroke="#0e2418" stroke-width="0.7" stroke-linecap="round" opacity="0.3"/>
+    <path d="M32 33.5C34.8 32.2 36.6 31.2 37.8 30.4M32 25.5C34.4 24.4 35.8 23.5 36.8 22.8" stroke="#0e2418" stroke-width="0.7" stroke-linecap="round" opacity="0.3"/>
+  </g>
+  <circle cx="32" cy="42.15" r="1.85" fill="#3d6b52"/>
 </svg>

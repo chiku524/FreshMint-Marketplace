@@ -10,7 +10,7 @@ import { cookies } from "next/headers";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Collections — FreshMint Marketplace",
+  title: "Collections",
   description:
     "Browse creator collections with at least $1,000 all-time completed primary volume.",
 };

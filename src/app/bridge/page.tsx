@@ -2,7 +2,7 @@ import { BridgePanel } from "@/components/BridgePanel";
 import { chainMode, listBridgeNetworks } from "@/lib/chains/registry";
 
 export const metadata = {
-  title: "Bridge — FreshMint Marketplace",
+  title: "Bridge",
   description:
     "Move native ETH and SOL across FreshMint mint networks via Relay.",
 };

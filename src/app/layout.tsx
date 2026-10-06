@@ -10,6 +10,8 @@ import { DiscoverySidebar } from "@/components/DiscoverySidebar";
 import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
+import { appBaseUrl } from "@/lib/auth/paths";
+import { rootSiteMetadata, siteJsonLdGraph } from "@/lib/seo/site";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -34,11 +36,7 @@ const contra = localFont({
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "FreshMint Marketplace — Fair Discovery for Digital Art",
-  description:
-    "NFT marketplace for EVM and Solana with Emerging quotas, composed feeds, and anti-congestion discovery.",
-};
+export const metadata: Metadata = rootSiteMetadata();
 
 export default async function RootLayout({
   children,
@@ -50,6 +48,12 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${contra.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(siteJsonLdGraph(appBaseUrl())),
+          }}
+        />
         <Script id="fm-theme-boot" strategy="beforeInteractive">
           {THEME_BOOT_SCRIPT}
         </Script>

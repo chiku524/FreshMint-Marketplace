@@ -8,6 +8,12 @@ import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Rising",
+  description:
+    "Fairness-aware Rising feed with a hard Emerging quota and explore slots.",
+};
+
 export default async function RisingPage() {
   const engine = await getDiscoveryEngine();
   const user = await getSessionUser();

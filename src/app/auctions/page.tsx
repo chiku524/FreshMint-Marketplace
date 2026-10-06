@@ -17,7 +17,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Auctions — FreshMint Marketplace",
+  title: "Auctions",
   description:
     "Live timed drops and English auctions, plus cleared past primary sales.",
 };

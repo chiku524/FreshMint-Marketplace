@@ -2,10 +2,13 @@ import { AccountAuthForm } from "@/components/AccountAuthForm";
 import { isGoogleAuthConfigured } from "@/lib/auth/google";
 import { safeNextPath } from "@/lib/auth/paths";
 import { getSessionUser } from "@/lib/auth/session";
+import { noIndexMetadata } from "@/lib/seo/site";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = noIndexMetadata("Sign up");
 
 export default async function SignUpPage({
   searchParams,

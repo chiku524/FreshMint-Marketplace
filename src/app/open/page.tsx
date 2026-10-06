@@ -8,6 +8,12 @@ import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Open Lane",
+  description:
+    "Browse the Open Lane: filter by chain, medium, price, and sale mode.",
+};
+
 export default async function OpenLanePage({
   searchParams,
 }: {

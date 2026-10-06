@@ -6,6 +6,12 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Collector shelves",
+  description:
+    "Named collector curations that amplify emerging work others can follow.",
+};
+
 export default async function ShelvesPage() {
   const engine = await getDiscoveryEngine();
   const soldIds = await listClosedPrimarySaleIds();

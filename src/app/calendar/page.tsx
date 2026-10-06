@@ -5,6 +5,12 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Drop calendar",
+  description:
+    "Upcoming open editions and timed drops, paced by congestion caps.",
+};
+
 function fmt(ts: number) {
   return new Date(ts).toLocaleString(undefined, {
     month: "short",

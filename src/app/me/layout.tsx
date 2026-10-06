@@ -1,9 +1,15 @@
 import { AccountTabs } from "@/components/AccountTabs";
 import { getSessionUser } from "@/lib/auth/session";
+import { noIndexMetadata } from "@/lib/seo/site";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = noIndexMetadata(
+  "Account",
+  "Your FreshMint account, collection, and settings.",
+);
 
 export default async function MeLayout({
   children,

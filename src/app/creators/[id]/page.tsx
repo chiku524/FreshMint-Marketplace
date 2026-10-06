@@ -8,10 +8,23 @@ import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { creatorPageMetadata } from "@/lib/seo/site";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const engine = await getDiscoveryEngine();
+  const creator = engine.state.creators.get(id);
+  return creatorPageMetadata(creator ?? null);
+}
 
 export default async function CreatorProfilePage({
   params,

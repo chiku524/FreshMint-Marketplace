@@ -3,6 +3,12 @@ import { getPersistedMetrics } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Discovery metrics",
+  description:
+    "Public fairness metrics for Emerging share, quotas, and discovery health.",
+};
+
 function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`;
 }

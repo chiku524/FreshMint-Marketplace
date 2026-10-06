@@ -28,10 +28,23 @@ import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketpla
 import { lazySettleEnglishAuction } from "@/lib/marketplace/english-auction";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { listingPageMetadata } from "@/lib/seo/site";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const engine = await getDiscoveryEngine();
+  const listing = engine.state.listings.get(id);
+  return listingPageMetadata(listing ?? null);
+}
 
 export default async function ListingDetailPage({
   params,

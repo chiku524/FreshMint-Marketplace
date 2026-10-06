@@ -4,14 +4,29 @@ import { WorkCard } from "@/components/WorkCard";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { searchCatalog } from "@/lib/marketplace/search";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Search — FreshMint Marketplace",
-  description: "Find works, collections, and creators.",
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" ? sp.q.trim() : "";
+  if (q) {
+    return {
+      title: `Search: ${q}`,
+      description: `Works, collections, and creators matching “${q}”.`,
+    };
+  }
+  return {
+    title: "Search",
+    description: "Find works, collections, and creators.",
+  };
+}
 
 export default async function SearchPage({
   searchParams,

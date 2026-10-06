@@ -1,8 +1,11 @@
 import { StudioPanel } from "@/components/StudioPanel";
 import { getSessionUser } from "@/lib/auth/session";
+import { noIndexMetadata } from "@/lib/seo/site";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = noIndexMetadata("Studio");
 
 export default async function StudioPage() {
   const user = await getSessionUser();

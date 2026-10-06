@@ -7,6 +7,12 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Featured",
+  description:
+    "Curated Featured slots and paid Promoted boosts — never mixed into Rising or Open Lane quotas.",
+};
+
 export default async function FeaturedPage() {
   const engine = await getDiscoveryEngine();
   const featured = engine.buildFeatured();
