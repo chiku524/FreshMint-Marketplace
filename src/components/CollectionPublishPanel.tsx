@@ -22,7 +22,7 @@ function mintPublishErrorMessage(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "mint_failed";
   if (
-    /account not found|boing_|collection_not_deployed|onchain_deploy/i.test(
+    /account not found|boing_|collection_not_deployed|onchain_deploy|probe_unknown/i.test(
       trimmed,
     )
   ) {

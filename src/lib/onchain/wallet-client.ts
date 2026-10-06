@@ -341,6 +341,25 @@ export async function sendBoingMintWalletTx(tx: BoingWalletTx): Promise<string> 
   throw new Error("boing_tx_id_required");
 }
 
+/** Surface wallet/provider errors as a plain message (not opaque objects). */
+function boingProviderErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err && typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    for (const key of ["message", "error", "reason"]) {
+      const v = o[key];
+      if (typeof v === "string" && v.trim()) return v.trim();
+      if (v && typeof v === "object") {
+        const nested = (v as { message?: unknown }).message;
+        if (typeof nested === "string" && nested.trim()) return nested.trim();
+      }
+    }
+    if (typeof o.data === "string" && o.data.trim()) return o.data.trim();
+  }
+  return "boing_tx_failed";
+}
+
 /** Prefer this when deploy confirm needs the real contract AccountId. */
 export async function sendBoingWalletTxDetailed(
   tx: BoingWalletTx,
@@ -355,10 +374,15 @@ export async function sendBoingWalletTxDetailed(
   } catch {
     // Wallet may already be on testnet or omit switch.
   }
-  const result = await provider.request({
-    method: "boing_sendTransaction",
-    params: [tx.tx],
-  });
+  let result: unknown;
+  try {
+    result = await provider.request({
+      method: "boing_sendTransaction",
+      params: [tx.tx],
+    });
+  } catch (err) {
+    throw new Error(boingProviderErrorMessage(err));
+  }
 
   const txHash = extractBoingTxHashClient(result);
   const contractAddress = extractBoingContractAddressClient(result);

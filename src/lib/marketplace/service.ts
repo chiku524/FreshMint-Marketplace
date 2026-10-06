@@ -1264,6 +1264,7 @@ export async function prepareCollectionPublishMints(input: {
 
   if (network === "boing") {
     const {
+      findBoingNftCollectionDeploy,
       isBoingNativeAccountIdHex,
       normalizeBoingAccountId,
       probeBoingAccount,
@@ -1271,14 +1272,65 @@ export async function prepareCollectionPublishMints(input: {
     if (!isBoingNativeAccountIdHex(creator)) {
       return { ok: false as const, error: "boing_account_id_required" };
     }
-    const contract = normalizeBoingAccountId(collection.contractAddress!);
-    const contractProbe = await probeBoingAccount(contract);
+
+    async function probeExists(
+      accountId: string,
+    ): Promise<"exists" | "missing" | "unknown"> {
+      let probe = await probeBoingAccount(accountId);
+      if (probe === "unknown") {
+        probe = await probeBoingAccount(accountId);
+      }
+      return probe;
+    }
+
+    let contract = normalizeBoingAccountId(collection.contractAddress!);
+    let contractProbe = await probeExists(contract);
+
+    // DB may say deploy-ready while the stored AccountId is wrong/dead — heal.
+    if (contractProbe === "missing" && creator) {
+      const found = await findBoingNftCollectionDeploy({
+        senderAddress: creator,
+        assetName: collection.title.trim().slice(0, 32),
+      });
+      if (found) {
+        const healed = normalizeBoingAccountId(found.contractAddress);
+        if (healed !== contract) {
+          const syncTxHash = `0x${createHash("sha256")
+            .update(
+              `boing-sync:${collection.id}:${healed}:${found.blockHeight}`,
+            )
+            .digest("hex")}`;
+          const confirmed = await confirmCollectionDeploy({
+            collectionId: input.collectionId,
+            creatorId: input.creatorId,
+            txHash: syncTxHash,
+            contractAddress: healed,
+            escrowAddress: collection.escrowAddress,
+            creatorAddress: creator,
+          });
+          if (confirmed.ok) {
+            collection = confirmed.collection;
+            engine.state.collections.set(input.collectionId, confirmed.collection);
+            contract = normalizeBoingAccountId(collection.contractAddress!);
+            contractProbe = await probeExists(contract);
+          }
+        }
+      }
+    }
+
     if (contractProbe === "missing") {
       return { ok: false as const, error: "boing_collection_account_missing" };
     }
-    const creatorProbe = await probeBoingAccount(normalizeBoingAccountId(creator));
+    if (contractProbe !== "exists") {
+      return { ok: false as const, error: "boing_account_probe_unknown" };
+    }
+
+    const creatorProbe = await probeExists(normalizeBoingAccountId(creator));
     if (creatorProbe === "missing") {
       return { ok: false as const, error: "boing_creator_account_missing" };
+    }
+    if (creatorProbe !== "exists") {
+      return { ok: false as const, error: "boing_account_probe_unknown" };
     }
   }
 

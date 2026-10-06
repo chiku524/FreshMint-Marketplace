@@ -3,6 +3,9 @@
 export function formatBoingMintUserMessage(error: string | undefined): string {
   const raw = (error ?? "").trim();
   const code = raw.toLowerCase();
+  if (code === "boing_account_probe_unknown") {
+    return "Could not verify Boing accounts (RPC hiccup). Wait a moment and retry — if it keeps failing, check Boing network status.";
+  }
   if (
     code.includes("account not found") ||
     code.includes("account_not_found") ||

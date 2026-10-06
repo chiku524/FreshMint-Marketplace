@@ -33,6 +33,7 @@ import {
   validateCollectionTitleFormat,
   type CollectionTitleIssue,
 } from "@/lib/marketplace/collection-title";
+import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
 import { isExplorableTxHash } from "@/lib/onchain/explorer";
 import {
   maybeSendWalletTx,
@@ -1207,6 +1208,24 @@ export function CreateWizard() {
       const creatorAddress = await requestBuyerAddress(
         network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
       );
+
+      // Heal Boing deploy rows that never stored the real contract AccountId.
+      if (network === "boing") {
+        try {
+          await fetch(`/api/collections/${id}/deploy`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "sync",
+              creatorAddress: creatorAddress || undefined,
+            }),
+          });
+        } catch {
+          // Prepare still validates; sync is best-effort.
+        }
+      }
+
       const mintPrep = await retryWithBackoff(
         async () => {
           const res = await fetch(`/api/collections/${id}/mint`, {
@@ -1221,7 +1240,12 @@ export function CreateWizard() {
           });
           const data = await res.json();
           if (!res.ok) {
-            throw makeHttpError(data.error || "mint_prepare_failed", res.status);
+            throw makeHttpError(
+              formatBoingMintUserMessage(
+                String(data.error || "mint_prepare_failed"),
+              ),
+              res.status,
+            );
           }
           return data as {
             batches?: Array<{
@@ -1252,12 +1276,9 @@ export function CreateWizard() {
                 txHash = await sendBoingMintWalletTx(wt);
               } catch (err) {
                 const code = err instanceof Error ? err.message : "";
-                if (code === "boing_tx_id_required") {
-                  throw new Error(
-                    "Boing wallet did not return a transaction id (mempool ok is not a mint receipt). Wait a moment and retry this batch.",
-                  );
-                }
-                throw err;
+                throw new Error(
+                  formatBoingMintUserMessage(code || "mint_failed"),
+                );
               }
             } else {
               txHash =
@@ -1275,7 +1296,7 @@ export function CreateWizard() {
           } else if (!txHash) {
             throw new Error(
               network === "boing"
-                ? "Boing wallet mint required — connect Boing Express and retry. Simulated mint hashes are not allowed."
+                ? formatBoingMintUserMessage("boing_tx_id_required")
                 : `Wallet mint required for batch ${b + 1} of ${batches.length}. Connect your wallet and retry.`,
             );
           }
@@ -1296,7 +1317,9 @@ export function CreateWizard() {
               const confirmData = await confirm.json();
               if (!confirm.ok) {
                 throw makeHttpError(
-                  confirmData.error || "mint_confirm_failed",
+                  formatBoingMintUserMessage(
+                    String(confirmData.error || "mint_confirm_failed"),
+                  ),
                   confirm.status,
                 );
               }
@@ -1395,7 +1418,14 @@ export function CreateWizard() {
       router.refresh();
       window.dispatchEvent(new Event("fm-collections-changed"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "failed");
+      const raw = err instanceof Error ? err.message : "failed";
+      setError(
+        /account not found|boing_|collection_not_deployed|onchain_deploy/i.test(
+          raw,
+        )
+          ? formatBoingMintUserMessage(raw)
+          : raw,
+      );
     } finally {
       setBusy(false);
       setMintProgress(null);
