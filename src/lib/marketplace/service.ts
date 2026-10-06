@@ -1512,7 +1512,9 @@ export async function softLaunchMintedDraftsInCollection(input: {
       l.collectionId === input.collectionId &&
       l.stage === "draft" &&
       !l.delisted &&
-      Boolean(l.tokenId && l.contractAddress && l.mintTxHash),
+      Boolean(l.tokenId && l.contractAddress && l.mintTxHash) &&
+      !String(l.mintTxHash).toLowerCase().startsWith("simulated-mint:") &&
+      !String(l.mintTxHash).toLowerCase().startsWith("pending:"),
   );
 
   const softLaunched: string[] = [];
