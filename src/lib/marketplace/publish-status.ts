@@ -195,7 +195,7 @@ export function buildCollectionPublishLifecycle(
   if (failedPhase === "deploy") {
     summary =
       input.progressNote?.trim() ||
-      "Deploy step failed — approve re-deploy in your wallet, then mint again.";
+      "Deploy step needs attention — retry Mint & publish (approve re-deploy in your wallet only if prompted).";
   } else if (current === "draft") {
     summary = "Draft saved. Next: deploy the collection contract on your mint network.";
   } else if (current === "deploy") {

@@ -5,7 +5,9 @@ import {
 } from "@/lib/data/memory-store";
 
 const probeBoingAccount = vi.fn();
+const probeBoingNftCollection = vi.fn();
 const findBoingNftCollectionDeploy = vi.fn();
+const resolveBoingDeployContractAddress = vi.fn();
 
 vi.mock("@/lib/onchain/boing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/onchain/boing")>();
@@ -13,8 +15,12 @@ vi.mock("@/lib/onchain/boing", async (importOriginal) => {
     ...actual,
     probeBoingAccount: (...args: unknown[]) =>
       probeBoingAccount(...(args as [string])),
+    probeBoingNftCollection: (...args: unknown[]) =>
+      probeBoingNftCollection(...(args as [string])),
     findBoingNftCollectionDeploy: (...args: unknown[]) =>
       findBoingNftCollectionDeploy(...(args as [])),
+    resolveBoingDeployContractAddress: (...args: unknown[]) =>
+      resolveBoingDeployContractAddress(...(args as [])),
   };
 });
 
@@ -29,8 +35,11 @@ beforeEach(() => {
   resetMemoryStoreForTests();
   enableMemoryMode("unit-test");
   probeBoingAccount.mockReset();
+  probeBoingNftCollection.mockReset();
   findBoingNftCollectionDeploy.mockReset();
+  resolveBoingDeployContractAddress.mockReset();
   findBoingNftCollectionDeploy.mockResolvedValue(null);
+  resolveBoingDeployContractAddress.mockResolvedValue(null);
 });
 
 describe("prepareCollectionPublishMints Boing account probes", () => {
@@ -46,6 +55,9 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
     expect(created.ok).toBe(true);
     if (!created.ok) throw new Error("create failed");
     const real = `0x${"77".repeat(32)}`;
+    // confirmCollectionDeploy probes the contract — allow it through.
+    probeBoingNftCollection.mockResolvedValue("exists");
+    probeBoingAccount.mockResolvedValue("exists");
     const confirmed = await confirmCollectionDeploy({
       collectionId: created.collection.id,
       creatorId: "artist-fresh",
@@ -71,6 +83,12 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
     });
     expect(piece.ok).toBe(true);
     if (!piece.ok) throw new Error("listing failed");
+    probeBoingNftCollection.mockReset();
+    probeBoingAccount.mockReset();
+    findBoingNftCollectionDeploy.mockReset();
+    resolveBoingDeployContractAddress.mockReset();
+    findBoingNftCollectionDeploy.mockResolvedValue(null);
+    resolveBoingDeployContractAddress.mockResolvedValue(null);
     return {
       collectionId: created.collection.id,
       listingId: piece.listing.id,
@@ -81,7 +99,8 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
 
   it("fails closed when contract probe stays unknown", async () => {
     const ctx = await readyBoingCollection();
-    probeBoingAccount.mockResolvedValue("unknown");
+    probeBoingNftCollection.mockResolvedValue("unknown");
+    probeBoingAccount.mockResolvedValue("exists");
 
     const prepared = await prepareCollectionPublishMints({
       collectionId: ctx.collectionId,
@@ -93,12 +112,12 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
     if (!prepared.ok) {
       expect(prepared.error).toBe("boing_account_probe_unknown");
     }
-    // Retry once per probeExists call.
-    expect(probeBoingAccount.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(probeBoingNftCollection.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("fails closed when collection account is missing and heal finds nothing", async () => {
     const ctx = await readyBoingCollection();
+    probeBoingNftCollection.mockResolvedValue("missing");
     probeBoingAccount.mockResolvedValue("missing");
     findBoingNftCollectionDeploy.mockResolvedValue(null);
 
@@ -117,15 +136,15 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
   it("heals a dead contract AccountId then prepares when probes exist", async () => {
     const ctx = await readyBoingCollection();
     const healed = `0x${"88".repeat(32)}`;
-    findBoingNftCollectionDeploy.mockResolvedValue({
-      contractAddress: healed,
-      txNonce: 3,
-      blockHeight: 100,
-      assetName: "Probe Squad",
+    resolveBoingDeployContractAddress.mockResolvedValue(healed);
+    probeBoingNftCollection.mockImplementation(async (id: string) => {
+      const n = id.toLowerCase();
+      if (n === ctx.contract.toLowerCase()) return "missing";
+      if (n === healed.toLowerCase()) return "exists";
+      return "missing";
     });
     probeBoingAccount.mockImplementation(async (id: string) => {
       const n = id.toLowerCase();
-      if (n === ctx.contract.toLowerCase()) return "missing";
       if (n === healed.toLowerCase() || n === ctx.creator.toLowerCase()) {
         return "exists";
       }
@@ -138,16 +157,18 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
       listingIds: [ctx.listingId],
       creatorAddress: ctx.creator,
     });
-    expect(prepared.ok).toBe(true);
-    if (!prepared.ok) return;
+    if (!prepared.ok) {
+      throw new Error(`heal prepare failed: ${prepared.error}`);
+    }
     expect(prepared.batches.length).toBeGreaterThan(0);
-    expect(findBoingNftCollectionDeploy).toHaveBeenCalled();
+    expect(resolveBoingDeployContractAddress).toHaveBeenCalled();
   });
 
   it("forceRedeploy clears a dead confirmed contract and returns a wallet intent", async () => {
     const { prepareCollectionDeployForUser, syncCollectionDeployFromChain } =
       await import("@/lib/marketplace/service");
     const ctx = await readyBoingCollection();
+    probeBoingNftCollection.mockResolvedValue("missing");
     probeBoingAccount.mockResolvedValue("missing");
     findBoingNftCollectionDeploy.mockResolvedValue(null);
 
@@ -171,5 +192,24 @@ describe("prepareCollectionPublishMints Boing account probes", () => {
     if (!prep.ok) return;
     expect(prep.alreadyDeployed).toBe(false);
     expect(prep.deployIntent?.walletTx).toBeTruthy();
+  });
+
+  it("forceRedeploy does not wipe deploy when contract probe is unknown", async () => {
+    const { prepareCollectionDeployForUser } = await import(
+      "@/lib/marketplace/service"
+    );
+    const ctx = await readyBoingCollection();
+    probeBoingNftCollection.mockResolvedValue("unknown");
+
+    const prep = await prepareCollectionDeployForUser({
+      collectionId: ctx.collectionId,
+      creatorId: "artist-fresh",
+      creatorAddress: ctx.creator,
+      forceRedeploy: true,
+    });
+    expect(prep.ok).toBe(false);
+    if (!prep.ok) {
+      expect(prep.error).toBe("boing_account_probe_unknown");
+    }
   });
 });

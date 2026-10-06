@@ -23,6 +23,8 @@ import {
   normalizeBoingAccountId,
   normalizeBoingTokenIdWord,
   predictNonceDerivedContractAddress,
+  probeBoingAccount,
+  probeBoingNftCollection,
   provisionalBoingCollectionAddress,
   referenceNftOwnerStorageKey,
   REF_NFT_OWNER_STORAGE_XOR_HEX,
@@ -468,5 +470,97 @@ describe("waitForBoingNftTokensMinted", () => {
           result.error.length > 0,
       ).toBe(true);
     }
+  });
+});
+
+describe("boing account / collection probes", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.BOING_RPC_URL;
+    delete process.env.BOING_RPC_FALLBACK_URLS;
+    delete process.env.BOING_RPC_DISABLE_DEFAULT_FALLBACKS;
+  });
+
+  function stubRpc(
+    handler: (method: string, params: unknown[]) => unknown | { error: string },
+  ) {
+    process.env.BOING_RPC_URL = "https://probe.example/";
+    process.env.BOING_RPC_DISABLE_DEFAULT_FALLBACKS = "1";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          method?: string;
+          params?: unknown[];
+        };
+        const out = handler(body.method ?? "", body.params ?? []);
+        if (out && typeof out === "object" && "error" in out) {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              error: { message: (out as { error: string }).error },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: 1, result: out }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+  }
+
+  it("probeBoingAccount uses getAccountProof (not getAccount zeros)", async () => {
+    const methods: string[] = [];
+    stubRpc((method) => {
+      methods.push(method);
+      if (method === "boing_getAccountProof") {
+        return { proof: "00", root: "00", value_hash: "00" };
+      }
+      return { error: `unexpected ${method}` };
+    });
+    await expect(probeBoingAccount(ACCOUNT)).resolves.toBe("exists");
+    expect(methods).toEqual(["boing_getAccountProof"]);
+  });
+
+  it("probeBoingAccount returns missing on Account not found", async () => {
+    stubRpc((method) => {
+      if (method === "boing_getAccountProof") {
+        return { error: "Account not found" };
+      }
+      return { error: `unexpected ${method}` };
+    });
+    await expect(probeBoingAccount(ACCOUNT)).resolves.toBe("missing");
+  });
+
+  it("probeBoingNftCollection treats successful owner_of simulate as exists", async () => {
+    stubRpc((method) => {
+      if (method === "boing_simulateContractCall") {
+        return {
+          success: true,
+          return_data: `0x${"00".repeat(32)}`,
+          gas_used: 1,
+        };
+      }
+      return { error: `unexpected ${method}` };
+    });
+    await expect(probeBoingNftCollection(ACCOUNT)).resolves.toBe("exists");
+  });
+
+  it("probeBoingNftCollection returns missing when simulate says Account not found", async () => {
+    stubRpc((method) => {
+      if (method === "boing_simulateContractCall") {
+        return {
+          success: false,
+          error: "Account not found",
+          return_data: "0x",
+          gas_used: 0,
+        };
+      }
+      return { error: `unexpected ${method}` };
+    });
+    await expect(probeBoingNftCollection(ACCOUNT)).resolves.toBe("missing");
   });
 });

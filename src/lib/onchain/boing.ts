@@ -444,6 +444,12 @@ export async function getBoingAccount(accountId: string): Promise<{
 /**
  * Distinguish missing Boing accounts from RPC/edge failures.
  * Used before mint so we do not send wallet txs to a non-existent contract.
+ *
+ * Important: `boing_getAccount` returns `{ balance: "0", nonce: 0, … }` for
+ * unknown AccountIds — it never signals missing. Use `boing_getAccountProof`,
+ * which errors with "Account not found" when the id is absent from committed
+ * state. Deployed contracts and funded EOAs both have proofs; FreshMint
+ * provisional placeholders and never-deployed ids do not.
  */
 export async function probeBoingAccount(
   accountId: string,
@@ -451,7 +457,7 @@ export async function probeBoingAccount(
   const id = normalizeBoingAccountId(accountId);
   if (!isBoingNativeAccountIdHex(id)) return "missing";
   try {
-    await boingRpc<{ balance?: string }>("boing_getAccount", [id]);
+    await boingRpc<{ proof?: string }>("boing_getAccountProof", [id]);
     return "exists";
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
@@ -1031,7 +1037,7 @@ export async function resolveBoingDeployContractAddress(input: {
 }): Promise<string | null> {
   const fromWallet = extractBoingContractAddress(input.walletResult);
   if (fromWallet) {
-    const probe = await probeBoingAccount(fromWallet);
+    const probe = await probeBoingNftCollection(fromWallet);
     if (probe === "exists") return fromWallet;
   }
 
@@ -1045,7 +1051,7 @@ export async function resolveBoingDeployContractAddress(input: {
     )
   ) {
     const normalized = normalizeBoingAccountId(fallback);
-    const probe = await probeBoingAccount(normalized);
+    const probe = await probeBoingNftCollection(normalized);
     if (probe === "exists") return normalized;
   }
 
@@ -1059,7 +1065,7 @@ export async function resolveBoingDeployContractAddress(input: {
   });
   if (found) {
     const addr = normalizeBoingAccountId(found.contractAddress);
-    const probe = await probeBoingAccount(addr);
+    const probe = await probeBoingNftCollection(addr);
     if (probe === "exists") return addr;
   }
 
@@ -1067,7 +1073,7 @@ export async function resolveBoingDeployContractAddress(input: {
   if (acct && acct.nonce > 0) {
     // Deploy consumed the prior nonce; current nonce is next unused.
     const predicted = predictNonceDerivedContractAddress(creator, acct.nonce - 1);
-    const probe = await probeBoingAccount(predicted);
+    const probe = await probeBoingNftCollection(predicted);
     if (probe === "exists") return predicted;
   }
   return null;
@@ -1098,7 +1104,7 @@ export async function waitForBoingDeployedContract(input: {
       isBoingNativeAccountIdHex(preferred) &&
       !preferred.startsWith("pending:")
     ) {
-      const probe = await probeBoingAccount(preferred);
+      const probe = await probeBoingNftCollection(preferred);
       if (probe === "exists") {
         return {
           ok: true,
@@ -1187,6 +1193,47 @@ export function encodeBoingOwnerOf(tokenIdHex32: string): `0x${string}` {
   const tokenId = normalizeBoingTokenIdWord(tokenIdHex32);
   if (!tokenId) throw new Error("boing_token_id_invalid");
   return `0x${selectorWord(SELECTOR_OWNER_OF)}${tokenId.slice(2)}${"00".repeat(32)}`;
+}
+
+/**
+ * Probe whether a reference-NFT collection contract is executable on Boing.
+ * Uses `owner_of` simulation: missing code → "Account not found"; any other
+ * simulate outcome (including unowned token) means the contract exists.
+ */
+export async function probeBoingNftCollection(
+  contractId: string,
+): Promise<"exists" | "missing" | "unknown"> {
+  const id = normalizeBoingAccountId(contractId);
+  if (!isBoingNativeAccountIdHex(id)) return "missing";
+  try {
+    const calldata = encodeBoingOwnerOf(`0x${"00".repeat(32)}`);
+    const sim = await boingRpc<{
+      success?: boolean;
+      error?: string;
+    }>("boing_simulateContractCall", [id, calldata, null, "latest"]);
+    if (sim.success) return "exists";
+    const err = (sim.error ?? "").toLowerCase();
+    if (
+      err.includes("account not found") ||
+      err.includes("account_not_found") ||
+      err.includes("unknown account")
+    ) {
+      return "missing";
+    }
+    // Contract executed but reverted for another reason — still on-chain.
+    if (sim.error) return "exists";
+    return "unknown";
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    if (
+      msg.includes("account not found") ||
+      msg.includes("account_not_found") ||
+      msg.includes("unknown account")
+    ) {
+      return "missing";
+    }
+    return "unknown";
+  }
 }
 
 /** 96-byte reference NFT calldata (selector last byte + two argument words). */

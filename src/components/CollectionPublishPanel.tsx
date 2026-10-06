@@ -82,7 +82,8 @@ export function CollectionPublishPanel({
         liveCount,
         busyPhase: busy ? busyPhase : null,
         failedPhase,
-        progressNote: progress ?? (failedPhase ? msg : null),
+        // Keep live progress in the rail; failure copy renders once below.
+        progressNote: progress,
       }),
     [
       deployStatus,
@@ -95,7 +96,6 @@ export function CollectionPublishPanel({
       busyPhase,
       failedPhase,
       progress,
-      msg,
     ],
   );
 
@@ -494,7 +494,12 @@ export function CollectionPublishPanel({
         </p>
       ) : null}
       {msg ? (
-        <p className="fm-form-note" style={{ marginTop: "0.65rem" }} role="status">
+        <p
+          className="fm-form-note"
+          style={{ marginTop: "0.65rem" }}
+          role="status"
+          data-testid="collection-publish-message"
+        >
           {msg}
         </p>
       ) : null}
