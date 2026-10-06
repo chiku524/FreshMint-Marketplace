@@ -9,6 +9,7 @@ import { BrandMark } from "@/components/MintLeaf";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { TasteSeed } from "@/components/TasteSeed";
 import { RankedWorkCard, WorkCard } from "@/components/WorkCard";
+import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import { getSessionUser } from "@/lib/auth/session";
 import { readViewerSession, readViewerTaste } from "@/lib/discovery/cookies";
 import { hasTaste, inferTasteFromCatalog } from "@/lib/discovery/taste";
@@ -98,6 +99,10 @@ export default async function HomePage() {
           <p className="fm-home-hero__lede anim-rise-delay">
             Fair discovery for digital art. Emerging artists get a real quota.
           </p>
+          <TreasuryFridayNote
+            surface="home"
+            className="fm-home-hero__note anim-rise-delay"
+          />
           <div className="fm-home-hero__actions anim-rise-delay">
             <Link href="/open" className="fm-btn fm-btn--primary">
               Browse works

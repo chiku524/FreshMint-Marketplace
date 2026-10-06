@@ -309,4 +309,6 @@ export function resetMemoryStoreForTests(): void {
   globalMemory.__freshmintNotifications = [];
   const accounts = globalThis as unknown as { __freshmintAccounts?: Map<string, unknown> };
   accounts.__freshmintAccounts = undefined;
+  const friday = globalThis as unknown as { __freshmintFridayBuys?: unknown[] };
+  friday.__freshmintFridayBuys = [];
 }

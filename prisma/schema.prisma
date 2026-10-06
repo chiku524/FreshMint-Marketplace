@@ -438,6 +438,26 @@ model MetricCounter {
   value Float  @default(0)
 }
 
+/// One row per UTC Friday — Friday treasury Open Lane buy (idempotent).
+model TreasuryFridayBuy {
+  id            String   @id @default(cuid())
+  /// UTC Friday calendar date (YYYY-MM-DD)
+  windowId      String   @unique
+  /// purchased | queued | skipped_no_funds | skipped_no_listings | skipped_not_friday | skipped_error
+  status        String
+  listingId     String?
+  purchaseId    String?
+  amountUsd     Float?
+  chain         String?
+  network       String?
+  reason        String   @default("")
+  paymentTxHash String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
 model Bid {
   id        String   @id @default(cuid())
   listingId String

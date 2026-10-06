@@ -4,6 +4,7 @@ import { DiscoveryEngineDiagram } from "@/components/DiscoveryEngineDiagram";
 import { NftLifecycleDiagram } from "@/components/NftLifecycleDiagram";
 import { DISCOVERY_CONFIG, getDailySlotBudgets } from "@/lib/discovery";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
+import { TREASURY_FRIDAY_COPY } from "@/lib/marketplace/friday-treasury-copy";
 import Link from "next/link";
 import { useLayoutEffect, useState } from "react";
 
@@ -201,7 +202,7 @@ export function DocsGuide() {
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
               That cut funds community events, future updates, and running the
               market — not a hidden operator take on top. You can see the split
-              before you confirm a buy.
+              before you confirm a buy. {TREASURY_FRIDAY_COPY.docs}
             </p>
           </section>
           ) : null}

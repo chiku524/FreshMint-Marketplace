@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/settle-auctions",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/friday-treasury-buy",
+      "schedule": "15 16 * * 5"
     }
   ]
 }

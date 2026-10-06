@@ -4,6 +4,7 @@ import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
 import { FollowButton } from "@/components/FollowButton";
+import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
@@ -173,6 +174,11 @@ export default async function CollectionDetailPage({
             ) : null}
           </>
         }
+      />
+
+      <TreasuryFridayNote
+        surface="collection"
+        className="collection-detail__friday-note"
       />
 
       {isOwner ? (

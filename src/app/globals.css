@@ -984,6 +984,16 @@ html.fm-intro-pending .fm-intro-cover {
   max-width: 46ch;
 }
 
+.page-lead__copy + .page-lead__copy {
+  margin-top: 0.55rem;
+}
+
+.page-lead__copy a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .page-crumb {
   margin: 0 0 0.85rem;
   color: var(--ink-muted);
@@ -1049,11 +1059,25 @@ html.fm-intro-pending .fm-intro-cover {
 }
 
 .fm-home-hero__lede {
-  margin: 0 0 1.15rem;
+  margin: 0 0 0.55rem;
   color: var(--ink-muted);
   font-size: clamp(0.92rem, 1.5vw, 1.02rem);
   line-height: 1.5;
   max-width: 34ch;
+}
+
+.fm-home-hero__note {
+  margin: 0 0 1.15rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.8rem, 1.3vw, 0.9rem);
+  line-height: 1.5;
+  max-width: 38ch;
+}
+
+.fm-home-hero__note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .fm-home-hero__actions {
@@ -2023,6 +2047,20 @@ button.work-tile__media-link {
 
 .collection-detail__crumb a {
   color: inherit;
+}
+
+.collection-detail__friday-note {
+  margin: 0 0 1.15rem;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 48ch;
+}
+
+.collection-detail__friday-note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .collection-profile {
@@ -4708,6 +4746,12 @@ select.fm-field {
   font-size: 0.88rem;
   max-width: 42ch;
   line-height: 1.5;
+}
+
+.listing-detail__note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .listing-detail__note--unlisted {

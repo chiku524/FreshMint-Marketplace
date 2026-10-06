@@ -57,6 +57,17 @@ sale amount (buyer still pays the listed / bid / offer / package price):
 
 Covered services: **buy now**, **timed listing**, **English auction**, **Dutch auction**, **accepted offers**, **collection packages**, **resale** (resale also deducts creator royalty). Creator mint/deploy gas is network gas, not this fee. Featured boost remains a separate **$15 USD** promotional payment to the same treasury.
 
+### Friday treasury buys
+
+Every **Friday 16:15 UTC**, Vercel Cron hits `GET /api/cron/friday-treasury-buy` (`CRON_SECRET`). If the listing-chain treasury native balance covers a live Open Lane buy-now work (not the treasury’s own listings, not auctions/open editions), the job records that Friday’s window (`TreasuryFridayBuy.windowId` = UTC date) and:
+
+1. **Signer present** (`TREASURY_EVM_SIGNER_PRIVATE_KEY` / `TREASURY_SOLANA_SIGNER_SECRET_KEY` whose address matches the public treasury or operator): pays native via the existing settlement address, then `purchaseListing` (same path as collectors). NFT transfer may still be `pending_transfer` until escrow is signed.
+2. **No matching signer** (typical: EVM Safe / Solana Squads): **queued intent only** — does not reserve the listing. Fully automated on-chain spend is blocked until a hot wallet that *is* the treasury/operator, or a Safe/Squads execution path, exists.
+
+Spend cap: `TREASURY_FRIDAY_BUDGET_USD` (default **$50**). Selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Idempotent per Friday. Skip/no-op when funds are too low or nothing is eligible.
+
+Collectors see the policy on home, Open Lane, listing (buy-now), collection pages, and `/docs#fees`.
+
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 
 ```bash
