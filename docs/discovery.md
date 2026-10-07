@@ -246,5 +246,6 @@ Unit tests: `src/lib/discovery/__tests__/discovery.test.ts`.
 - Live wedge metrics: `/metrics`  
 - Drop congestion: `/calendar`  
 - Creator publish hub + editorial Featured + shelves: `/studio`  
-- How it works (lifecycle, Studio, fees): `/docs`  
+- How it works (lifecycle, Studio, fees, trait rarity): `/docs`  
+- Collection trait rarity (statistical rank from trait frequency): `/collections/[idOrSlug]` Items tab + NFT detail  
 - Reports / nomination settle: `/moderate`

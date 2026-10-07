@@ -40,6 +40,11 @@ const TOC = [
     blurb: "Mint happens at publish. Buys transfer that NFT — withdraw is legacy only.",
   },
   {
+    id: "rarity",
+    label: "Trait rarity",
+    blurb: "Collection pages rank pieces from trait frequency when traits exist.",
+  },
+  {
     id: "discovery",
     label: "Discovery",
     blurb: "Attention is scarce. Emerging quota is enforced in code.",
@@ -331,6 +336,48 @@ export function DocsGuide() {
               is only for older USD holds that never settled on-chain at purchase.
               Link a matching wallet in <Link href="/me/settings">Settings</Link>.
             </p>
+          </section>
+          ) : null}
+
+          {active === "rarity" ? (
+          <section id="rarity">
+            <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+              Trait rarity
+            </h2>
+            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+              When a collection has trait metadata (CSV import or hand-entered traits
+              at create), each piece gets a{" "}
+              <strong style={{ color: "var(--ink)" }}>statistical rarity</strong>{" "}
+              rank on the collection page and NFT detail.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gap: "1.25rem 2rem",
+                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+              }}
+            >
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  How the score works
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  For each trait value, score contribution is collection size ÷ how
+                  often that value appears. A piece’s score is the sum of its trait
+                  contributions. Rank 1 is the rarest. Sort the Items tab by Rarity
+                  to browse that order.
+                </p>
+              </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  No traits
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  Collections or pieces without traits show no rarity rank or fake
+                  percentages — rarity stays hidden until real trait data exists.
+                </p>
+              </div>
+            </div>
           </section>
           ) : null}
 

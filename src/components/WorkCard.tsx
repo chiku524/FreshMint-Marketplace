@@ -145,6 +145,8 @@ export function WorkCard({
   footer,
   sold = false,
   canStageRising = false,
+  rarityRank = null,
+  rarityScoredSize = 0,
 }: {
   listing: Listing;
   emerging?: boolean;
@@ -158,6 +160,9 @@ export function WorkCard({
   footer?: ReactNode;
   sold?: boolean;
   canStageRising?: boolean;
+  /** Collection trait rarity rank (1 = rarest). Null = unranked / no traits. */
+  rarityRank?: number | null;
+  rarityScoredSize?: number;
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
@@ -314,6 +319,15 @@ export function WorkCard({
           <span className="work-tile__price">{priceLabel(listing, bucket)}</span>
           {listing.type === "auction" ? (
             <span className="work-tile__sep"> · {saleModeBadge(listing)}</span>
+          ) : null}
+          {rarityRank != null && rarityScoredSize > 0 ? (
+            <span
+              className="work-tile__rarity"
+              title={`Rarity rank ${rarityRank} of ${rarityScoredSize}`}
+            >
+              {" "}
+              · #{rarityRank}
+            </span>
           ) : null}
           {placeText && place !== "featured" ? (
             <span

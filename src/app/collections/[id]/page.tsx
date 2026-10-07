@@ -1,5 +1,6 @@
 import { CollectionDetailTabs } from "@/components/CollectionDetailTabs";
 import { CollectionEditModal } from "@/components/CollectionEditModal";
+import { CollectionItemsWithRarity } from "@/components/CollectionItemsWithRarity";
 import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
@@ -7,7 +8,6 @@ import { FollowButton } from "@/components/FollowButton";
 import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
 import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
-import { WorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
 import { listCollectionActivity } from "@/lib/marketplace/activity";
@@ -17,6 +17,7 @@ import { deriveCollectionFloorUsd } from "@/lib/marketplace/home-discovery";
 import {
   listingVisibleOnCollectionPage,
 } from "@/lib/marketplace/listing-manage";
+import { computeCollectionRarity } from "@/lib/marketplace/rarity";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { collectionPageMetadata } from "@/lib/seo/site";
@@ -105,6 +106,8 @@ export default async function CollectionDetailPage({
   const liveCount = allInCollection.filter(
     (l) => l.stage !== "draft" && !l.delisted,
   ).length;
+  const rarity = computeCollectionRarity(pieces);
+  const rarityById = Object.fromEntries(rarity.byListingId);
 
   return (
     <div className="page-wrap collection-detail">
@@ -228,24 +231,20 @@ export default async function CollectionDetailPage({
         activityCount={collectionActivity.length}
         items={
           pieces.length ? (
-            <div className="collection-items-grid">
-              {pieces.map((listing) => (
-                <WorkCard
-                  key={listing.id}
-                  listing={listing}
-                  showActions
-                  sold={soldIds.has(listing.id) || Boolean(listing.delisted)}
-                  canStageRising={isOwner}
-                  creatorName={creatorName}
-                  creatorAvatarUrl={creator?.avatarUrl}
-                  collection={{
-                    id: collection.id,
-                    title: collection.title,
-                    slug: collection.slug,
-                  }}
-                />
-              ))}
-            </div>
+            <CollectionItemsWithRarity
+              pieces={pieces}
+              rarityById={rarityById}
+              hasTraits={rarity.hasTraits}
+              soldIds={[...soldIds]}
+              isOwner={isOwner}
+              creatorName={creatorName}
+              creatorAvatarUrl={creator?.avatarUrl}
+              collection={{
+                id: collection.id,
+                title: collection.title,
+                slug: collection.slug,
+              }}
+            />
           ) : (
             <p className="collection-detail__empty">
               {isOwner ? (
@@ -295,6 +294,16 @@ export default async function CollectionDetailPage({
               <dt>Items</dt>
               <dd>{collection.totalItems || pieces.length}</dd>
             </div>
+            {rarity.hasTraits ? (
+              <div>
+                <dt>Rarity</dt>
+                <dd>
+                  Statistical trait rarity on {rarity.scoredSize} of{" "}
+                  {rarity.collectionSize} pieces (rank 1 = rarest). Pieces
+                  without traits are not ranked.
+                </dd>
+              </div>
+            ) : null}
             {collection.dropStartsAt && collection.dropEndsAt ? (
               <div>
                 <dt>Drop window</dt>

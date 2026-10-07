@@ -3432,6 +3432,128 @@ button.work-tile__media-link {
   font-family: var(--font-display), Georgia, ui-serif, serif;
 }
 
+.nft-traits__value {
+  display: block;
+}
+
+.nft-traits__freq {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nft-rarity {
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.nft-rarity__rank {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+}
+
+.nft-rarity__rank-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 55%, var(--ink-muted));
+  font-family: var(--font-display), Georgia, ui-serif, serif;
+}
+
+.nft-rarity__rank-value {
+  font-family: var(--font-display), Georgia, ui-serif, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.nft-rarity__rank-of {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.nft-rarity__score {
+  margin-left: auto;
+  font-size: 0.86rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nft-rarity .nft-traits {
+  margin: 0;
+}
+
+.nft-rarity__note {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.collection-rarity__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin: 0 0 0.85rem;
+}
+
+.collection-rarity__method {
+  margin: 0;
+  flex: 1 1 16rem;
+  max-width: 52ch;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.collection-rarity__sort {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-lift) 80%, transparent);
+}
+
+.collection-rarity__sort button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 0.84rem;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+.collection-rarity__sort button.is-active {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.work-tile__rarity {
+  color: color-mix(in srgb, var(--emergent) 85%, var(--ink));
+  font-variant-numeric: tabular-nums;
+}
+
+.listing-detail__rarity {
+  color: color-mix(in srgb, var(--emergent) 90%, var(--ink));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 560px) {
   .collections-row {
     grid-template-columns: 3.5rem minmax(0, 1fr);

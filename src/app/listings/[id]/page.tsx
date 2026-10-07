@@ -4,6 +4,7 @@ import { ListingActions } from "@/components/ListingActions";
 import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
 import { ListingMoreActionsModal } from "@/components/ListingMoreActionsModal";
 import { ManageListingModal } from "@/components/ManageListingModal";
+import { NftTraitRarity } from "@/components/NftTraitRarity";
 import { OfferModal } from "@/components/OfferModal";
 import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { ResaleListButton } from "@/components/ResaleListButton";
@@ -28,8 +29,10 @@ import {
   hasActiveSecondaryForOrigin,
   listingHasPublicSurface,
   listingSellerId,
+  listingVisibleOnCollectionPage,
 } from "@/lib/marketplace/listing-manage";
 import { buildListingPublishLifecycle } from "@/lib/marketplace/publish-status";
+import { computeCollectionRarity } from "@/lib/marketplace/rarity";
 import { findBuyerOpenPurchase, listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { lazySettleEnglishAuction } from "@/lib/marketplace/english-auction";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
@@ -72,6 +75,19 @@ export default async function ListingDetailPage({
     : false;
   const user = await getSessionUser();
   const isManager = canManageListing(user?.id, listing);
+  const isCollectionOwner =
+    Boolean(collection) && user?.id === collection?.creatorId;
+  const collectionPeers = collection
+    ? [...engine.state.listings.values()].filter(
+        (l) =>
+          l.collectionId === collection.id &&
+          listingVisibleOnCollectionPage(l, isCollectionOwner),
+      )
+    : [];
+  const collectionRarity = collectionPeers.length
+    ? computeCollectionRarity(collectionPeers)
+    : null;
+  const listingRarity = collectionRarity?.byListingId.get(listing.id) ?? null;
   // Drafts stay creator/seller-private. Cancelled listings with artwork/mint
   // keep a stable public NFT page (not-for-sale) instead of 404.
   if (listing.stage === "draft" && !isManager) {
@@ -263,6 +279,19 @@ export default async function ListingDetailPage({
                   </Link>
                 </>
               ) : null}
+              {listingRarity?.rank != null ? (
+                <>
+                  <span className="listing-detail__sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span
+                    className="listing-detail__rarity"
+                    title={`Rarity rank ${listingRarity.rank} of ${listingRarity.scoredSize}`}
+                  >
+                    Rank #{listingRarity.rank}
+                  </span>
+                </>
+              ) : null}
             </p>
           </div>
           <p className="listing-detail__desc">
@@ -345,7 +374,11 @@ export default async function ListingDetailPage({
               ))}
             </p>
           ) : null}
-          {listing.traits && listing.traits.length > 0 ? (
+          {listingRarity &&
+          collectionRarity?.hasTraits &&
+          listingRarity.traits.length > 0 ? (
+            <NftTraitRarity rarity={listingRarity} />
+          ) : listing.traits && listing.traits.length > 0 ? (
             <dl className="nft-traits">
               {listing.traits.map((trait) => (
                 <div key={`${trait.trait_type}-${trait.value}`}>
