@@ -329,7 +329,7 @@ function CollectionsLayout({
 }
 
 /**
- * Public creator profile catalog: minted/published collections are primary.
+ * Profile catalog: minted/published collections are primary.
  * Gallery / grid / list apply to collections; NFT tiles are gallery drill-in only.
  */
 export function ProfileWorksExplorer({
@@ -337,26 +337,32 @@ export function ProfileWorksExplorer({
   initialView = "grid",
   creatorName,
   emptyCollections,
+  title,
+  hint = "Minted collections. Open a set to browse pieces.",
+  trailing,
 }: {
   collections: ProfileCollectionItem[];
   initialView?: ProfileViewId;
   creatorName?: string;
   emptyCollections?: ReactNode;
+  title?: string;
+  hint?: string;
+  /** Secondary account sections (sales, shelves, …) after the collections browse. */
+  trailing?: ReactNode;
 }) {
   const { view, select } = useProfileViewMode(initialView);
+  const heading = title ?? `Collections (${collections.length})`;
 
   return (
     <div className="profile-catalog">
       <div className="profile-catalog__toolbar">
         <div>
           <h2 className="display me-section__title" style={{ marginBottom: "0.35rem" }}>
-            Collections ({collections.length})
+            {heading}
           </h2>
-          <p className="profile-catalog__hint">
-            Minted collections on this profile. Open a set to browse pieces.
-          </p>
+          <p className="profile-catalog__hint">{hint}</p>
         </div>
-        <ProfileViewToggle view={view} onChange={select} />
+        <ProfileViewToggle view={view} onChange={select} label="Collection view" />
       </div>
 
       {collections.length === 0
@@ -372,6 +378,7 @@ export function ProfileWorksExplorer({
               creatorName={creatorName}
             />
           )}
+      {trailing}
     </div>
   );
 }

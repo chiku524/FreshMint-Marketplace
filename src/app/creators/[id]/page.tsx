@@ -2,13 +2,9 @@ import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { FollowButton } from "@/components/FollowButton";
 import { ProfileWorksExplorer } from "@/components/ProfileWorksExplorer";
 import { getSessionUser } from "@/lib/auth/session";
-import { getNetwork, resolveNetwork } from "@/lib/chains/registry";
 import { isEmergingCreator } from "@/lib/discovery";
 import { aggregateCollectionVolumesUsd } from "@/lib/marketplace/collections-browse";
-import {
-  collectionVisibleOnCreatorProfile,
-  mintedPublishedListingsInCollection,
-} from "@/lib/marketplace/profile-collections";
+import { buildCreatorProfileCollections } from "@/lib/marketplace/profile-collections";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { isActiveSeller, ACTIVE_SELLER_MIN_VOLUME_USD } from "@/lib/marketplace/trust";
 import {
@@ -22,8 +18,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-
-const GALLERY_SAMPLE_LIMIT = 6;
 
 export async function generateMetadata({
   params,
@@ -55,43 +49,13 @@ export default async function CreatorProfilePage({
 
   const emerging = isEmergingCreator(creator);
   const volumes = await aggregateCollectionVolumesUsd();
-  const allListings = [...engine.state.listings.values()];
-  const ownedCollections = [...engine.state.collections.values()].filter(
-    (c) => c.creatorId === id,
-  );
-
-  const collectionItems = ownedCollections
-    .flatMap((collection) => {
-      const inCollection = allListings.filter(
-        (l) => l.collectionId === collection.id,
-      );
-      if (!collectionVisibleOnCreatorProfile(inCollection)) return [];
-
-      const minted = mintedPublishedListingsInCollection(inCollection);
-      const heroId = collection.heroListingId;
-      const hero =
-        minted.find((l) => l.id === heroId) ??
-        minted.find((l) => l.mediaUrl) ??
-        minted[0] ??
-        null;
-
-      return [
-        {
-          id: collection.id,
-          title: collection.title,
-          slug: collection.slug,
-          totalItems: minted.length,
-          chain: getNetwork(
-            resolveNetwork(collection.network, collection.chain),
-          ).label,
-          coverUrl: collection.imageUrl || hero?.mediaUrl || null,
-          volumeUsd: volumes.get(collection.id) ?? 0,
-          sampleListings: minted.slice(0, GALLERY_SAMPLE_LIMIT),
-          sortAt: hero?.createdAt ?? 0,
-        },
-      ];
-    })
-    .sort((a, b) => b.sortAt - a.sortAt);
+  const collectionItems = buildCreatorProfileCollections({
+    collections: [...engine.state.collections.values()].filter(
+      (c) => c.creatorId === id,
+    ),
+    listings: [...engine.state.listings.values()],
+    volumes,
+  });
 
   const user = await getSessionUser();
   const following =

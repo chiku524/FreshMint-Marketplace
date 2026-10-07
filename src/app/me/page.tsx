@@ -2,18 +2,16 @@ import { MeCollectionBrowser } from "@/components/MeCollectionBrowser";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNetwork, isNetworkId } from "@/lib/chains/registry";
-import { diagnoseRisingEligibility } from "@/lib/discovery";
+import { aggregateCollectionVolumesUsd } from "@/lib/marketplace/collections-browse";
+import { purchaseIsOpenCheckout } from "@/lib/marketplace/lifecycle";
 import {
-  creatorLifecycleHint,
-  purchaseIsOpenCheckout,
-} from "@/lib/marketplace/lifecycle";
+  buildCreatorProfileCollections,
+  countUnpublishedOwnedCollections,
+} from "@/lib/marketplace/profile-collections";
 import {
-  findListingsByWalletNfts,
   getUserAssetProfile,
-  listBoingNftScanCandidates,
   profileFromSession,
 } from "@/lib/marketplace/profile";
-import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { formatBoingBalanceUserMessage } from "@/lib/onchain/boing";
 import {
@@ -21,10 +19,7 @@ import {
   resolveProfileView,
 } from "@/lib/profile-view";
 import {
-  fetchLinkedWalletNfts,
-  matchWalletNftsToListings,
-  mergeWalletHeldListings,
-  walletNftsNotOnMarketplace,
+  fetchBoingBalancesForWallets,
   type LinkedWalletScanMeta,
 } from "@/lib/wallet/inventory";
 import { cookies } from "next/headers";
@@ -53,41 +48,24 @@ export default async function MeCollectionPage({
 
   const profile =
     (await getUserAssetProfile(user.id)) ?? profileFromSession(user);
-  const soldIds = await listClosedPrimarySaleIds();
   const engine = await getDiscoveryEngine();
-  const creator = engine.state.creators.get(user.id);
+  const volumes = await aggregateCollectionVolumesUsd();
+  const allListings = [...engine.state.listings.values()];
+  const ownedCollections = [...engine.state.collections.values()].filter(
+    (c) => c.creatorId === user.id,
+  );
 
-  const catalog = [
-    ...profile.created,
-    ...profile.owned.map((item) => item.listing),
-  ];
-  const boingCandidates = await listBoingNftScanCandidates();
-  const scanMeta: LinkedWalletScanMeta = {
-    warnings: [],
-    boingBalances: [],
-  };
-  const scanned = await fetchLinkedWalletNfts(
-    profile.wallets,
-    [...catalog, ...boingCandidates],
-    { meta: scanMeta, skipCache: false },
-  );
-  const extraListings = await findListingsByWalletNfts(scanned);
-  const walletNfts = matchWalletNftsToListings(scanned, [
-    ...catalog,
-    ...extraListings,
-    ...boingCandidates,
-  ]);
-  const collected = mergeWalletHeldListings(
-    profile.owned,
-    profile.created,
-    walletNfts,
-    extraListings,
-  );
-  const inWallet = walletNftsNotOnMarketplace(
-    walletNfts,
-    profile.created,
-    collected,
-  );
+  const collections = buildCreatorProfileCollections({
+    collections: ownedCollections,
+    listings: allListings,
+    volumes,
+  });
+  const unpublishedCount = countUnpublishedOwnedCollections({
+    collections: ownedCollections,
+    listings: allListings,
+    creatorId: user.id,
+  });
+
   const openCheckouts = profile.owned.filter((item) =>
     purchaseIsOpenCheckout(item.status),
   );
@@ -96,50 +74,28 @@ export default async function MeCollectionPage({
   );
   const hasBoingWallet = profile.wallets.some((w) => w.chain === "boing");
 
-  const created = profile.created.map((listing) => ({
-    listing,
-    sold: soldIds.has(listing.id),
-    footer: creatorLifecycleHint(
-      listing,
-      soldIds.has(listing.id),
-      creator
-        ? diagnoseRisingEligibility(
-            listing,
-            creator,
-            engine.state.listings.values(),
-          )
-        : null,
-    ),
-  }));
-
-  const collectedItems = collected.map((item) => ({
-    purchaseId: item.purchaseId,
-    listing: item.listing,
-    purchasedAt: item.purchasedAt,
-    amountUsd: item.amountUsd,
-    txHash: item.txHash ?? null,
-    fromWallet: "fromWallet" in item ? Boolean(item.fromWallet) : false,
-    status: "status" in item ? item.status : undefined,
-    withdrawnAt:
-      "withdrawnAt" in item ? (item.withdrawnAt ?? null) : null,
-    withdrawTxHash:
-      "withdrawTxHash" in item ? (item.withdrawTxHash ?? null) : null,
-    payNetwork: "payNetwork" in item ? (item.payNetwork ?? null) : null,
-  }));
+  const scanMeta: LinkedWalletScanMeta = {
+    warnings: [],
+    boingBalances: [],
+  };
+  if (hasBoingWallet) {
+    scanMeta.boingBalances = await fetchBoingBalancesForWallets(
+      profile.wallets,
+    );
+  }
 
   return (
     <>
       <p className="me-section__lead">
-        Works you created, collected, hold in a linked wallet, curated, and
-        bridged.
+        Your minted collections, sales, shelves, and bridges. Open a collection
+        to browse or manage pieces.
       </p>
 
       {hasBoingWallet ? (
         <section className="me-notice" data-testid="boing-wallet-balances">
           <h2 className="display me-section__title">Boing balance</h2>
           <p className="me-section__lead">
-            Live native BOING from linked Boing wallets. NFT scan covers
-            FreshMint-known Boing tokens only (not a full chain indexer).
+            Live native BOING from linked Boing wallets.
           </p>
           {scanMeta.boingBalances.length === 0 ? (
             <p className="fm-empty-copy">No usable Boing wallet address linked.</p>
@@ -188,12 +144,7 @@ export default async function MeCollectionPage({
             <p className="fm-form-note" data-testid="boing-scan-warnings">
               {formatBoingBalanceUserMessage(
                 scanMeta.boingBalances.find((b) => !b.ok)?.error,
-              )}{" "}
-              NFT scan still covers FreshMint-known Boing tokens only.
-            </p>
-          ) : scanMeta.warnings.length > 0 ? (
-            <p className="fm-form-note" data-testid="boing-scan-warnings">
-              {scanMeta.warnings.join(" ")}
+              )}
             </p>
           ) : null}
         </section>
@@ -228,103 +179,125 @@ export default async function MeCollectionPage({
         </section>
       ) : null}
 
+      {unpublishedCount > 0 ? (
+        <section className="me-notice">
+          <h2 className="display me-section__title">Finish publishing</h2>
+          <p className="me-section__lead">
+            {unpublishedCount} collection
+            {unpublishedCount === 1 ? "" : "s"} still need mint or soft-launch
+            before they appear here.{" "}
+            <Link href="/create">Continue in Create</Link>
+            {" · "}
+            <Link href={`/creators/${user.id}`}>Public profile</Link>
+          </p>
+        </section>
+      ) : null}
+
       <MeCollectionBrowser
         initialView={initialView}
-        created={created}
-        collected={collectedItems}
-        inWallet={inWallet}
-        hasWallets={profile.wallets.length > 0}
-        hasBoingWallet={hasBoingWallet}
-        sales={
-          <section className="me-section">
-            <h2 className="display me-section__title">
-              Sales ({liveSales.length})
-            </h2>
-            {liveSales.length === 0 ? (
-              <p className="fm-empty-copy">
-                No collector checkouts yet. Soft-launch from{" "}
-                <Link href="/create">Create</Link>.
-              </p>
-            ) : (
-              <ul className="me-list">
-                {liveSales.map((sale) => (
-                  <li key={sale.purchaseId} className="me-list__row">
-                    <Link href={`/listings/${sale.listing.id}`}>
-                      {sale.listing.title}
-                    </Link>
-                    {" · $"}
-                    {sale.amountUsd}
-                    {sale.sellerNetUsd != null
-                      ? ` · net $${sale.sellerNetUsd.toFixed(2)}`
-                      : ""}
-                    {" · "}
-                    {sale.status === "completed"
-                      ? "sold"
-                      : sale.status === "pending_transfer"
-                        ? "paid, transferring"
-                        : "checkout in progress"}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+        creatorName={profile.displayName}
+        collections={collections}
+        emptyCollections={
+          <p className="fm-empty-copy">
+            No minted collections yet.{" "}
+            <Link href="/create">Publish a collection</Link>.
+          </p>
         }
-        shelves={
-          <section className="me-section">
-            <h2 className="display me-section__title">
-              Shelves ({profile.shelves.length})
-            </h2>
-            {profile.shelves.length === 0 ? (
-              <p className="fm-empty-copy">
-                No shelves yet. Curate from <Link href="/studio">Studio</Link>.
-              </p>
-            ) : (
-              <ul className="me-list">
-                {profile.shelves.map((shelf) => (
-                  <li key={shelf.id} className="me-list__row">
-                    <div className="display" style={{ fontSize: "1.05rem" }}>
-                      {shelf.name}
-                    </div>
-                    <p className="fm-form-note" style={{ marginTop: "0.25rem" }}>
-                      {shelf.listingIds.length} works · {shelf.followerCount}{" "}
-                      followers · <Link href="/shelves">View shelves</Link>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        }
-        bridges={
-          <section className="me-section">
-            <h2 className="display me-section__title">Recent bridges</h2>
-            {profile.bridges.length === 0 ? (
-              <p className="fm-empty-copy">
-                No bridge transfers yet. <Link href="/bridge">Move funds</Link>.
-              </p>
-            ) : (
-              <ul className="me-list">
-                {profile.bridges.map((b) => {
-                  const from = isNetworkId(b.fromNetwork)
-                    ? getNetwork(b.fromNetwork).label
-                    : b.fromNetwork;
-                  const to = isNetworkId(b.toNetwork)
-                    ? getNetwork(b.toNetwork).label
-                    : b.toNetwork;
-                  return (
-                    <li
-                      key={b.id}
-                      className="me-list__row"
-                      style={{ color: "var(--ink-muted)" }}
-                    >
-                      {b.amount} · {from} → {to} · {b.status} ·{" "}
-                      {new Date(b.createdAt).toLocaleString()}
+        trailing={
+          <>
+            <section className="me-section">
+              <h2 className="display me-section__title">
+                Sales ({liveSales.length})
+              </h2>
+              {liveSales.length === 0 ? (
+                <p className="fm-empty-copy">
+                  No collector checkouts yet. Soft-launch from{" "}
+                  <Link href="/create">Create</Link>.
+                </p>
+              ) : (
+                <ul className="me-list">
+                  {liveSales.map((sale) => (
+                    <li key={sale.purchaseId} className="me-list__row">
+                      <Link href={`/listings/${sale.listing.id}`}>
+                        {sale.listing.title}
+                      </Link>
+                      {" · $"}
+                      {sale.amountUsd}
+                      {sale.sellerNetUsd != null
+                        ? ` · net $${sale.sellerNetUsd.toFixed(2)}`
+                        : ""}
+                      {" · "}
+                      {sale.status === "completed"
+                        ? "sold"
+                        : sale.status === "pending_transfer"
+                          ? "paid, transferring"
+                          : "checkout in progress"}
                     </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="me-section">
+              <h2 className="display me-section__title">
+                Shelves ({profile.shelves.length})
+              </h2>
+              {profile.shelves.length === 0 ? (
+                <p className="fm-empty-copy">
+                  No shelves yet. Curate from{" "}
+                  <Link href="/studio">Studio</Link>.
+                </p>
+              ) : (
+                <ul className="me-list">
+                  {profile.shelves.map((shelf) => (
+                    <li key={shelf.id} className="me-list__row">
+                      <div className="display" style={{ fontSize: "1.05rem" }}>
+                        {shelf.name}
+                      </div>
+                      <p
+                        className="fm-form-note"
+                        style={{ marginTop: "0.25rem" }}
+                      >
+                        {shelf.listingIds.length} works · {shelf.followerCount}{" "}
+                        followers · <Link href="/shelves">View shelves</Link>
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="me-section">
+              <h2 className="display me-section__title">Recent bridges</h2>
+              {profile.bridges.length === 0 ? (
+                <p className="fm-empty-copy">
+                  No bridge transfers yet.{" "}
+                  <Link href="/bridge">Move funds</Link>.
+                </p>
+              ) : (
+                <ul className="me-list">
+                  {profile.bridges.map((b) => {
+                    const from = isNetworkId(b.fromNetwork)
+                      ? getNetwork(b.fromNetwork).label
+                      : b.fromNetwork;
+                    const to = isNetworkId(b.toNetwork)
+                      ? getNetwork(b.toNetwork).label
+                      : b.toNetwork;
+                    return (
+                      <li
+                        key={b.id}
+                        className="me-list__row"
+                        style={{ color: "var(--ink-muted)" }}
+                      >
+                        {b.amount} · {from} → {to} · {b.status} ·{" "}
+                        {new Date(b.createdAt).toLocaleString()}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </>
         }
       />
     </>
