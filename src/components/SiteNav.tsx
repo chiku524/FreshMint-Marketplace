@@ -34,7 +34,10 @@ const PRIMARY_GROUPS: NavGroup[] = [
   {
     id: "funds",
     label: "Funds",
-    items: [{ href: "/bridge", label: "Bridge" }],
+    items: [
+      { href: "/treasury", label: "Treasury" },
+      { href: "/bridge", label: "Bridge" },
+    ],
   },
   {
     id: "docs",

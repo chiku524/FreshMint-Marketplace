@@ -45,6 +45,7 @@ export const SITEMAP_PATHS = [
   "/trending",
   "/auctions",
   "/bridge",
+  "/treasury",
   "/shelves",
   "/metrics",
 ] as const;

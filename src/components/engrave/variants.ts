@@ -9,6 +9,7 @@ export type EngraveVariant =
   | "create"
   | "studio"
   | "bridge"
+  | "treasury"
   | "me"
   | "security"
   | "listing"
@@ -29,6 +30,7 @@ export const VARIANT_SEEDS: Record<Exclude<EngraveVariant, "home">, number> = {
   create: 0xa1d49c6e,
   studio: 0x6f30b8d2,
   bridge: 0x2c87e1af,
+  treasury: 0x3a6e91c8,
   me: 0x84f5a023,
   security: 0xd16c4b97,
   listing: 0x5e9a72d0,
@@ -50,6 +52,7 @@ export function variantFromPathname(pathname: string): EngraveVariant {
   if (pathname.startsWith("/create")) return "create";
   if (pathname.startsWith("/studio")) return "studio";
   if (pathname.startsWith("/bridge")) return "bridge";
+  if (pathname.startsWith("/treasury")) return "treasury";
   if (pathname.startsWith("/me/security")) return "security";
   if (pathname.startsWith("/me/settings")) return "me";
   if (pathname.startsWith("/me")) return "me";

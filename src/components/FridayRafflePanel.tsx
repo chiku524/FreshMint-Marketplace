@@ -28,8 +28,10 @@ type MeState = {
  * Marketing awareness lives on FridayRaffleBanner — keep this lean.
  */
 export function FridayRafflePanel({
+  surface = "me",
   wallets = [],
 }: {
+  surface?: "me" | "public";
   /** Linked wallet addresses the signed-in user can claim to. */
   wallets?: Array<{ chain: string; address: string }>;
 }) {
@@ -80,8 +82,13 @@ export function FridayRafflePanel({
     }
   }
 
+  const lead =
+    surface === "public"
+      ? TREASURY_FRIDAY_COPY.public
+      : TREASURY_FRIDAY_COPY.me;
   const myWins = me?.wins ?? [];
   const latest = me?.latest ?? history[0] ?? null;
+  const showClaimUi = surface === "me";
 
   return (
     <section
@@ -90,7 +97,7 @@ export function FridayRafflePanel({
       data-testid="friday-raffle-panel"
     >
       <h2 className="display me-section__title">Friday treasury raffle</h2>
-      <p className="me-section__lead">{TREASURY_FRIDAY_COPY.me}</p>
+      <p className="me-section__lead">{lead}</p>
 
       {me ? (
         <p className="fm-form-note" style={{ marginBottom: "0.75rem" }}>
@@ -99,6 +106,11 @@ export function FridayRafflePanel({
             ? `entered (${me.kinds.join(", ") || "active"})`
             : "not entered yet"}
           .
+        </p>
+      ) : surface === "public" ? (
+        <p className="fm-form-note" style={{ marginBottom: "0.75rem" }}>
+          <Link href="/sign-in?next=/me%23friday-raffle">Sign in</Link> to see
+          your entry and claims.
         </p>
       ) : null}
 
@@ -117,7 +129,7 @@ export function FridayRafflePanel({
         <p className="fm-empty-copy">No Friday draw yet this season.</p>
       )}
 
-      {myWins.length > 0 ? (
+      {showClaimUi && myWins.length > 0 ? (
         <ul className="me-list">
           {myWins.map((w) => (
             <li key={w.id} className="me-list__row">

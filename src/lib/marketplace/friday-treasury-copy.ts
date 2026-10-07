@@ -1,6 +1,6 @@
 /**
  * Friday treasury raffle — marketing + slim claim-surface copy.
- * Awareness lives on the sitewide banner; /docs is not the primary channel.
+ * Awareness lives on the sitewide banner; /treasury is the public hub.
  */
 export const TREASURY_FRIDAY_COPY = {
   /** Sitewide marketing banner headline */
@@ -14,6 +14,9 @@ export const TREASURY_FRIDAY_COPY = {
   bannerHref: "/treasury#friday-raffle",
   /** Slim status lead on /me claim UI — not an eligibility essay */
   me: "Your Friday raffle entry and any prize claims.",
+  /** Public /treasury raffle section lead */
+  public:
+    "Every Friday, if last week’s treasury fees cover it, FreshMint buys a live Open Lane work and raffles it to active creators and collectors.",
   /** Kept for API/docs minimal stubs; not surface lecture copy */
   eligibility:
     "Auto-entered from mint, list, buy, offer, or bid activity in the week before Friday (UTC).",
