@@ -64,7 +64,7 @@ export default async function CreatorProfilePage({
 
   return (
     <div className="page-wrap">
-      <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+      <p className="page-crumb">
         <Link href="/creators">Creators</Link>
         {" · "}
         <Link href="/open">Open Lane</Link>
@@ -72,106 +72,123 @@ export default async function CreatorProfilePage({
         <Link href="/rising">Rising</Link>
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-          gap: "1rem",
-          alignItems: "flex-start",
-          marginBottom: "2rem",
-        }}
-      >
-        <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", minWidth: 0 }}>
+      <header className="profile-masthead">
+        <div className="profile-masthead__identity">
           <CreatorAvatar
             id={creator.id}
             displayName={creator.displayName}
             avatarUrl={creator.avatarUrl}
             size={72}
           />
-          <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
-            {emerging.emerging ? (
-              <span className="badge emerging">Emerging</span>
-            ) : null}
-            {creator.establishedBadge ? (
-              <span className="badge featured">Established</span>
-            ) : null}
-            {creator.verifiedCreator ? (
-              <span className="badge">Verified</span>
-            ) : null}
-            {isActiveSeller(creator.lifetimePrimaryVolumeUsd) ? (
-              <span className="badge featured" title={`≥ $${ACTIVE_SELLER_MIN_VOLUME_USD} all-time completed volume`}>
-                Active seller
-              </span>
-            ) : null}
-          </div>
-          <h1 className="display" style={{ margin: "0 0 0.4rem", fontSize: "2.6rem" }}>
-            {creator.displayName}
-          </h1>
-          <p style={{ color: "var(--ink-muted)", margin: 0, maxWidth: "48ch" }}>
-            {creator.completedSales} sales · $
-            {Math.round(creator.lifetimePrimaryVolumeUsd)} primary volume ·
-            curator score {creator.curatorScore}
-          </p>
-          {creator.bio ? (
-            <p style={{ margin: "0.65rem 0 0", maxWidth: "52ch", lineHeight: 1.5 }}>
-              {creator.bio}
+          <div className="profile-masthead__copy">
+            <div className="profile-masthead__badges">
+              {emerging.emerging ? (
+                <span className="badge emerging">Emerging</span>
+              ) : null}
+              {creator.establishedBadge ? (
+                <span className="badge featured">Established</span>
+              ) : null}
+              {creator.verifiedCreator ? (
+                <span className="badge">Verified</span>
+              ) : null}
+              {isActiveSeller(creator.lifetimePrimaryVolumeUsd) ? (
+                <span
+                  className="badge featured"
+                  title={`≥ $${ACTIVE_SELLER_MIN_VOLUME_USD} all-time completed volume`}
+                >
+                  Active seller
+                </span>
+              ) : null}
+            </div>
+            <h1 className="display profile-masthead__name">
+              {creator.displayName}
+            </h1>
+            <p className="profile-masthead__meta">
+              {creator.completedSales} sales · $
+              {Math.round(creator.lifetimePrimaryVolumeUsd)} primary volume ·
+              curator score {creator.curatorScore}
             </p>
-          ) : null}
-          {(creator.websiteUrl || creator.twitterUrl || creator.farcasterUrl) ? (
-            <p style={{ margin: "0.45rem 0 0", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-              {creator.websiteUrl ? (
-                <a href={creator.websiteUrl} className="badge" target="_blank" rel="noreferrer">
-                  Website
-                </a>
-              ) : null}
-              {creator.twitterUrl ? (
-                <a href={creator.twitterUrl} className="badge" target="_blank" rel="noreferrer">
-                  Twitter
-                </a>
-              ) : null}
-              {creator.farcasterUrl ? (
-                <a href={creator.farcasterUrl} className="badge" target="_blank" rel="noreferrer">
-                  Farcaster
-                </a>
-              ) : null}
+            {creator.bio ? (
+              <p className="profile-masthead__bio">{creator.bio}</p>
+            ) : null}
+            {creator.websiteUrl || creator.twitterUrl || creator.farcasterUrl ? (
+              <p className="profile-masthead__links">
+                {creator.websiteUrl ? (
+                  <a
+                    href={creator.websiteUrl}
+                    className="badge"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Website
+                  </a>
+                ) : null}
+                {creator.twitterUrl ? (
+                  <a
+                    href={creator.twitterUrl}
+                    className="badge"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Twitter
+                  </a>
+                ) : null}
+                {creator.farcasterUrl ? (
+                  <a
+                    href={creator.farcasterUrl}
+                    className="badge"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Farcaster
+                  </a>
+                ) : null}
+              </p>
+            ) : null}
+            <p className="profile-masthead__wallets">
+              Wallets:{" "}
+              {creator.wallets
+                .map((w) => `${w.chain}:${w.address.slice(0, 8)}…`)
+                .join(" · ")}
             </p>
-          ) : null}
-          <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
-            Wallets:{" "}
-            {creator.wallets
-              .map((w) => `${w.chain}:${w.address.slice(0, 8)}…`)
-              .join(" · ")}
-          </p>
           </div>
         </div>
-        <div style={{ display: "grid", gap: "0.45rem", justifyItems: "end" }}>
-          <FollowButton artistId={id} initiallyFollowing={following} label="Follow artist" />
+        <div className="profile-masthead__actions">
+          <FollowButton
+            artistId={id}
+            initiallyFollowing={following}
+            label="Follow artist"
+          />
           {user?.id === id ? (
-            <Link href="/me/settings" className="badge" style={{ fontSize: "0.82rem" }}>
+            <Link
+              href="/me/settings"
+              className="badge"
+              style={{ fontSize: "0.82rem" }}
+            >
               Edit profile photo
             </Link>
           ) : null}
         </div>
-      </div>
+      </header>
 
-      <ProfileWorksExplorer
-        initialView={initialView}
-        creatorName={creator.displayName}
-        collections={collectionItems}
-        emptyCollections={
-          <p style={{ color: "var(--ink-muted)" }}>
-            No minted collections yet.
-            {user?.id === id ? (
-              <>
-                {" "}
-                <Link href="/create">Publish a collection</Link>.
-              </>
-            ) : null}
-          </p>
-        }
-      />
+      <div className="profile-stack">
+        <ProfileWorksExplorer
+          initialView={initialView}
+          creatorName={creator.displayName}
+          collections={collectionItems}
+          emptyCollections={
+            <p className="fm-empty-copy">
+              No minted collections yet.
+              {user?.id === id ? (
+                <>
+                  {" "}
+                  <Link href="/create">Publish a collection</Link>.
+                </>
+              ) : null}
+            </p>
+          }
+        />
+      </div>
     </div>
   );
 }

@@ -21,18 +21,20 @@ export default async function MeLayout({
 
   return (
     <div className="page-wrap">
-      <div className="me-head">
-        <h1 className="display me-head__title">{user.displayName}</h1>
-        <Link href={`/creators/${user.id}`} className="fm-btn fm-btn--ghost">
-          Public profile
-        </Link>
-      </div>
-      <p className="me-head__meta">
-        Role: {user.role} · curator score {user.curatorScore}
-        {user.verifiedCreator ? " · verified" : ""}
-        {user.establishedBadge ? " · established" : ""}
-        {user.totpEnabled ? " · 2FA on" : ""}.
-      </p>
+      <header className="me-shell__masthead">
+        <div className="me-head">
+          <h1 className="display me-head__title">{user.displayName}</h1>
+          <Link href={`/creators/${user.id}`} className="fm-btn fm-btn--ghost">
+            Public profile
+          </Link>
+        </div>
+        <p className="me-head__meta">
+          Role: {user.role} · curator score {user.curatorScore}
+          {user.verifiedCreator ? " · verified" : ""}
+          {user.establishedBadge ? " · established" : ""}
+          {user.totpEnabled ? " · 2FA on" : ""}.
+        </p>
+      </header>
       <AccountTabs />
       {children}
     </div>

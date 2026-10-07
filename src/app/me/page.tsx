@@ -86,8 +86,8 @@ export default async function MeCollectionPage({
   }
 
   return (
-    <>
-      <p className="me-section__lead">
+    <div className="profile-stack">
+      <p className="profile-stack__lead">
         Your minted collections, sales, shelves, and bridges. Open a collection
         to browse or manage pieces.
       </p>
@@ -313,6 +313,6 @@ export default async function MeCollectionPage({
           </>
         }
       />
-    </>
+    </div>
   );
 }

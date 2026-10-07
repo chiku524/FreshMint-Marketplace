@@ -367,7 +367,7 @@ export function ProfileWorksExplorer({
 
       {collections.length === 0
         ? (emptyCollections ?? (
-            <p style={{ color: "var(--ink-muted)" }}>
+            <p className="fm-empty-copy">
               No minted collections yet.
             </p>
           ))
@@ -378,7 +378,9 @@ export function ProfileWorksExplorer({
               creatorName={creatorName}
             />
           )}
-      {trailing}
+      {trailing ? (
+        <div className="profile-catalog__trailing">{trailing}</div>
+      ) : null}
     </div>
   );
 }
