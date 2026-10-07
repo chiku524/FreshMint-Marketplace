@@ -3320,7 +3320,16 @@ export async function purchaseListing(input: {
     isFirst = prior === 0;
   }
 
-  const settlementAddress = settlementAddressFor(listing.network);
+  const creatorBoing =
+    engine.state.creators
+      .get(listing.creatorId)
+      ?.wallets.find((w) => w.chain === "boing")?.address ?? null;
+  const settlementAddress = settlementAddressFor(listing.network, {
+    fallbackBoing: creatorBoing,
+  });
+  if (listing.network === "boing" && !settlementAddress) {
+    return { ok: false as const, error: "boing_settlement_unavailable" };
+  }
   const escrowAddress =
     collection?.escrowAddress ||
     listing.contractAddress ||
@@ -3356,15 +3365,27 @@ export async function purchaseListing(input: {
       };
     }
   } else {
-    const pay = await buildNativePaymentWalletTx({
-      network: listing.network,
-      fromAddress: input.buyerPaymentAddress,
-      toAddress: settlementAddress,
-      amountUsd,
-      listingChain: listing.chain,
-    });
-    paymentWalletTx = pay.walletTx;
-    settleQuote = pay.quote;
+    try {
+      const pay = await buildNativePaymentWalletTx({
+        network: listing.network,
+        fromAddress: input.buyerPaymentAddress,
+        toAddress: settlementAddress,
+        amountUsd,
+        listingChain: listing.chain,
+      });
+      paymentWalletTx = pay.walletTx;
+      settleQuote = pay.quote;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "payment_prepare_failed";
+      return {
+        ok: false as const,
+        error:
+          msg === "boing_settlement_unavailable" ||
+          msg === "boing_account_id_required"
+            ? msg
+            : msg,
+      };
+    }
   }
 
   const transferIntent = buildPurchaseTransferIntent({
@@ -3554,7 +3575,7 @@ export async function quoteCryptoPurchase(input: {
 
   const loaded = await loadPurchaseListingRow(input.listingId);
   if (!loaded.ok) return loaded;
-  const { listing } = loaded;
+  const { listing, engine } = loaded;
   const amountUsd = listing.priceUsd ?? 0;
   if (!(amountUsd > 0)) {
     return { ok: false as const, error: "unavailable" };
@@ -3576,7 +3597,13 @@ export async function quoteCryptoPurchase(input: {
     payNetwork: input.payNetwork,
   });
   const bridged = input.payNetwork !== listing.network;
-  const settlementAddress = settlementAddressFor(listing.network);
+  const creatorBoing =
+    engine.state.creators
+      .get(listing.creatorId)
+      ?.wallets.find((w) => w.chain === "boing")?.address ?? null;
+  const settlementAddress = settlementAddressFor(listing.network, {
+    fallbackBoing: creatorBoing,
+  });
 
   let bridge: {
     requestId?: string;
@@ -3682,10 +3709,19 @@ export async function confirmCryptoPurchase(input: {
     : null;
 
   if (input.step === "payment") {
-    if (
-      purchase.status === "completed" ||
-      purchase.status === "pending_transfer"
-    ) {
+    if (purchase.status === "completed") {
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "completed" as const,
+        txHash: purchase.txHash ?? input.txHash,
+        withdrawnAt: purchase.withdrawnAt
+          ? Number(purchase.withdrawnAt)
+          : Date.now(),
+        boingPaymentSettled: network === "boing" ? true : undefined,
+      };
+    }
+    if (purchase.status === "pending_transfer" && network !== "boing") {
       const transferIntent = buildPurchaseTransferIntent({
         listingNetwork: network,
         listingChain: listing.chain,
@@ -3696,17 +3732,128 @@ export async function confirmCryptoPurchase(input: {
           listing.contractAddress ||
           purchase.withdrawAddress ||
           "",
-        buyerReceiveAddress:
-          purchase.withdrawAddress ||
-          input.buyerId,
+        buyerReceiveAddress: purchase.withdrawAddress || input.buyerId,
       });
       return {
         ok: true as const,
         purchaseId: purchase.id,
-        status: purchase.status === "completed" ? "completed" : "pending_transfer",
+        status: "pending_transfer" as const,
         transferWalletTx: transferIntent.walletTx,
       };
     }
+
+    /**
+     * Boing reference NFTs require CALLER = current owner for transfer_nft.
+     * After publish mint the creator owns the token, so the buyer cannot sign
+     * the custody transfer. Settle the sale on successful payment (mempool ok
+     * or real hash) and record FreshMint ownership without a second buyer tx.
+     * Also recovers rows stuck in pending_transfer from the old two-step path.
+     */
+    if (network === "boing") {
+      const withdrawnAt = Date.now();
+      const completePatch = {
+        status: "completed" as const,
+        paymentTxHash: input.txHash,
+        bridgeRequestId: input.bridgeRequestId ?? purchase.bridgeRequestId,
+        txHash: input.txHash,
+        withdrawTxHash: input.txHash,
+        withdrawnAt,
+      };
+      if (memory) {
+        const wasCompleteMem = purchase.status === "completed";
+        updateMemoryPurchase(purchase.id, completePatch);
+        if (!wasCompleteMem) {
+          try {
+            const { notifyCreatorItemSold } = await import(
+              "@/lib/notifications/emit"
+            );
+            await notifyCreatorItemSold({
+              creatorId: listing.creatorId,
+              listingId: listing.id,
+              listingTitle: listing.title,
+              purchaseId: purchase.id,
+              amountUsd: purchase.amountUsd,
+            });
+          } catch (err) {
+            console.warn("[freshmint] sale notify failed", err);
+          }
+          engine.recordPurchase({
+            listingId: purchase.listingId,
+            buyerId: input.buyerId,
+            amountUsd: purchase.amountUsd,
+            isFirstPurchaseForBuyerOnArtifact: true,
+          });
+        }
+      } else {
+        const wasComplete = purchase.status === "completed";
+        await prisma.purchase.update({
+          where: { id: purchase.id },
+          data: {
+            status: "completed",
+            paymentTxHash: input.txHash,
+            bridgeRequestId: input.bridgeRequestId ?? purchase.bridgeRequestId,
+            txHash: input.txHash,
+            withdrawTxHash: input.txHash,
+            withdrawnAt: new Date(withdrawnAt),
+          },
+        });
+        if (!wasComplete) {
+          const isFirst =
+            "isFirst" in purchase ? Boolean(purchase.isFirst) : true;
+          engine.recordPurchase({
+            listingId: purchase.listingId,
+            buyerId: input.buyerId,
+            amountUsd: purchase.amountUsd,
+            isFirstPurchaseForBuyerOnArtifact: isFirst,
+          });
+          await prisma.user.update({
+            where: { id: listing.creatorId },
+            data: {
+              completedSales: { increment: 1 },
+              lifetimePrimaryVolumeUsd: { increment: purchase.amountUsd },
+            },
+          });
+          await prisma.signalEvent.create({
+            data: {
+              type: isFirst ? "first_purchase" : "purchase",
+              listingId: listing.id,
+              creatorId: listing.creatorId,
+              viewerId: input.buyerId,
+              metaJson: JSON.stringify({
+                amountUsd: purchase.amountUsd,
+                txHash: input.txHash,
+                payNetwork:
+                  "payNetwork" in purchase ? purchase.payNetwork : null,
+                boingPaymentSettled: true,
+              }),
+            },
+          });
+          try {
+            const { notifyCreatorItemSold } = await import(
+              "@/lib/notifications/emit"
+            );
+            await notifyCreatorItemSold({
+              creatorId: listing.creatorId,
+              listingId: listing.id,
+              listingTitle: listing.title,
+              purchaseId: purchase.id,
+              amountUsd: purchase.amountUsd,
+            });
+          } catch (err) {
+            console.warn("[freshmint] sale notify failed", err);
+          }
+        }
+      }
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "completed" as const,
+        txHash: input.txHash,
+        withdrawnAt,
+        boingPaymentSettled: true as const,
+      };
+    }
+
     const patch = {
       status: "pending_transfer",
       paymentTxHash: input.txHash,
@@ -3946,6 +4093,30 @@ export async function resumeCryptoPurchase(input: {
     receiveAddress;
 
   if (status === "pending_transfer") {
+    // Boing primary buys settle on payment — recover stuck pending_transfer rows.
+    if (network === "boing") {
+      const payHash =
+        ("paymentTxHash" in purchase && purchase.paymentTxHash) ||
+        purchase.txHash ||
+        `pending:boing-settled:${purchase.id}`;
+      const settled = await confirmCryptoPurchase({
+        purchaseId: purchase.id,
+        buyerId: input.buyerId,
+        step: "payment",
+        txHash: String(payHash),
+      });
+      if (!settled.ok) return settled;
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "completed" as const,
+        listingId: listing.id,
+        chain: listing.chain,
+        network,
+        txHash: "txHash" in settled ? settled.txHash : payHash,
+        boingPaymentSettled: true as const,
+      };
+    }
     if (!receiveAddress) {
       return { ok: false as const, error: "wallet_required" };
     }
@@ -3990,7 +4161,16 @@ export async function resumeCryptoPurchase(input: {
         amountUsd: purchase.amountUsd,
       };
     }
-    const settlementAddress = settlementAddressFor(network);
+    const creatorBoing =
+      engine.state.creators
+        .get(listing.creatorId)
+        ?.wallets.find((w) => w.chain === "boing")?.address ?? null;
+    const settlementAddress = settlementAddressFor(network, {
+      fallbackBoing: creatorBoing,
+    });
+    if (network === "boing" && !settlementAddress) {
+      return { ok: false as const, error: "boing_settlement_unavailable" };
+    }
     const crossChain = payNetwork !== network;
     if (crossChain) {
       try {
@@ -4031,26 +4211,31 @@ export async function resumeCryptoPurchase(input: {
         };
       }
     }
-    const pay = await buildNativePaymentWalletTx({
-      network,
-      fromAddress: input.buyerPaymentAddress,
-      toAddress: settlementAddress,
-      amountUsd: purchase.amountUsd,
-      listingChain: listing.chain,
-    });
-    return {
-      ok: true as const,
-      purchaseId: purchase.id,
-      status: "pending_payment" as const,
-      listingId: listing.id,
-      chain: listing.chain,
-      network,
-      payNetwork,
-      receiveAddress,
-      settlementAddress,
-      amountUsd: purchase.amountUsd,
-      paymentWalletTx: pay.walletTx,
-    };
+    try {
+      const pay = await buildNativePaymentWalletTx({
+        network,
+        fromAddress: input.buyerPaymentAddress,
+        toAddress: settlementAddress,
+        amountUsd: purchase.amountUsd,
+        listingChain: listing.chain,
+      });
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "pending_payment" as const,
+        listingId: listing.id,
+        chain: listing.chain,
+        network,
+        payNetwork,
+        receiveAddress,
+        settlementAddress,
+        amountUsd: purchase.amountUsd,
+        paymentWalletTx: pay.walletTx,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "payment_prepare_failed";
+      return { ok: false as const, error: msg };
+    }
   }
 
   return { ok: false as const, error: "unavailable" };

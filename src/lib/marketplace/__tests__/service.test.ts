@@ -42,6 +42,8 @@ import { splitSaleProceeds } from "@/lib/fees/platform";
 beforeEach(() => {
   resetMemoryStoreForTests();
   enableMemoryMode("unit-test");
+  // Boing settlement needs a 32-byte AccountId (never the EVM treasury).
+  process.env.NEXT_PUBLIC_PLATFORM_TREASURY_BOING = `0x${"aa".repeat(32)}`;
 });
 
 function markListingMintedForTest(listingId: string) {
@@ -73,11 +75,15 @@ function cryptoBuy(input: {
   const payAddr =
     payNetwork === "solana"
       ? "Buyer1111111111111111111111111111111111111"
-      : `0x${"b1".repeat(20)}`;
+      : payNetwork === "boing"
+        ? `0x${"b1".repeat(32)}`
+        : `0x${"b1".repeat(20)}`;
   const recvAddr =
     listing?.chain === "solana"
       ? "Recv11111111111111111111111111111111111111"
-      : `0x${"b2".repeat(20)}`;
+      : listing?.chain === "boing"
+        ? `0x${"b2".repeat(32)}`
+        : `0x${"b2".repeat(20)}`;
   return purchaseListing({
     listingId: input.listingId,
     buyerId: input.buyerId,

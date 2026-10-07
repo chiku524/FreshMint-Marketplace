@@ -1477,6 +1477,91 @@ export function buildBoingBatchMintIntent(input: {
   };
 }
 
+/**
+ * Owner-signed `transfer_nft` for an already-minted Boing reference NFT.
+ * CALLER must be the current owner (or admin when the token is still unowned).
+ */
+export function buildBoingNftTransferIntent(input: {
+  collectionAddress: string;
+  tokenId: string;
+  toAddress: string;
+  signerAddress: string;
+  listingId?: string;
+}): {
+  chain: "boing";
+  network: "boing";
+  contractAddress: string;
+  tokenId: string;
+  txHash: string;
+  calldata: string;
+  status: "pending_wallet" | "simulated";
+  walletTx: BoingWalletTx;
+} {
+  const collectionOk = isBoingNativeAccountIdHex(input.collectionAddress);
+  const toOk = isBoingNativeAccountIdHex(input.toAddress);
+  const signerOk = isBoingNativeAccountIdHex(input.signerAddress);
+  const collection = collectionOk
+    ? normalizeBoingAccountId(input.collectionAddress)
+    : input.collectionAddress;
+  const to = toOk ? normalizeBoingAccountId(input.toAddress) : input.toAddress;
+  const signer = signerOk
+    ? normalizeBoingAccountId(input.signerAddress)
+    : input.signerAddress;
+  const tokenId = input.tokenId.replace(/^0x/, "");
+  const label = (input.listingId ?? "transfer").slice(0, 32);
+
+  if (!collectionOk || !toOk || !signerOk) {
+    return {
+      chain: "boing",
+      network: "boing",
+      contractAddress: collection,
+      tokenId: input.tokenId,
+      txHash: simulatedBoingHash(),
+      calldata: "0x",
+      status: "simulated",
+      walletTx: {
+        chain: "boing",
+        network: "boing",
+        chainId: BOING_TESTNET_CHAIN_ID,
+        method: "boing_sendTransaction",
+        tx: {
+          type: "transfer",
+          to,
+          from: signer,
+          amount: "0",
+          purpose_category: "nft",
+        },
+      },
+    };
+  }
+
+  return {
+    chain: "boing",
+    network: "boing",
+    contractAddress: collection,
+    tokenId: input.tokenId,
+    txHash: "",
+    calldata: encodeBoingTransferNft(to, tokenId),
+    status: "pending_wallet",
+    walletTx: {
+      chain: "boing",
+      network: "boing",
+      chainId: BOING_TESTNET_CHAIN_ID,
+      method: "boing_sendTransaction",
+      tx: {
+        type: "contract_call",
+        contract: collection,
+        to: collection,
+        from: signer,
+        calldata: encodeBoingTransferNft(to, tokenId),
+        purpose_category: "nft",
+        asset_name: label,
+        asset_symbol: "FMINT",
+      },
+    },
+  };
+}
+
 export function buildBoingPurchaseIntent(input: {
   buyerAddress: string;
   listingId: string;

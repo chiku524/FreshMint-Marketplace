@@ -75,6 +75,9 @@ export function platformFeeRecipients(): {
   treasurySolana: string | null;
   operatorSolana: string | null;
   treasuryBtc: string | null;
+  /** Boing 32-byte AccountId (`0x` + 64 hex). Never reuse the EVM treasury. */
+  treasuryBoing: string | null;
+  operatorBoing: string | null;
 } {
   const treasury =
     process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS?.trim() || null;
@@ -86,7 +89,19 @@ export function platformFeeRecipients(): {
     process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA?.trim() || null;
   const treasuryBtc =
     process.env.NEXT_PUBLIC_PLATFORM_TREASURY_BTC?.trim() || null;
-  return { treasury, operator, treasurySolana, operatorSolana, treasuryBtc };
+  const treasuryBoing =
+    process.env.NEXT_PUBLIC_PLATFORM_TREASURY_BOING?.trim() || null;
+  const operatorBoing =
+    process.env.NEXT_PUBLIC_PLATFORM_OPERATOR_BOING?.trim() || null;
+  return {
+    treasury,
+    operator,
+    treasurySolana,
+    operatorSolana,
+    treasuryBtc,
+    treasuryBoing,
+    operatorBoing,
+  };
 }
 
 export function describePlatformFee(amountUsd: number | null | undefined): string {

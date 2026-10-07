@@ -202,90 +202,103 @@ export function ListingPreviewModal({
           </h2>
         </div>
 
-        <div
-          className="work-media listing-preview-modal__media"
-          style={mediaStyle}
-        >
-          {media ? (
-            <FmImage
-              src={media}
-              alt=""
-              fill
-              sizes="(max-width: 640px) 92vw, 420px"
-            />
-          ) : null}
-        </div>
-
-        <p className="listing-preview-modal__byline">
-          {creatorName ? (
-            <Link href={`/creators/${listing.creatorId}`}>{creatorName}</Link>
-          ) : (
-            <Link href={`/creators/${listing.creatorId}`}>Creator</Link>
-          )}
-          {collection ? (
-            <>
-              {" · "}
-              <Link href={collectionHref(collection)}>{collection.title}</Link>
-            </>
-          ) : null}
-          {" · "}
-          {saleModeBadge(listing)}
-          {listing.priceUsd != null || saleMode === "dutch"
-            ? ` · $${priceUsdForActions(listing) ?? "—"}`
-            : null}
-        </p>
-
-        {listing.description ? (
-          <p className="listing-preview-modal__desc">{listing.description}</p>
-        ) : null}
-
-        {listing.delisted ? (
-          <p className="listing-detail__note listing-detail__note--unlisted">
-            Not listed for sale.
-          </p>
-        ) : null}
-
-        {showActions && !listing.delisted ? (
-          <div className="listing-preview-modal__actions">
-            <div className="listing-preview-modal__follow">
-              <FollowButton artistId={listing.creatorId} compact />
-              <SaveButton listingId={listing.id} compact />
-            </div>
-            {saleMode === "english" ? (
-              <BidPanel
-                listingId={listing.id}
-                minBidUsd={minBid}
-                live={auctionLive}
-                ended={Boolean(auctionEnded)}
-                winningBidUsd={listing.currentHighBidUsd}
-                reserveMet={
-                  !listing.reserveUsd ||
-                  (listing.currentHighBidUsd != null &&
-                    listing.currentHighBidUsd >= listing.reserveUsd)
-                }
-                isCreator={false}
+        <div className="listing-preview-modal__body">
+          <div
+            className="work-media listing-preview-modal__media"
+            style={mediaStyle}
+          >
+            {media ? (
+              <FmImage
+                src={media}
+                alt=""
+                fill
+                sizes="(max-width: 720px) 92vw, 280px"
               />
             ) : null}
-            <ListingActions
-              listingId={listing.id}
-              creatorId={listing.creatorId}
-              priceUsd={priceUsdForActions(listing)}
-              stage={listing.stage}
-              sold={sold}
-              listingType={listing.type}
-              chain={listing.chain}
-              network={listing.network}
-              isSecondary={Boolean(listing.isSecondary)}
-              creatorRoyaltyBps={listing.creatorRoyaltyBps ?? null}
-              dropState={dropState}
-              repeatable={cap == null || cap > 1}
-              minted={minted}
-              canStageRising={canStageRising}
-              suppressBuy={saleMode === "english" && auctionLive}
-              layout="inline"
-            />
           </div>
-        ) : null}
+
+          <div className="listing-preview-modal__side">
+            <p className="listing-preview-modal__byline">
+              {creatorName ? (
+                <Link href={`/creators/${listing.creatorId}`}>
+                  {creatorName}
+                </Link>
+              ) : (
+                <Link href={`/creators/${listing.creatorId}`}>Creator</Link>
+              )}
+              {collection ? (
+                <>
+                  {" · "}
+                  <Link href={collectionHref(collection)}>
+                    {collection.title}
+                  </Link>
+                </>
+              ) : null}
+              {" · "}
+              {saleModeBadge(listing)}
+              {listing.priceUsd != null || saleMode === "dutch"
+                ? ` · $${priceUsdForActions(listing) ?? "—"}`
+                : null}
+            </p>
+
+            {listing.description ? (
+              <p className="listing-preview-modal__desc">
+                {listing.description}
+              </p>
+            ) : null}
+
+            {listing.delisted ? (
+              <p className="listing-detail__note listing-detail__note--unlisted">
+                Not listed for sale.
+              </p>
+            ) : null}
+
+            {showActions && !listing.delisted ? (
+              <div className="listing-preview-modal__actions">
+                <div className="listing-preview-modal__follow">
+                  <FollowButton artistId={listing.creatorId} compact />
+                  <SaveButton listingId={listing.id} compact />
+                </div>
+                {saleMode === "english" ? (
+                  <BidPanel
+                    listingId={listing.id}
+                    minBidUsd={minBid}
+                    live={auctionLive}
+                    ended={Boolean(auctionEnded)}
+                    winningBidUsd={listing.currentHighBidUsd}
+                    reserveMet={
+                      !listing.reserveUsd ||
+                      (listing.currentHighBidUsd != null &&
+                        listing.currentHighBidUsd >= listing.reserveUsd)
+                    }
+                    isCreator={false}
+                  />
+                ) : null}
+                <ListingActions
+                  listingId={listing.id}
+                  creatorId={listing.creatorId}
+                  priceUsd={priceUsdForActions(listing)}
+                  stage={listing.stage}
+                  sold={sold}
+                  listingType={listing.type}
+                  chain={listing.chain}
+                  network={listing.network}
+                  isSecondary={Boolean(listing.isSecondary)}
+                  creatorRoyaltyBps={listing.creatorRoyaltyBps ?? null}
+                  dropState={dropState}
+                  repeatable={cap == null || cap > 1}
+                  minted={minted}
+                  canStageRising={canStageRising}
+                  suppressBuy={saleMode === "english" && auctionLive}
+                  layout="inline"
+                  showSave={false}
+                  showCommunityActions={false}
+                  dense
+                />
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>,
     document.body,

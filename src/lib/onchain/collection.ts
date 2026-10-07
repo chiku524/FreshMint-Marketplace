@@ -6,6 +6,7 @@ import {
   boingMintBatchChunkSize,
   buildBoingBatchMintIntent,
   buildBoingMintIntent,
+  buildBoingNftTransferIntent,
   provisionalBoingCollectionAddress,
   resolveBoingNftCollectionBytecode,
   resolveBoingNftDeployTemplateVersion,
@@ -325,13 +326,14 @@ export function buildWithdrawTransferIntent(input: {
       signerAddress: input.signerAddress ?? input.escrowAddress,
     });
   }
-  // Solana/Boing: collector wallet still signs a transfer-style mint intent for now.
+  // Boing reference NFT: owner (or admin for unowned) signs transfer_nft(to, tokenId).
   if (chain === "boing") {
-    return buildBoingMintIntent({
-      creatorAddress: input.destinationAddress,
-      metadataUri: `transfer:${input.tokenId}`,
-      listingId: `withdraw-${input.tokenId}`,
-      title: "Withdraw",
+    return buildBoingNftTransferIntent({
+      collectionAddress: input.contractAddress,
+      tokenId: input.tokenId,
+      toAddress: input.destinationAddress,
+      signerAddress: input.signerAddress ?? input.escrowAddress,
+      listingId: `transfer-${input.tokenId}`,
     });
   }
   return buildSolanaMintIntent({
