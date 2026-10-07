@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /** Routes where product chrome (and the raffle banner) should stay out of the way. */
-const HIDDEN_PREFIXES = ["/create", "/sign-in", "/sign-up"];
+const HIDDEN_PREFIXES = ["/create", "/sign-in", "/sign-up", "/treasury"];
 
 /**
  * Sitewide marketing strip for the weekly Friday treasury raffle.
