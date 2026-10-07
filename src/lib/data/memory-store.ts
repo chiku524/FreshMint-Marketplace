@@ -311,4 +311,6 @@ export function resetMemoryStoreForTests(): void {
   accounts.__freshmintAccounts = undefined;
   const friday = globalThis as unknown as { __freshmintFridayBuys?: unknown[] };
   friday.__freshmintFridayBuys = [];
+  const raffle = globalThis as unknown as { __freshmintFridayRaffles?: unknown[] };
+  raffle.__freshmintFridayRaffles = [];
 }

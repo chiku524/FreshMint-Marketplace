@@ -458,6 +458,35 @@ model TreasuryFridayBuy {
   @@index([status, createdAt])
 }
 
+/// One row per UTC Friday — raffle of that week's treasury floor buy to an active user.
+model TreasuryFridayRaffle {
+  id              String    @id @default(cuid())
+  /// UTC Friday calendar date (YYYY-MM-DD); matches TreasuryFridayBuy.windowId
+  windowId        String    @unique
+  /// drawn | skipped_no_eligible | skipped_no_buy | skipped_no_profit | skipped_disabled
+  status          String
+  fridayBuyId     String?
+  listingId       String?
+  purchaseId      String?
+  winnerUserId    String?
+  eligibleCount   Int       @default(0)
+  /// pending_claim | assigned | claimed | transferred | n/a
+  prizeStatus     String    @default("n/a")
+  /// Winner wallet recorded at claim (or assigned at draw when known)
+  claimAddress    String?
+  claimTxHash     String?
+  claimedAt       DateTime?
+  /// JSON string[] of activity kinds that entered the winner (minted|listed|bought|offer|bid)
+  winnerKindsJson String    @default("[]")
+  reason          String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([winnerUserId])
+  @@index([prizeStatus, createdAt])
+  @@index([status, createdAt])
+}
+
 model Bid {
   id        String   @id @default(cuid())
   listingId String

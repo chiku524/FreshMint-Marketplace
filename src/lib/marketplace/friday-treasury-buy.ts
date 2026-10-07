@@ -82,6 +82,14 @@ export type FridayTreasuryBuyResult = FridayTreasuryBuyRecord & {
   alreadyRan: boolean;
   signerAvailable: boolean;
   weekProfitUsd: number;
+  raffle?: {
+    id: string;
+    status: string;
+    winnerUserId: string | null;
+    eligibleCount: number;
+    prizeStatus: string;
+    reason: string;
+  } | null;
 };
 
 /** Optional ceiling on weekly profit. Unset = no extra cap. */
@@ -563,6 +571,7 @@ export async function runFridayTreasuryBuys(input?: {
       alreadyRan: false,
       signerAvailable,
       weekProfitUsd: 0,
+      raffle: null,
     };
   }
 
@@ -576,8 +585,31 @@ export async function runFridayTreasuryBuys(input?: {
     input?.weekProfitUsd != null
       ? roundUsd(input.weekProfitUsd)
       : await computeWeekTreasuryProfitUsd({ windowId, now, memory });
+
+  const { runFridayTreasuryRaffle, getFridayRafflePublic } = await import(
+    "@/lib/marketplace/friday-treasury-raffle"
+  );
+
   if (existing) {
-    return { ...existing, alreadyRan: true, signerAvailable, weekProfitUsd };
+    const raffles = await getFridayRafflePublic({ limit: 1, memory });
+    const raffle =
+      raffles.find((r) => r.windowId === windowId) ?? raffles[0] ?? null;
+    return {
+      ...existing,
+      alreadyRan: true,
+      signerAvailable,
+      weekProfitUsd,
+      raffle: raffle
+        ? {
+            id: raffle.id,
+            status: raffle.status,
+            winnerUserId: raffle.winnerUserId,
+            eligibleCount: raffle.eligibleCount,
+            prizeStatus: raffle.prizeStatus,
+            reason: raffle.reason,
+          }
+        : null,
+    };
   }
 
   const budgetUsd = applyFridayBudgetCeiling(weekProfitUsd);
@@ -593,7 +625,30 @@ export async function runFridayTreasuryBuys(input?: {
       reason: `week_profit_usd=${weekProfitUsd}`,
       paymentTxHash: null,
     });
-    return { ...row, alreadyRan: false, signerAvailable, weekProfitUsd };
+    const raffle = await runFridayTreasuryRaffle({
+      windowId,
+      memory,
+      fridayBuyId: row.id,
+      buyStatus: row.status,
+      listingId: null,
+      purchaseId: null,
+      weekProfitUsd,
+      now,
+    });
+    return {
+      ...row,
+      alreadyRan: false,
+      signerAvailable,
+      weekProfitUsd,
+      raffle: {
+        id: raffle.id,
+        status: raffle.status,
+        winnerUserId: raffle.winnerUserId,
+        eligibleCount: raffle.eligibleCount,
+        prizeStatus: raffle.prizeStatus,
+        reason: raffle.reason,
+      },
+    };
   }
 
   const { getDiscoveryEngine, purchaseListing } = await import(
@@ -665,12 +720,74 @@ export async function runFridayTreasuryBuys(input?: {
       reason: picked.reason,
       paymentTxHash: null,
     });
-    return { ...row, alreadyRan: false, signerAvailable, weekProfitUsd };
+    const raffle = await runFridayTreasuryRaffle({
+      windowId,
+      memory,
+      fridayBuyId: row.id,
+      buyStatus: row.status,
+      listingId: null,
+      purchaseId: null,
+      weekProfitUsd,
+      now,
+    });
+    return {
+      ...row,
+      alreadyRan: false,
+      signerAvailable,
+      weekProfitUsd,
+      raffle: {
+        id: raffle.id,
+        status: raffle.status,
+        winnerUserId: raffle.winnerUserId,
+        eligibleCount: raffle.eligibleCount,
+        prizeStatus: raffle.prizeStatus,
+        reason: raffle.reason,
+      },
+    };
   }
 
   const { listing, amountUsd, network } = picked.candidate;
   const receive = treasuryReceiveAddress(network);
   const settlement = settlementAddressFor(network);
+
+  // Pre-draw raffle winner so a successful purchase can assign ownership to them.
+  const {
+    collectFridayRaffleEligible,
+    pickFridayRaffleWinner,
+    winnerReceiveAddress,
+    fridayRaffleDisabled,
+  } = await import("@/lib/marketplace/friday-treasury-raffle");
+  let preWinnerUserId: string | null = null;
+  let preWinnerReceive: string | null = null;
+  if (!fridayRaffleDisabled() && weekProfitUsd > 0) {
+    const eligible = await collectFridayRaffleEligible({
+      windowId,
+      now,
+      memory,
+    });
+    const exclude = new Set([listing.creatorId, listingSellerId(listing)]);
+    const winner = pickFridayRaffleWinner(windowId, eligible, exclude);
+    if (winner) {
+      preWinnerUserId = winner.userId;
+      let winnerWallets: Array<{ chain: string; address: string }> = [];
+      if (memory) {
+        const c = engine.state.creators.get(winner.userId);
+        winnerWallets = c?.wallets ?? [];
+      } else {
+        const wallets = await prisma.wallet.findMany({
+          where: { userId: winner.userId },
+          select: { chain: true, address: true },
+        });
+        winnerWallets = wallets;
+      }
+      const recv = winnerReceiveAddress({
+        listing,
+        winnerWallets,
+        treasuryFallback: receive,
+      });
+      preWinnerReceive = recv.address;
+    }
+  }
 
   let paymentTxHash: string | null = null;
   let fromAddress = receive;
@@ -695,24 +812,28 @@ export async function runFridayTreasuryBuys(input?: {
         paymentTxHash = sent.txHash;
         fromAddress = sent.fromAddress;
         const { upsertUserFromWallet } = await import("@/lib/auth/wallet");
-        const buyer = await upsertUserFromWallet({
+        const treasuryBuyer = await upsertUserFromWallet({
           chain: listing.chain === "solana" ? "solana" : listing.chain === "boing" ? "boing" : "evm",
           address: receive,
           displayName: "FreshMint Treasury",
         });
+        const buyerId = preWinnerUserId ?? treasuryBuyer.id;
+        const buyerReceiveAddress = preWinnerReceive || receive;
         const bought = await purchaseListing({
           listingId: listing.id,
-          buyerId: buyer.id,
+          buyerId,
           payNetwork: network,
           buyerPaymentAddress: fromAddress,
-          buyerReceiveAddress: receive,
+          buyerReceiveAddress,
           amountUsd,
           paymentTxHash,
         });
         if (bought.ok) {
           purchaseId = bought.purchaseId;
           status = "purchased";
-          reason = "paid_via_treasury_signer_existing_purchase_path";
+          reason = preWinnerUserId
+            ? "paid_via_treasury_signer_raffle_winner_assigned"
+            : "paid_via_treasury_signer_existing_purchase_path";
         } else {
           status = "queued";
           reason = `payment_sent_purchase_failed:${bought.error}`;
@@ -735,5 +856,29 @@ export async function runFridayTreasuryBuys(input?: {
     reason,
     paymentTxHash,
   });
-  return { ...row, alreadyRan: false, signerAvailable, weekProfitUsd };
+  const raffle = await runFridayTreasuryRaffle({
+    windowId,
+    memory,
+    fridayBuyId: row.id,
+    buyStatus: row.status,
+    listingId: listing.id,
+    purchaseId,
+    listing,
+    weekProfitUsd,
+    now,
+  });
+  return {
+    ...row,
+    alreadyRan: false,
+    signerAvailable,
+    weekProfitUsd,
+    raffle: {
+      id: raffle.id,
+      status: raffle.status,
+      winnerUserId: raffle.winnerUserId,
+      eligibleCount: raffle.eligibleCount,
+      prizeStatus: raffle.prizeStatus,
+      reason: raffle.reason,
+    },
+  };
 }

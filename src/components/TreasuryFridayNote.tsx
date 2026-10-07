@@ -7,7 +7,7 @@ export function TreasuryFridayNote({
   surface,
   className,
 }: {
-  surface: Exclude<Surface, "docs">;
+  surface: Exclude<Surface, "docs" | "eligibility" | "studio" | "me">;
   className?: string;
 }) {
   const copy = TREASURY_FRIDAY_COPY[surface];
@@ -19,8 +19,15 @@ export function TreasuryFridayNote({
         <>
           {" "}
           <Link href="/open">Browse Open Lane</Link>
+          {" · "}
+          <Link href="/docs#friday">Raffle rules</Link>
         </>
-      ) : null}
+      ) : (
+        <>
+          {" "}
+          <Link href="/docs#friday">How the raffle works</Link>
+        </>
+      )}
     </p>
   );
 }

@@ -21,6 +21,11 @@ export function __resetMemoryOffersForTests() {
   memoryOffers.length = 0;
 }
 
+/** Snapshot for Friday raffle eligibility (memory mode). */
+export function listMemoryOffersForRaffle(): OfferRow[] {
+  return [...memoryOffers];
+}
+
 function roundUsd(n: number) {
   return Math.round(n * 100) / 100;
 }

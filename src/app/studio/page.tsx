@@ -1,3 +1,4 @@
+import { FridayRafflePanel } from "@/components/FridayRafflePanel";
 import { StudioPanel } from "@/components/StudioPanel";
 import { getSessionUser } from "@/lib/auth/session";
 import { buildStudioCollectionRows } from "@/lib/marketplace/studio-hub";
@@ -54,6 +55,7 @@ export default async function StudioPage() {
           </p>
         ) : null}
       </header>
+      <FridayRafflePanel surface="studio" />
       <StudioPanel
         collections={collections}
         canEditFeatured={canEdit}

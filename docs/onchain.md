@@ -57,16 +57,18 @@ sale amount (buyer still pays the listed / bid / offer / package price):
 
 Covered services: **buy now**, **timed listing**, **English auction**, **Dutch auction**, **accepted offers**, **collection packages**, **resale** (resale also deducts creator royalty). Creator mint/deploy gas is network gas, not this fee. Featured boost remains a separate **$15 USD** promotional payment to the same treasury.
 
-### Friday treasury buys
+### Friday treasury buys + raffle
 
 Every **Friday 16:15 UTC**, Vercel Cron hits `GET /api/cron/friday-treasury-buy` (`CRON_SECRET`). Budget is **last week’s treasury profit** (0.5% sale fees + Featured boosts). If that profit is positive and the listing-chain treasury native balance covers a live Open Lane buy-now work (not the treasury’s own listings, not auctions/open editions), the job records that Friday’s window (`TreasuryFridayBuy.windowId` = UTC date) and:
 
-1. **Signer present** (`TREASURY_EVM_SIGNER_PRIVATE_KEY` / `TREASURY_SOLANA_SIGNER_SECRET_KEY` whose address matches the public treasury or operator): pays native via the existing settlement address, then `purchaseListing` (same path as collectors). NFT transfer may still be `pending_transfer` until escrow is signed.
-2. **No matching signer** (typical: EVM Safe / Solana Squads): **queued intent only** — does not reserve the listing. Fully automated on-chain spend is blocked until a hot wallet that *is* the treasury/operator, or a Safe/Squads execution path, exists.
+1. **Signer present** (`TREASURY_EVM_SIGNER_PRIVATE_KEY` / `TREASURY_SOLANA_SIGNER_SECRET_KEY` whose address matches the public treasury or operator): pays native via the existing settlement address, then `purchaseListing` (same path as collectors). When a raffle winner is drawn, the purchase is assigned to that user (receive address = their linked wallet on the listing chain when available). NFT transfer may still be `pending_transfer` until escrow is signed.
+2. **No matching signer** (typical: EVM Safe / Solana Squads): **queued intent only** — does not reserve the listing. Fully automated on-chain spend is blocked until a hot wallet that *is* the treasury/operator, or a Safe/Squads execution path, exists. The raffle still records a winner against the queued buy.
 
-Spend cap: **that UTC week’s treasury profit** — sum of `Purchase.feeTreasuryUsd` (0.5% of settled sales) plus `$15` per Featured boost in the window (previous Friday 00:00 UTC through this Friday). Skip when profit is 0. Optional `TREASURY_FRIDAY_BUDGET_USD` is a ceiling on that profit, not a default. Selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Native check is list-price quote + gas reserve (0.001 ETH on Ethereum, 0.0001 ETH on Base/Arbitrum/Optimism, 0.001 SOL). Idempotent per Friday.
+**Raffle:** same profit gate and Friday cadence. Eligible users (auto-entered) are creators/collectors with real activity in the profit window — minted or listed (non-draft), bought, offered, or bid — excluding flagged/wash accounts, users with no linked wallet, treasury/operator wallets, and the seller of that Friday’s bought work. Winner: SHA-256(`windowId` + `userId`) ascending. Persisted on `TreasuryFridayRaffle` (`prizeStatus`: `assigned` | `pending_claim` | `claimed` | `transferred`). Claim path: `POST /api/treasury/friday-raffle/claim` with a linked wallet; public status: `GET /api/treasury/friday-raffle`. Kill switch: `TREASURY_FRIDAY_RAFFLE_DISABLED=1`.
 
-Collectors see the policy on home, Open Lane, listing (buy-now), collection pages, and `/docs#fees`.
+Spend cap: **that UTC week’s treasury profit** — sum of `Purchase.feeTreasuryUsd` (0.5% of settled sales) plus `$15` per Featured boost in the window (previous Friday 00:00 UTC through this Friday). Skip when profit is 0. Optional `TREASURY_FRIDAY_BUDGET_USD` is a ceiling on that profit, not a default. Listing selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Native check is list-price quote + gas reserve (0.001 ETH on Ethereum, 0.0001 ETH on Base/Arbitrum/Optimism, 0.001 SOL). Idempotent per Friday.
+
+Collectors see the policy on home, Open Lane, listing (buy-now), collection pages, Studio, `/me#friday-raffle`, and `/docs#friday`.
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 

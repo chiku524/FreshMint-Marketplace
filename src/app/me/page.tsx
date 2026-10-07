@@ -1,3 +1,4 @@
+import { FridayRafflePanel } from "@/components/FridayRafflePanel";
 import { MeCollectionBrowser } from "@/components/MeCollectionBrowser";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { getSessionUser } from "@/lib/auth/session";
@@ -90,6 +91,14 @@ export default async function MeCollectionPage({
         Your minted collections, sales, shelves, and bridges. Open a collection
         to browse or manage pieces.
       </p>
+
+      <FridayRafflePanel
+        surface="me"
+        wallets={profile.wallets.map((w) => ({
+          chain: w.chain,
+          address: w.address,
+        }))}
+      />
 
       {hasBoingWallet ? (
         <section className="me-notice" data-testid="boing-wallet-balances">
