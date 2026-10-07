@@ -66,7 +66,7 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 - **Sybil-lite** signal rate limits, new-account caps, self-engagement block, wash-purchase detection
 - **OE / auction calendar** with hourly start caps + Rising concurrency limits (`/calendar`)
 - **Moderation queue** for reports & appeals (`/moderate` — demo as Ops Moderator)
-- **Studio** for Featured editorial controls + collector shelf creation (`/studio`)
+- **Studio** creator hub: collection draft → deploy → mint → live status + next actions; also shelves + Featured editorial (`/studio`)
 
 ### Media & chains
 - **Media upload** via `POST /api/media/upload` → Vercel Blob or local disk

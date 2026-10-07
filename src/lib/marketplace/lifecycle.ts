@@ -135,7 +135,7 @@ export function creatorLifecycleHint(
     return "In Rising — collectors can find you without a Featured pin";
   }
   if (listing.stage === "featured_eligible") {
-    return "Featured-eligible — Studio can pin it";
+    return "Featured-eligible — editors can pin it in Studio";
   }
   if (listing.stage === "featured") return "Featured";
   return stageLabel(listing.stage);

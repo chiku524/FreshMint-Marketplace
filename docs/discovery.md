@@ -106,7 +106,7 @@ draft → soft_launch → rising_eligible → featured_eligible → featured
 ### Featured
 
 - Nomination / editorial path into `featured_eligible`  
-- Editors promote into fixed Featured inventory via Studio  
+- Editors promote into fixed Featured inventory via Studio (same page as the creator publish hub)  
 - Featured dominance can block further Rising saturation for that creator  
 
 Implemented in `src/lib/discovery/staging.ts`.
@@ -196,7 +196,7 @@ From `DISCOVERY_CONFIG`:
 ### Collector amplification
 
 - Follow artists → homepage Following bucket  
-- Collector shelves (Studio) can be followed  
+- Collector shelves (created in Studio) can be followed  
 - Nominations stake reputation into Rising path  
 
 ---
@@ -245,5 +245,6 @@ Unit tests: `src/lib/discovery/__tests__/discovery.test.ts`.
 - Live rules for collectors: **`/docs`**  
 - Live wedge metrics: `/metrics`  
 - Drop congestion: `/calendar`  
-- Editorial Featured + shelves: `/studio`  
+- Creator publish hub + editorial Featured + shelves: `/studio`  
+- How it works (lifecycle, Studio, fees): `/docs`  
 - Reports / nomination settle: `/moderate`

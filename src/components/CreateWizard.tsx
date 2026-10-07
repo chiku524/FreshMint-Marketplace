@@ -322,15 +322,19 @@ export function CreateWizard() {
   ]);
 
 
+  const deepCollectionId = searchParams.get("collectionId")?.trim() || "";
+
   useEffect(() => {
     const raw = searchParams.get("intent");
     if (raw === "drop" || raw === "single" || raw === "auction") {
       setIntent(raw);
       // Skip the intent picker when deep-linked from Timed drops / Calendar.
       setStepIndex((idx) => (idx === 0 ? 1 : idx));
+    } else if (deepCollectionId) {
+      // Studio / collection "Add works" — default to drop if intent omitted.
+      setIntent((prev) => prev ?? "drop");
     }
-  }, [searchParams]);
-
+  }, [searchParams, deepCollectionId]);
 
   function loadMine() {
     const base = new URLSearchParams({ mine: "1", network });
@@ -339,6 +343,7 @@ export function CreateWizard() {
       network,
       deployed: "1",
     });
+    const resumeId = deepCollectionId;
     void (async () => {
       try {
         const res = await fetch(`/api/collections?${base}`, {
@@ -369,20 +374,51 @@ export function CreateWizard() {
         const readyData = (await readyRes.json()) as {
           collections?: CollectionOption[];
         };
-        setCollections(readyData.collections ?? []);
+        let ready = readyData.collections ?? [];
+
+        // Include the Studio deep-link target even if not yet deploy-ready.
+        if (resumeId) {
+          const target =
+            ready.find((c) => c.id === resumeId) ??
+            mine.find((c) => c.id === resumeId);
+          if (target && !ready.some((c) => c.id === target.id)) {
+            ready = [...ready, target];
+          }
+        }
+
+        setCollections(ready);
       } catch {
         setCollections([]);
       }
     })();
   }
 
+  // Apply ?collectionId= once collections are available (Studio / Add works).
+  useEffect(() => {
+    if (!deepCollectionId || !collections.length) return;
+    const target = collections.find((c) => c.id === deepCollectionId);
+    if (!target) return;
+    setCollectionId(target.id);
+    const targetNet = (target.network || target.chain || "").toLowerCase();
+    if (targetNet && targetNet !== network) {
+      setNetwork(targetNet);
+      return; // loadMine will re-run for the matching network
+    }
+    setStepIndex((idx) => {
+      const defs = stepDefs(intent ?? "drop");
+      const artworkIdx = defs.findIndex((s) => s.id === "artwork");
+      if (artworkIdx >= 0) return Math.max(idx, artworkIdx);
+      return idx;
+    });
+  }, [deepCollectionId, collections, network, intent]);
+
   useEffect(() => {
     loadMine();
     window.addEventListener("fm-collections-changed", loadMine);
     return () => window.removeEventListener("fm-collections-changed", loadMine);
-    // Reload when mint network changes so the dropdown stays network-scoped.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMine closes over network
-  }, [network]);
+    // Reload when mint network or Studio deep-link target changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMine closes over network + deepCollectionId
+  }, [network, deepCollectionId]);
 
   // Keep suggested slug in sync with title until the creator edits the slug field.
   useEffect(() => {

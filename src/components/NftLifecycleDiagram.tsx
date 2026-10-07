@@ -48,7 +48,7 @@ const STEPS: Step[] = [
     realm: "ledger",
     x: 310,
     y: 88,
-    body: "Name a collection and pick the mint network. Deploying the contract is on-chain — you pay gas from a linked wallet.",
+    body: "In Create or Studio: name a unique collection, pick the mint network, then deploy the contract on-chain (you pay gas). Studio tracks draft → deploy → mint → live.",
   },
   {
     id: "mint",
@@ -57,7 +57,7 @@ const STEPS: Step[] = [
     realm: "chain",
     x: 560,
     y: 88,
-    body: "Publish mints pieces into the collection, then soft-launches to Open Lane. Unminted drafts stay off the market.",
+    body: "Mint pieces into the deployed collection, then soft-launch to Open Lane. Unminted drafts stay private. Boing only re-deploys when the contract is actually missing.",
   },
   {
     id: "discover",
@@ -66,7 +66,7 @@ const STEPS: Step[] = [
     realm: "ledger",
     x: 760,
     y: 88,
-    body: "The work opens in Open Lane. Saves, follows, and page views raise its score. Rising and Featured are scarce slots — not automatic.",
+    body: "Live works open in Open Lane. Profile pages show minted collections (gallery, grid, or list). Saves, follows, and views raise score — Rising and Featured stay scarce.",
   },
   {
     id: "buy",
@@ -75,7 +75,7 @@ const STEPS: Step[] = [
     realm: "chain",
     x: 760,
     y: 228,
-    body: `Pay native (or bridge via Relay) at the listed USD quote. FreshMint takes ${PLATFORM_FEE_PERCENT.total}% of every NFT sale for the treasury (buy now, auctions, offers, packages, resale); the seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%. A 1/1 sells once.`,
+    body: `Pay native (or bridge via Relay) at the listed USD quote. List, buy, and offer like an OpenSea-style market. FreshMint takes ${PLATFORM_FEE_PERCENT.total}% treasury on every NFT sale; the seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%.`,
   },
   {
     id: "own",
@@ -84,7 +84,7 @@ const STEPS: Step[] = [
     realm: "chain",
     x: 500,
     y: 368,
-    body: "The already-minted NFT transfers into your wallet at purchase (mint happened at publish). Withdraw is only for older USD holds.",
+    body: "The already-minted NFT transfers into your wallet at purchase. Listing and collection pages show an activity timeline (mint, list, offer, sale). Withdraw is only for older USD holds.",
   },
 ];
 
@@ -143,7 +143,7 @@ export function NftLifecycleDiagram() {
         <div>
           <p className="nft-flow__kicker">The life of a work</p>
           <h3 id={headingId} className="display nft-flow__title">
-            From mint to own
+            Draft → deploy → mint → live → own
           </h3>
         </div>
         <div className="nft-flow__controls">

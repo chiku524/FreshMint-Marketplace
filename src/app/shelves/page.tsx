@@ -28,7 +28,7 @@ export default async function ShelvesPage() {
       </p>
       {shelves.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>
-          No shelves yet. After you <Link href="/open">Save</Link> a work, make a shelf from <Link href="/studio#shelves">Studio</Link>.
+          No shelves yet. After you <Link href="/open">Save</Link> a work, curate a shelf from the shelves section in <Link href="/studio#shelves">Studio</Link>.
         </p>
       ) : (
         shelves.map((shelf) => {

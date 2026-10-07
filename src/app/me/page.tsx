@@ -186,7 +186,9 @@ export default async function MeCollectionPage({
             {unpublishedCount} collection
             {unpublishedCount === 1 ? "" : "s"} still need mint or soft-launch
             before they appear here.{" "}
-            <Link href="/create">Continue in Create</Link>
+            <Link href="/studio">Open Studio</Link>
+            {" · "}
+            <Link href="/create">Create</Link>
             {" · "}
             <Link href={`/creators/${user.id}`}>Public profile</Link>
           </p>
@@ -200,7 +202,9 @@ export default async function MeCollectionPage({
         emptyCollections={
           <p className="fm-empty-copy">
             No minted collections yet.{" "}
-            <Link href="/create">Publish a collection</Link>.
+            <Link href="/create">Publish a collection</Link>
+            {" · "}
+            <Link href="/studio">Studio</Link>.
           </p>
         }
         trailing={
@@ -212,6 +216,7 @@ export default async function MeCollectionPage({
               {liveSales.length === 0 ? (
                 <p className="fm-empty-copy">
                   No collector checkouts yet. Soft-launch from{" "}
+                  <Link href="/studio">Studio</Link> or{" "}
                   <Link href="/create">Create</Link>.
                 </p>
               ) : (

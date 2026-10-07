@@ -173,7 +173,10 @@ export default async function CollectionDetailPage({
                   discordUrl={collection.discordUrl}
                   instagramUrl={collection.instagramUrl}
                 />
-                <Link href="/create" className="badge featured">
+                <Link
+                  href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
+                  className="badge featured"
+                >
                   Add works
                 </Link>
               </>
@@ -250,12 +253,23 @@ export default async function CollectionDetailPage({
                   <>
                     No on-chain pieces yet. Use <strong>Mint &amp; publish
                     remaining</strong> above to mint drafts, or{" "}
-                    <Link href="/create">add more works</Link>.
+                    <Link
+                      href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
+                    >
+                      add more works
+                    </Link>
+                    . Track status in <Link href="/studio">Studio</Link>.
                   </>
                 ) : (
                   <>
                     No pieces yet.{" "}
-                    <Link href="/create">Add a drop to this collection</Link>.
+                    <Link
+                      href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
+                    >
+                      Add a drop to this collection
+                    </Link>
+                    {" · "}
+                    <Link href="/studio">Studio</Link>.
                   </>
                 )
               ) : (
