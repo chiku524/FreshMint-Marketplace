@@ -8,7 +8,6 @@ import { NftTraitRarity } from "@/components/NftTraitRarity";
 import { OfferModal } from "@/components/OfferModal";
 import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { ResaleListButton } from "@/components/ResaleListButton";
-import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import {
   dutchCurrentPriceUsd,
   minNextBidUsd,
@@ -297,12 +296,6 @@ export default async function ListingDetailPage({
           <p className="listing-detail__desc">
             {listing.description || "No description yet."}
           </p>
-          {!listing.delisted && (saleMode === "fixed" || saleMode === "timed_window") ? (
-            <TreasuryFridayNote
-              surface="listing"
-              className="listing-detail__note"
-            />
-          ) : null}
           {minted || listing.tokenId ? (
             <div className="listing-detail__chain">
               {listing.tokenId ? (

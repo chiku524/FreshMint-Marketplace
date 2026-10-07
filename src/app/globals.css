@@ -409,6 +409,139 @@ a {
   flex: 1;
 }
 
+/* Weekly Friday raffle — sitewide marketing strip (product chrome) */
+.fm-raffle-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(
+      120% 180% at 0% 0%,
+      color-mix(in srgb, var(--mint-leaf) 22%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 140% at 100% 100%,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 50%
+    ),
+    linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--bg-lift) 88%, var(--mint-leaf-lo)) 0%,
+      var(--bg-mid) 55%,
+      color-mix(in srgb, var(--bg-lift) 90%, var(--accent)) 100%
+    );
+}
+
+.fm-raffle-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -18deg,
+    transparent,
+    transparent 11px,
+    color-mix(in srgb, var(--ink) 3%, transparent) 11px,
+    color-mix(in srgb, var(--ink) 3%, transparent) 12px
+  );
+  opacity: 0.55;
+  pointer-events: none;
+  animation: fm-raffle-banner-drift 28s linear infinite;
+}
+
+.fm-raffle-banner__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem 1.25rem;
+  padding: 0.85rem var(--page-x);
+  max-width: 92rem;
+  margin: 0 auto;
+}
+
+.fm-raffle-banner__copy {
+  min-width: 0;
+  flex: 1 1 18rem;
+  animation: fm-raffle-banner-rise 0.55s ease-out both;
+}
+
+.fm-raffle-banner__title {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+  font-weight: 560;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.fm-raffle-banner__lead {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--ink-muted);
+  font-size: clamp(0.84rem, 1.35vw, 0.95rem);
+  line-height: 1.45;
+}
+
+.fm-raffle-banner__cta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.05rem;
+  border: 1px solid color-mix(in srgb, var(--mint-leaf) 45%, var(--line));
+  background: color-mix(in srgb, var(--mint-leaf) 18%, var(--panel-solid));
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+  animation: fm-raffle-banner-rise 0.7s ease-out both;
+}
+
+.fm-raffle-banner__cta:hover,
+.fm-raffle-banner__cta:focus-visible {
+  background: color-mix(in srgb, var(--mint-leaf) 28%, var(--panel-solid));
+  border-color: color-mix(in srgb, var(--mint-leaf-hi) 55%, var(--line));
+  transform: translateY(-1px);
+}
+
+@keyframes fm-raffle-banner-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fm-raffle-banner-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 48px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-raffle-banner::before,
+  .fm-raffle-banner__copy,
+  .fm-raffle-banner__cta {
+    animation: none;
+  }
+}
+
 .site-frame {
   display: flex;
   flex: 1 1 auto;
@@ -2049,20 +2182,6 @@ button.work-tile__media-link {
   color: inherit;
 }
 
-.collection-detail__friday-note {
-  margin: 0 0 1.15rem;
-  color: var(--ink-muted);
-  font-size: 0.88rem;
-  line-height: 1.5;
-  max-width: 48ch;
-}
-
-.collection-detail__friday-note a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
 .collection-profile {
   margin-bottom: 1.5rem;
 }
@@ -2577,7 +2696,8 @@ button.work-tile__media-link {
 /* Create wizard — full-viewport split (hides site chrome via :has) */
 .site-shell:has(.create-fullscreen) .site-header,
 .site-shell:has(.create-fullscreen) .discovery-rail,
-.site-shell:has(.create-fullscreen) .site-footer {
+.site-shell:has(.create-fullscreen) .site-footer,
+.site-shell:has(.create-fullscreen) .fm-raffle-banner {
   display: none !important;
 }
 

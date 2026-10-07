@@ -23,17 +23,18 @@ type MeState = {
   latest: RaffleRow | null;
 } | null;
 
+/**
+ * Functional Friday raffle status + claim UI for winners.
+ * Marketing awareness lives on FridayRaffleBanner — keep this lean.
+ */
 export function FridayRafflePanel({
-  surface = "me",
   wallets = [],
 }: {
-  surface?: "me" | "studio";
   /** Linked wallet addresses the signed-in user can claim to. */
   wallets?: Array<{ chain: string; address: string }>;
 }) {
   const [history, setHistory] = useState<RaffleRow[]>([]);
   const [me, setMe] = useState<MeState>(null);
-  const [eligibility, setEligibility] = useState(TREASURY_FRIDAY_COPY.eligibility);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -44,7 +45,6 @@ export function FridayRafflePanel({
         if (!d?.ok) return;
         setHistory(d.history ?? []);
         setMe(d.me ?? null);
-        if (typeof d.copy === "string") setEligibility(d.copy);
       })
       .catch(() => undefined);
   }, []);
@@ -80,11 +80,6 @@ export function FridayRafflePanel({
     }
   }
 
-  const lead =
-    surface === "studio"
-      ? TREASURY_FRIDAY_COPY.studio
-      : TREASURY_FRIDAY_COPY.me;
-
   const myWins = me?.wins ?? [];
   const latest = me?.latest ?? history[0] ?? null;
 
@@ -95,31 +90,21 @@ export function FridayRafflePanel({
       data-testid="friday-raffle-panel"
     >
       <h2 className="display me-section__title">Friday treasury raffle</h2>
-      <p className="me-section__lead">{lead}</p>
-      <p className="fm-form-note" style={{ marginBottom: "0.75rem" }}>
-        {eligibility}{" "}
-        <Link href="/docs#friday">How it works</Link>
-      </p>
+      <p className="me-section__lead">{TREASURY_FRIDAY_COPY.me}</p>
 
       {me ? (
         <p className="fm-form-note" style={{ marginBottom: "0.75rem" }}>
           This week:{" "}
           {me.eligibleThisWeek
             ? `entered (${me.kinds.join(", ") || "active"})`
-            : "not entered yet — mint, list, buy, offer, or bid before Friday UTC"}
+            : "not entered yet"}
           .
         </p>
-      ) : surface === "me" ? null : (
-        <p className="fm-form-note" style={{ marginBottom: "0.75rem" }}>
-          <Link href="/sign-in?next=/studio">Sign in</Link> to see your entry
-          status.
-        </p>
-      )}
+      ) : null}
 
       {latest ? (
         <p className="fm-form-note" style={{ marginBottom: "0.75rem" }}>
           Latest window {latest.windowId}: {latest.status}
-          {latest.eligibleCount > 0 ? ` · ${latest.eligibleCount} eligible` : ""}
           {latest.listingId ? (
             <>
               {" · "}
@@ -129,9 +114,7 @@ export function FridayRafflePanel({
           {latest.prizeStatus !== "n/a" ? ` · prize ${latest.prizeStatus}` : ""}
         </p>
       ) : (
-        <p className="fm-empty-copy">
-          No Friday raffle yet — runs when treasury fees fund the weekly buy.
-        </p>
+        <p className="fm-empty-copy">No Friday draw yet this season.</p>
       )}
 
       {myWins.length > 0 ? (

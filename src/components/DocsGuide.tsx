@@ -4,7 +4,6 @@ import { DiscoveryEngineDiagram } from "@/components/DiscoveryEngineDiagram";
 import { NftLifecycleDiagram } from "@/components/NftLifecycleDiagram";
 import { DISCOVERY_CONFIG, getDailySlotBudgets } from "@/lib/discovery";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
-import { TREASURY_FRIDAY_COPY } from "@/lib/marketplace/friday-treasury-copy";
 import Link from "next/link";
 import { useLayoutEffect, useState } from "react";
 
@@ -28,11 +27,6 @@ const TOC = [
     id: "fees",
     label: "Fees",
     blurb: `${PLATFORM_FEE_PERCENT.total}% treasury. Seller keeps ${PLATFORM_FEE_PERCENT.sellerNet}%.`,
-  },
-  {
-    id: "friday",
-    label: "Friday treasury raffle",
-    blurb: "Fee-funded Open Lane buy, raffled to active creators and collectors.",
   },
   {
     id: "ownership",
@@ -274,46 +268,8 @@ export function DocsGuide() {
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
               That cut funds community events, future updates, and running the
               market — not a hidden operator take on top. You can see the split
-              before you confirm a buy. See also{" "}
-              <a
-                href="#friday"
-                onClick={(event) => {
-                  event.preventDefault();
-                  select("friday");
-                }}
-              >
-                Friday treasury raffle
-              </a>
-              .
-            </p>
-          </section>
-          ) : null}
-
-          {active === "friday" ? (
-          <section id="friday">
-            <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
-              Friday treasury raffle
-            </h2>
-            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
-              {TREASURY_FRIDAY_COPY.docs}
-            </p>
-            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
-              <strong style={{ color: "var(--ink)" }}>Eligibility.</strong>{" "}
-              {TREASURY_FRIDAY_COPY.eligibility}
-            </p>
-            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
-              <strong style={{ color: "var(--ink)" }}>How winners relate to the buy.</strong>{" "}
-              The treasury still picks one live Open Lane 1/1 under the weekly
-              fee budget (same economics as before). A raffle among eligible
-              users awards that purchased work — or a durable claim when
-              on-chain transfer to the winner is not ready yet. Status lives on{" "}
-              <Link href="/me#friday-raffle">your profile</Link>, Studio, and{" "}
-              <code style={{ fontSize: "0.9em" }}>/api/treasury/friday-raffle</code>
-              .
-            </p>
-            <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
-              The job only runs when last week’s treasury profit is positive
-              (0.5% sale fees + Featured boosts). Cron: Friday 16:15 UTC.
+              before you confirm a buy. Weekly fee profit can fund the{" "}
+              <Link href="/treasury#friday-raffle">Friday treasury raffle</Link>.
             </p>
           </section>
           ) : null}

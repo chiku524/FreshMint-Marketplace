@@ -1,6 +1,5 @@
 import { getSessionUser } from "@/lib/auth/session";
 import {
-  FRIDAY_RAFFLE_ELIGIBILITY_COPY,
   getFridayRaffleForUser,
   getFridayRafflePublic,
 } from "@/lib/marketplace/friday-treasury-raffle";
@@ -20,7 +19,8 @@ export async function GET(req: NextRequest) {
   const me = user ? await getFridayRaffleForUser(user.id) : null;
   return NextResponse.json({
     ok: true,
-    eligibility: FRIDAY_RAFFLE_ELIGIBILITY_COPY,
+    /** Slim eligibility string for clients that still read it; UI no longer lectures. */
+    eligibility: TREASURY_FRIDAY_COPY.eligibility,
     copy: TREASURY_FRIDAY_COPY.eligibility,
     history,
     me,

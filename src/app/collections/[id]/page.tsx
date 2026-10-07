@@ -6,7 +6,6 @@ import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
 import { FollowButton } from "@/components/FollowButton";
 import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
-import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
@@ -186,11 +185,6 @@ export default async function CollectionDetailPage({
             ) : null}
           </>
         }
-      />
-
-      <TreasuryFridayNote
-        surface="collection"
-        className="collection-detail__friday-note"
       />
 
       {isOwner ? (

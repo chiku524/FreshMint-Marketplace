@@ -7,6 +7,7 @@ import { LogoIntroSplash } from "@/components/LogoIntroSplashLoader";
 import { PageEngraveBackground } from "@/components/PageEngraveBackground";
 import { ReplayIntroButton } from "@/components/ReplayIntroButton";
 import { DiscoverySidebar } from "@/components/DiscoverySidebar";
+import { FridayRaffleBanner } from "@/components/FridayRaffleBanner";
 import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
@@ -80,6 +81,7 @@ export default async function RootLayout({
           <div className="site-frame">
             <DiscoverySidebar />
             <div className="site-frame__main">
+              <FridayRaffleBanner />
               <main className="site-main">{children}</main>
               <footer className="site-footer">
                 <span className="site-footer__tagline">

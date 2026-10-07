@@ -93,7 +93,6 @@ export default async function MeCollectionPage({
       </p>
 
       <FridayRafflePanel
-        surface="me"
         wallets={profile.wallets.map((w) => ({
           chain: w.chain,
           address: w.address,

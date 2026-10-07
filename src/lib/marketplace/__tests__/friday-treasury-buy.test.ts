@@ -64,13 +64,12 @@ describe("friday treasury window + copy", () => {
     expect(applyFridayBudgetCeiling(12.34)).toBe(10);
   });
 
-  it("keeps Friday copy in the existing product voice (buy + raffle)", () => {
-    expect(TREASURY_FRIDAY_COPY.home).toMatch(/Every Friday/i);
-    expect(TREASURY_FRIDAY_COPY.home).toMatch(/last week/i);
-    expect(TREASURY_FRIDAY_COPY.home).toMatch(/raffle/i);
-    expect(TREASURY_FRIDAY_COPY.docs).not.toMatch(/\$50/);
-    expect(TREASURY_FRIDAY_COPY.docs).toMatch(/raffle/i);
-    expect(TREASURY_FRIDAY_COPY.open).toMatch(/Fridays/);
+  it("keeps Friday marketing banner copy in product voice", () => {
+    expect(TREASURY_FRIDAY_COPY.bannerTitle).toMatch(/Friday treasury raffle/i);
+    expect(TREASURY_FRIDAY_COPY.bannerLead).toMatch(/auto-entered/i);
+    expect(TREASURY_FRIDAY_COPY.bannerLead).toMatch(/Friday/i);
+    expect(TREASURY_FRIDAY_COPY.bannerHref).toBe("/treasury#friday-raffle");
+    expect(TREASURY_FRIDAY_COPY.eligibility).not.toMatch(/\$50/);
   });
 });
 

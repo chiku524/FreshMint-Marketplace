@@ -55,10 +55,10 @@ function ensureCreatorWallet(creatorId: string) {
 }
 
 describe("friday raffle eligibility + draw", () => {
-  it("documents eligibility in product copy", () => {
-    expect(TREASURY_FRIDAY_COPY.docs).toMatch(/raffle/i);
+  it("keeps slim eligibility + banner marketing copy", () => {
+    expect(TREASURY_FRIDAY_COPY.bannerTitle).toMatch(/raffle/i);
     expect(TREASURY_FRIDAY_COPY.eligibility).toMatch(/mint/i);
-    expect(TREASURY_FRIDAY_COPY.home).toMatch(/raffle/i);
+    expect(TREASURY_FRIDAY_COPY.bannerHref).toContain("/treasury");
   });
 
   it("picks a deterministic winner and excludes the listing seller", () => {

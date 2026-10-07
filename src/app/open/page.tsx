@@ -1,6 +1,5 @@
 import { OpenLaneFilters } from "@/components/OpenLaneFilters";
 import { PuzzleRail } from "@/components/PuzzleRail";
-import { TreasuryFridayNote } from "@/components/TreasuryFridayNote";
 import { WorkCard } from "@/components/WorkCard";
 import { isNetworkId } from "@/lib/chains/registry";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
@@ -75,7 +74,6 @@ export default async function OpenLanePage({
           Browse soft-launched works across Ethereum, Base, Arbitrum, Optimism,
           Solana, and Boing — ranked lightly by quality, not dump-fed.
         </p>
-        <TreasuryFridayNote surface="open" className="page-lead__copy" />
       </header>
       <OpenLaneFilters
         chain={chain}

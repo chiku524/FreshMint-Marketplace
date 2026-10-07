@@ -21,8 +21,9 @@ import {
 } from "@/lib/marketplace/friday-treasury-buy";
 import { listingSellerId } from "@/lib/marketplace/listing-manage";
 
+/** @deprecated Prefer TREASURY_FRIDAY_COPY.eligibility — kept for callers/tests. */
 export const FRIDAY_RAFFLE_ELIGIBILITY_COPY =
-  "Auto-entered when you mint, list, buy, offer, or bid during the week before Friday (UTC). Flagged accounts, empty wallets, and treasury addresses are excluded.";
+  "Auto-entered from mint, list, buy, offer, or bid activity in the week before Friday (UTC).";
 
 export type FridayRaffleActivityKind =
   | "minted"

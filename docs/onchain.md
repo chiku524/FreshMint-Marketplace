@@ -68,7 +68,7 @@ Every **Friday 16:15 UTC**, Vercel Cron hits `GET /api/cron/friday-treasury-buy`
 
 Spend cap: **that UTC week’s treasury profit** — sum of `Purchase.feeTreasuryUsd` (0.5% of settled sales) plus `$15` per Featured boost in the window (previous Friday 00:00 UTC through this Friday). Skip when profit is 0. Optional `TREASURY_FRIDAY_BUDGET_USD` is a ceiling on that profit, not a default. Listing selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Native check is list-price quote + gas reserve (0.001 ETH on Ethereum, 0.0001 ETH on Base/Arbitrum/Optimism, 0.001 SOL). Idempotent per Friday.
 
-Collectors see the policy on home, Open Lane, listing (buy-now), collection pages, Studio, `/me#friday-raffle`, and `/docs#friday`.
+Collectors see the weekly raffle via the sitewide marketing banner (CTA → `/treasury#friday-raffle`). Claim/status UI stays on `/me#friday-raffle`.
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 
