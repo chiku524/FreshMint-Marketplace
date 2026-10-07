@@ -214,7 +214,7 @@ async function profileFromPrisma(
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        wallets: true,
+        wallets: { orderBy: { createdAt: "asc" } },
         purchases: {
           orderBy: { createdAt: "desc" },
           include: { listing: true },

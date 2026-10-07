@@ -56,7 +56,7 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 ### Platform layer
 - **Postgres + Prisma** persistence (memory fallback)
 - **Wallet auth**: EVM `personal_sign` + Solana ed25519 verify; HTTP-only session cookies
-- **Cross-chain wallet linking** via `/api/auth/link-wallet`
+- **Cross-chain wallet linking / unlinking** via `/api/auth/link-wallet` and `/api/auth/unlink-wallet`
 - **Demo personas** for local cold-start without a browser extension
 - **Create / soft-launch** with Sepolia / Devnet mint intents + optional live wallet txs
 - **Phase 2 signals**: impressions, dwell/meaningful views, saves, nominations, purchases

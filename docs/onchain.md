@@ -133,4 +133,5 @@ Mainnet Safe / Squads still need a separate funded deploy when you leave testnet
 - MetaMask / Rabby for EVM (auto chain-switch per listing network)
 - Phantom for Solana auth, mint, and Solana bridge legs
 - Boing Express for Boing Testnet auth and NFT deploy (`boing_requestAccounts`, `boing_signMessage`, `boing_sendTransaction`)
-- Link wallets under one FreshMint session via Connect / Link buttons
+- Link wallets under one FreshMint session via Connect / Link buttons (`POST /api/auth/link-wallet`)
+- Unlink from **Settings** (`/me/settings`) — `POST /api/auth/unlink-wallet` removes the account link only (listings / on-chain history stay). Blocked when the wallet is the last sign-in method (no email/Google/password) or an open checkout is in flight on that chain.

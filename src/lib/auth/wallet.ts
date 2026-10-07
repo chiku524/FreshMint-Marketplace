@@ -319,3 +319,151 @@ export async function linkWalletToUser(input: {
     data: { userId: input.userId, chain: input.chain, address },
   });
 }
+
+export type UnlinkWalletResult = {
+  chain: AuthChain;
+  address: string;
+  wasPrimary: boolean;
+};
+
+function addressesMatch(
+  chain: AuthChain,
+  a: string,
+  b: string,
+): boolean {
+  if (chain === "evm" || chain === "boing") {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  return a === b;
+}
+
+async function userHasAlternateSignIn(userId: string): Promise<boolean> {
+  if (await useMemoryAuth()) {
+    const { getMemoryAccount } = await import("@/lib/auth/account");
+    const account = getMemoryAccount(userId);
+    return Boolean(
+      account?.email || account?.googleId || account?.passwordHash,
+    );
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, googleId: true, passwordHash: true },
+  });
+  return Boolean(user?.email || user?.googleId || user?.passwordHash);
+}
+
+async function hasOpenCheckoutOnChain(
+  userId: string,
+  chain: AuthChain,
+): Promise<boolean> {
+  const { purchaseReservesSupply } = await import(
+    "@/lib/marketplace/lifecycle"
+  );
+
+  if (await useMemoryAuth()) {
+    const { getMemoryPurchases } = await import("@/lib/data/memory-store");
+    return getMemoryPurchases().some(
+      (p) =>
+        p.buyerId === userId &&
+        p.chain === chain &&
+        purchaseReservesSupply({
+          status: p.status,
+          soldAt: p.soldAt,
+          txHash: p.txHash,
+        }),
+    );
+  }
+
+  const open = await prisma.purchase.findMany({
+    where: {
+      buyerId: userId,
+      chain,
+      status: { in: ["pending_payment", "pending_transfer"] },
+    },
+    select: {
+      status: true,
+      createdAt: true,
+      txHash: true,
+    },
+  });
+  return open.some((p) =>
+    purchaseReservesSupply({
+      status: p.status,
+      createdAt: p.createdAt,
+      txHash: p.txHash,
+    }),
+  );
+}
+
+/**
+ * Remove a wallet↔user link. Does not touch listings, purchases, or on-chain
+ * history owned by the address — only the account association.
+ *
+ * Rules:
+ * - last wallet + no email/Google/password → blocked (would lock out the account)
+ * - primary = oldest linked wallet; may unlink when another wallet or alt sign-in remains
+ * - open buyer checkout on the same chain → blocked until finished/cancelled
+ */
+export async function unlinkWalletFromUser(input: {
+  userId: string;
+  chain: AuthChain;
+  address: string;
+}): Promise<UnlinkWalletResult> {
+  const address = normalizeAddress(input.chain, input.address);
+
+  if (await useMemoryAuth()) {
+    const { getMemoryState } = await import("@/lib/data/memory-store");
+    const state = getMemoryState();
+    const creator = state.creators.get(input.userId);
+    if (!creator) throw new Error("user_not_found");
+
+    const idx = creator.wallets.findIndex(
+      (w) =>
+        w.chain === input.chain &&
+        addressesMatch(input.chain, w.address, address),
+    );
+    if (idx < 0) throw new Error("wallet_not_found");
+
+    const wasPrimary = idx === 0;
+    if (creator.wallets.length === 1) {
+      if (!(await userHasAlternateSignIn(input.userId))) {
+        throw new Error("last_sign_in_method");
+      }
+    }
+
+    if (await hasOpenCheckoutOnChain(input.userId, input.chain)) {
+      throw new Error("open_checkout");
+    }
+
+    state.creators.set(input.userId, {
+      ...creator,
+      wallets: creator.wallets.filter((_, i) => i !== idx),
+    });
+    return { chain: input.chain, address, wasPrimary };
+  }
+
+  const wallets = await prisma.wallet.findMany({
+    where: { userId: input.userId },
+    orderBy: { createdAt: "asc" },
+  });
+  const target = wallets.find(
+    (w) =>
+      w.chain === input.chain &&
+      addressesMatch(input.chain, w.address, address),
+  );
+  if (!target) throw new Error("wallet_not_found");
+
+  const wasPrimary = wallets[0]?.id === target.id;
+  if (wallets.length === 1) {
+    if (!(await userHasAlternateSignIn(input.userId))) {
+      throw new Error("last_sign_in_method");
+    }
+  }
+
+  if (await hasOpenCheckoutOnChain(input.userId, input.chain)) {
+    throw new Error("open_checkout");
+  }
+
+  await prisma.wallet.delete({ where: { id: target.id } });
+  return { chain: input.chain, address, wasPrimary };
+}
