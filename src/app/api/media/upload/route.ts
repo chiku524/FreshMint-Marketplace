@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/auth/session";
 import { reserveCollectionMedia } from "@/lib/marketplace/service";
+import { classifyMediaUploadError } from "@/lib/media/upload-errors";
 import { storeUploadedMedia } from "@/lib/media/upload";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -34,7 +35,10 @@ export async function POST(req: NextRequest) {
       collectionId: collectionId || null,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "upload_failed";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    const classified = classifyMediaUploadError(e);
+    return NextResponse.json(
+      { error: classified.code, retryable: classified.retryable },
+      { status: classified.status },
+    );
   }
 }

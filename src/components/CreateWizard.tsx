@@ -151,6 +151,24 @@ function uploadErrorMessage(code: string | undefined, fallback = "upload_failed"
   if (code === "file_too_large") return "Each file can be up to 100 MB";
   if (code === "unsupported_type") return "Unsupported file type";
   if (code === "empty_file") return "Empty file skipped";
+  if (
+    code === "blob_suspended" ||
+    (code && /store has been suspended/i.test(code))
+  ) {
+    return "Media storage is paused (Vercel Blob Hobby quota exceeded). Upgrade the Vercel team to Pro, then retry only the failed files — uploads that already succeeded stay in this batch.";
+  }
+  if (code === "blob_store_missing") {
+    return "Media storage is not configured. Contact support, then retry the failed files.";
+  }
+  if (code === "upload_rate_limited") {
+    return "Upload rate limited — wait a moment and retry the failed files";
+  }
+  if (code === "blob_unavailable") {
+    return "Media storage temporarily unavailable — retry the failed files";
+  }
+  if (code === "sign_in" || code === "unauthorized") {
+    return "sign_in";
+  }
   return code || fallback;
 }
 
@@ -170,11 +188,17 @@ function listingErrorMessage(raw: string): string {
 function makeHttpError(
   message: string,
   status: number,
+  retryable?: boolean,
 ): Error & { status: number; retryable: boolean } {
   return Object.assign(new Error(message), {
     status,
-    retryable: status === 429 || status >= 500,
+    retryable: retryable ?? (status === 429 || status >= 500),
   });
+}
+
+/** Match selected files to already-uploaded pieces (name + size). */
+function uploadDedupeKey(fileName: string, size: number): string {
+  return `${fileName}::${size}`;
 }
 
 function stepDefs(intent: Intent | null) {
@@ -262,6 +286,8 @@ export function CreateWizard() {
   const [styleTags, setStyleTags] = useState("");
 
   const [pieces, setPieces] = useState<Piece[]>([]);
+  /** Files that failed in the last upload pass — kept for one-click retry. */
+  const [failedUploadFiles, setFailedUploadFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{
     current: number;
     total: number;
@@ -918,8 +944,18 @@ export function CreateWizard() {
     setError(null);
     setOk(null);
     setUploadProgress(null);
+    setFailedUploadFiles([]);
+    const keepAlive = { id: 0 as ReturnType<typeof setInterval> | 0 };
     try {
       if (!files.length) throw new Error("No files selected");
+
+      // Confirm session before a long batch so we fail fast with a clear CTA.
+      const meRes = await fetch("/api/auth/me", { credentials: "include" });
+      const meData = (await meRes.json().catch(() => ({}))) as {
+        user?: { id?: string } | null;
+      };
+      if (!meData.user?.id) throw new Error("sign_in");
+
       // Snapshot File[] before any await — clearing the input empties a live FileList.
       const id = await ensureCollection();
       const capped = batchUpload
@@ -933,11 +969,25 @@ export function CreateWizard() {
         );
       }
 
+      // Skip files already uploaded in this wizard session (resume-friendly).
+      const already = new Set(
+        pieces.map((p) => uploadDedupeKey(p.fileName, p.size)),
+      );
+      let skippedAlready = 0;
+      const fresh = capped.filter((file) => {
+        const key = uploadDedupeKey(file.name, file.size);
+        if (already.has(key)) {
+          skippedAlready += 1;
+          return false;
+        }
+        return true;
+      });
+
       // Greedy client-side cap so we don't hammer the API past quota.
       let budget = COLLECTION_MEDIA_CAP_BYTES - usedBytes;
       const queued: File[] = [];
       let skippedQuota = 0;
-      for (const file of capped) {
+      for (const file of fresh) {
         if (file.size > budget) {
           skippedQuota += 1;
           continue;
@@ -946,6 +996,12 @@ export function CreateWizard() {
         queued.push(file);
       }
       if (!queued.length) {
+        if (skippedAlready && !skippedQuota) {
+          setOk(
+            `All ${skippedAlready} selected file${skippedAlready === 1 ? "" : "s"} already uploaded in this batch.`,
+          );
+          return;
+        }
         throw new Error(
           skippedQuota
             ? "This collection is at the 10 GB art cap"
@@ -955,12 +1011,25 @@ export function CreateWizard() {
 
       setUploadProgress({ current: 0, total: queued.length });
       let completed = 0;
+      let sessionLost = false;
+      keepAlive.id = setInterval(() => {
+        void fetch("/api/auth/me", { credentials: "include" })
+          .then((r) => r.json())
+          .then((d: { user?: { id?: string } | null }) => {
+            if (!d?.user?.id) sessionLost = true;
+          })
+          .catch(() => {
+            /* network blip — uploads still retry on their own */
+          });
+      }, 45_000);
+
       const settled = await mapPoolSettled(
         queued,
         UPLOAD_CONCURRENCY,
         async (file, index) => {
           const piece = await retryWithBackoff(
             async () => {
+              if (sessionLost) throw makeHttpError("sign_in", 401, false);
               const fd = new FormData();
               fd.set("file", file);
               fd.set("collectionId", id);
@@ -969,21 +1038,29 @@ export function CreateWizard() {
                 credentials: "include",
                 body: fd,
               });
-              let data: { error?: string; mediaUrl?: string; mediaHash?: string; size?: number } =
-                {};
+              let data: {
+                error?: string;
+                retryable?: boolean;
+                mediaUrl?: string;
+                mediaHash?: string;
+                size?: number;
+              } = {};
               try {
                 data = await res.json();
               } catch {
                 data = {};
               }
               if (res.status === 401) {
-                throw makeHttpError("sign_in", 401);
+                sessionLost = true;
+                throw makeHttpError("sign_in", 401, false);
               }
               if (!res.ok) {
-                throw makeHttpError(
-                  uploadErrorMessage(data.error),
-                  res.status,
-                );
+                const message = uploadErrorMessage(data.error);
+                const retryable =
+                  typeof data.retryable === "boolean"
+                    ? data.retryable
+                    : res.status === 429 || res.status >= 500;
+                throw makeHttpError(message, res.status, retryable);
               }
               if (!data.mediaUrl || !data.mediaHash) {
                 throw makeHttpError("upload_failed", 502);
@@ -1012,7 +1089,9 @@ export function CreateWizard() {
         .filter((s): s is { ok: true; value: Piece; index: number } => s.ok)
         .sort((a, b) => a.index - b.index)
         .map((s) => s.value);
-      const failed = settled.filter((s) => !s.ok);
+      const failed = settled.filter(
+        (s): s is { ok: false; error: Error; index: number } => !s.ok,
+      );
 
       if (okPieces.length) {
         setPieces((current) =>
@@ -1021,23 +1100,43 @@ export function CreateWizard() {
       }
 
       if (failed.length) {
+        setFailedUploadFiles(failed.map((f) => queued[f.index]!));
         const sample = failed
           .slice(0, 3)
-          .map((f) => ("error" in f ? f.error.message : "upload_failed"))
+          .map((f) => f.error.message || "upload_failed")
           .join("; ");
-        const msg = `Uploaded ${okPieces.length} of ${queued.length} — ${failed.length} failed${sample ? ` (${sample})` : ""}. Retry the failed files.`;
-        if (!okPieces.length) throw new Error(msg);
+        const priorKept = batchUpload ? pieces.length : 0;
+        const totalKept = priorKept + okPieces.length;
+        const authLost = failed.some((f) => f.error.message === "sign_in");
+        const msg = authLost
+          ? `Uploaded ${okPieces.length} of ${queued.length} — session expired (${failed.length} left). Sign in again, then Retry failed. ${totalKept ? `${totalKept} successful file(s) kept in this batch.` : ""}`
+          : `Uploaded ${okPieces.length} of ${queued.length} — ${failed.length} failed${sample ? ` (${sample})` : ""}. ${totalKept ? `${totalKept} successful file(s) kept. ` : ""}Use Retry failed to continue.`;
+        if (!okPieces.length && !pieces.length) throw new Error(msg);
         setError(msg);
-      } else if (skippedQuota) {
-        setOk(
-          `Uploaded ${okPieces.length}. ${skippedQuota} file${skippedQuota === 1 ? "" : "s"} skipped — collection is at the 10 GB art cap.`,
-        );
+      } else {
+        setFailedUploadFiles([]);
+        const parts: string[] = [];
+        if (skippedAlready) {
+          parts.push(
+            `${skippedAlready} already in this batch (skipped)`,
+          );
+        }
+        if (skippedQuota) {
+          parts.push(
+            `${skippedQuota} skipped — collection is at the 10 GB art cap`,
+          );
+        }
+        if (parts.length) {
+          setOk(`Uploaded ${okPieces.length}. ${parts.join("; ")}.`);
+        }
       }
 
       loadMine();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "upload_failed");
+      const raw = e instanceof Error ? e.message : "upload_failed";
+      setError(uploadErrorMessage(raw, raw));
     } finally {
+      if (keepAlive.id) clearInterval(keepAlive.id);
       setBusy(false);
       setUploadProgress(null);
     }
@@ -2303,24 +2402,51 @@ export function CreateWizard() {
                   ? `${pieces.length} file${pieces.length === 1 ? "" : "s"} ready · ${formatBytes(piecesBytes)} this batch · ${formatBytes(usedBytes)} of ${formatBytes(COLLECTION_MEDIA_CAP_BYTES)} collection total`
                   : `0 files ready · ${formatBytes(usedBytes)} of ${formatBytes(COLLECTION_MEDIA_CAP_BYTES)} used`}
               </p>
-              {pieces.length ? (
-                <button
-                  type="button"
-                  className="badge"
-                  disabled={busy}
-                  style={{
-                    cursor: busy ? "default" : "pointer",
-                    background: "transparent",
-                    justifySelf: "start",
-                  }}
-                  onClick={() => {
-                    setPieces([]);
-                    setError(null);
-                  }}
-                >
-                  Clear files
-                </button>
+              {failedUploadFiles.length ? (
+                <p className="create-wizard__upload-count">
+                  {failedUploadFiles.length} file
+                  {failedUploadFiles.length === 1 ? "" : "s"} still need upload.
+                </p>
               ) : null}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  marginTop: "0.35rem",
+                }}
+              >
+                {failedUploadFiles.length ? (
+                  <button
+                    type="button"
+                    className="fm-btn fm-btn--primary"
+                    disabled={busy}
+                    onClick={() => {
+                      void uploadFiles(failedUploadFiles);
+                    }}
+                  >
+                    Retry failed ({failedUploadFiles.length})
+                  </button>
+                ) : null}
+                {pieces.length ? (
+                  <button
+                    type="button"
+                    className="badge"
+                    disabled={busy}
+                    style={{
+                      cursor: busy ? "default" : "pointer",
+                      background: "transparent",
+                    }}
+                    onClick={() => {
+                      setPieces([]);
+                      setFailedUploadFiles([]);
+                      setError(null);
+                    }}
+                  >
+                    Clear files
+                  </button>
+                ) : null}
+              </div>
             </div>
           </>
         ) : null}
@@ -2631,9 +2757,14 @@ export function CreateWizard() {
             … (you pay gas)
           </p>
         ) : null}
-        {error === "sign_in" ? (
+        {error === "sign_in" ||
+        (error && /session expired|sign in again/i.test(error)) ? (
           <p style={{ color: "var(--ink-muted)", margin: "0.75rem 0 0" }}>
-            <Link href="/sign-in?next=/create">Sign in</Link> to continue.
+            <Link href="/sign-in?next=/create">Sign in</Link> to continue
+            {failedUploadFiles.length
+              ? `, then use Retry failed (${failedUploadFiles.length})`
+              : ""}
+            . Successful uploads in this batch are kept.
           </p>
         ) : error ? (
           <p style={{ color: "var(--danger)", margin: "0.75rem 0 0" }}>{error}</p>
