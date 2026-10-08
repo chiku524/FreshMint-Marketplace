@@ -24,6 +24,20 @@ lower(trim(collapse_whitespace(title)))
 2. **API** — `POST /api/collections` rejects with `title_taken` / `invalid_title_*` before insert; unique violations map to `title_taken`.
 3. **Live check** — `GET /api/collections/name-check?title=…` for the create wizard (same pattern as slug-check).
 
+## Soft-hold until on-chain deploy confirms
+
+Creating a collection inserts a draft row (`deployStatus: pending_wallet`) so the wallet deploy intent can reference a stable id. That row **soft-holds** the unique `titleNormalized` / `slug` only while deploy is in flight.
+
+| Event | Name/slug hold |
+|---|---|
+| Wallet reject / cancel / failed send | Released immediately (`POST …/deploy` `action: "abandon"`) |
+| Mempool accepted but sync still indexing | Hold kept so heal/sync can confirm |
+| Confirmed on-chain | Hold becomes permanent (real contract) |
+| Creator retries same title/slug | Own unconfirmed draft is reclaimed, then create proceeds |
+| Abandoned draft older than 2h, never deployed, no minted listings | Age cleanup frees the hold |
+
+`releaseCollectionNameHold` only deletes when the collection is **not** deploy-ready and has no minted/live listings. Confirmed contracts and minted NFTs are never removed.
+
 ## Migration / existing duplicates
 
 The migration backfills `titleNormalized`, then **aborts** if any case-insensitive duplicate groups exist. It does not auto-rename or delete production rows.

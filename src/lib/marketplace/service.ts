@@ -792,6 +792,14 @@ export async function createCollectionForUser(input: {
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
 
+  // Soft-holds from failed/cancelled wallet deploys must not permanently
+  // consume a creator's own title/slug. Reclaim safe unconfirmed drafts first.
+  await reclaimOwnUnconfirmedCollectionHold({
+    creatorId: input.creatorId,
+    title,
+    slug,
+  });
+
   const titleAvailable = await isCollectionTitleAvailable(title);
   if (!titleAvailable) {
     return { ok: false as const, errors: ["title_taken"] };
@@ -801,6 +809,12 @@ export async function createCollectionForUser(input: {
   if (!available) {
     return { ok: false as const, errors: ["slug_taken"] };
   }
+
+  // Opportunistic: free this creator's abandoned unconfirmed drafts (age gate).
+  await cleanupAbandonedUnconfirmedCollections({
+    creatorId: input.creatorId,
+    maxAgeMs: ABANDONED_COLLECTION_HOLD_MAX_AGE_MS,
+  });
 
   let collection: Collection;
 
@@ -933,6 +947,223 @@ export function isCollectionDeployReady(
     if (isProvisionalBoingCollectionAddress(collection.id, addr)) return false;
   }
   return true;
+}
+
+/** Soft-hold drafts older than this are safe to purge when never deployed. */
+export const ABANDONED_COLLECTION_HOLD_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+function listingBlocksCollectionRelease(listing: Listing): boolean {
+  if (listing.delisted) return false;
+  if (listing.mintTxHash?.trim()) return true;
+  if (listing.tokenId?.trim()) return true;
+  if (listing.stage !== "draft") return true;
+  if (listing.softLaunchedAt) return true;
+  return false;
+}
+
+/**
+ * True when a collection row is only a soft name/slug hold (no confirmed
+ * on-chain contract, no minted/live listings). Safe to delete to free uniqueness.
+ */
+export function isReleasableCollectionNameHold(
+  collection: Pick<
+    Collection,
+    "deployStatus" | "contractAddress" | "id" | "chain" | "network"
+  >,
+  listings: Listing[],
+): boolean {
+  if (isCollectionDeployReady(collection)) return false;
+  if (listings.some(listingBlocksCollectionRelease)) return false;
+  return true;
+}
+
+/** Prefer in-memory engine when tests (or fallback) enabled memory mode. */
+async function engineForCollectionHold(): Promise<DiscoveryEngine> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    return getMemoryEngine();
+  }
+  return getDiscoveryEngine();
+}
+
+/**
+ * Release a soft-held collection name/slug after failed, cancelled, or
+ * never-confirmed on-chain deploy. Deletes the draft row (+ unminted draft
+ * listings) so `titleNormalized` / `slug` can be reused.
+ */
+export async function releaseCollectionNameHold(input: {
+  collectionId: string;
+  creatorId: string;
+  /** When set, only release if the collection is at least this old. */
+  minAgeMs?: number;
+}) {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  const useMemory = mode === "memory" || isMemoryMode();
+  const engine = useMemory ? getMemoryEngine() : await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  if (typeof input.minAgeMs === "number" && input.minAgeMs > 0) {
+    const createdAt = collection.createdAt ?? 0;
+    if (!createdAt || Date.now() - createdAt < input.minAgeMs) {
+      return { ok: false as const, error: "collection_hold_too_recent" };
+    }
+  }
+
+  const listings = [...engine.state.listings.values()].filter(
+    (l) => l.collectionId === input.collectionId,
+  );
+  if (!isReleasableCollectionNameHold(collection, listings)) {
+    return { ok: false as const, error: "collection_hold_not_releasable" };
+  }
+
+  const listingIds = listings.map((l) => l.id);
+
+  if (useMemory) {
+    const mem = getMemoryEngine();
+    for (const id of listingIds) {
+      mem.state.listings.delete(id);
+    }
+    mem.state.collections.delete(input.collectionId);
+  } else {
+    await prisma.$transaction(async (tx) => {
+      if (listingIds.length) {
+        // Draft-only children — clear FKs so listings + collection can go.
+        await tx.shelfItem.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.signalEvent.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.nomination.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.report.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.appeal.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.bid.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.offer.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.purchase.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.listing.deleteMany({
+          where: { id: { in: listingIds }, collectionId: input.collectionId },
+        });
+      }
+      // packagePurchase cascades from Collection.
+      await tx.collection.delete({ where: { id: input.collectionId } });
+    });
+    for (const id of listingIds) {
+      engine.state.listings.delete(id);
+    }
+    engine.state.collections.delete(input.collectionId);
+  }
+
+  return {
+    ok: true as const,
+    releasedCollectionId: input.collectionId,
+    releasedListingIds: listingIds,
+  };
+}
+
+/**
+ * If this creator already soft-holds `title` and/or `slug` with an unconfirmed
+ * draft, release that hold so create/retry can proceed.
+ */
+export async function reclaimOwnUnconfirmedCollectionHold(input: {
+  creatorId: string;
+  title?: string | null;
+  slug?: string | null;
+}) {
+  const { normalizeCollectionTitle } = await import(
+    "@/lib/marketplace/collection-title"
+  );
+  const { normalizeCollectionSlug } = await import(
+    "@/lib/marketplace/collection-slug"
+  );
+  const engine = await engineForCollectionHold();
+  const wantTitle = input.title?.trim()
+    ? normalizeCollectionTitle(input.title)
+    : null;
+  const wantSlug = input.slug?.trim()
+    ? normalizeCollectionSlug(input.slug)
+    : null;
+  if (!wantTitle && !wantSlug) {
+    return { ok: true as const, released: [] as string[] };
+  }
+
+  const candidates = [...engine.state.collections.values()].filter((c) => {
+    if (c.creatorId !== input.creatorId) return false;
+    const titleMatch =
+      wantTitle && normalizeCollectionTitle(c.title) === wantTitle;
+    const slugMatch =
+      wantSlug && (c.slug || "").toLowerCase() === wantSlug.toLowerCase();
+    return Boolean(titleMatch || slugMatch);
+  });
+
+  const released: string[] = [];
+  for (const c of candidates) {
+    const result = await releaseCollectionNameHold({
+      collectionId: c.id,
+      creatorId: input.creatorId,
+    });
+    if (result.ok) released.push(c.id);
+  }
+  return { ok: true as const, released };
+}
+
+/**
+ * Delete abandoned unpublished collection drafts that never got a real
+ * on-chain contract (frees unique title/slug). Scoped to one creator when set.
+ */
+export async function cleanupAbandonedUnconfirmedCollections(input?: {
+  creatorId?: string;
+  maxAgeMs?: number;
+  limit?: number;
+}) {
+  const maxAgeMs = input?.maxAgeMs ?? ABANDONED_COLLECTION_HOLD_MAX_AGE_MS;
+  const limit = input?.limit ?? 50;
+  const engine = await engineForCollectionHold();
+  const now = Date.now();
+  const candidates = [...engine.state.collections.values()]
+    .filter((c) => {
+      if (input?.creatorId && c.creatorId !== input.creatorId) return false;
+      if (isCollectionDeployReady(c)) return false;
+      const createdAt = c.createdAt ?? 0;
+      if (!createdAt || now - createdAt < maxAgeMs) return false;
+      return true;
+    })
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+    .slice(0, limit);
+
+  const released: string[] = [];
+  for (const c of candidates) {
+    const result = await releaseCollectionNameHold({
+      collectionId: c.id,
+      creatorId: c.creatorId,
+      minAgeMs: maxAgeMs,
+    });
+    if (result.ok) released.push(c.id);
+  }
+  return { ok: true as const, released, scanned: candidates.length };
 }
 
 export async function confirmCollectionDeploy(input: {

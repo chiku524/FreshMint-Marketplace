@@ -1,8 +1,12 @@
+import { getSessionUser } from "@/lib/auth/session";
 import {
   collectionTitleIssueMessage,
   validateCollectionTitleFormat,
 } from "@/lib/marketplace/collection-title";
-import { isCollectionTitleAvailable } from "@/lib/marketplace/service";
+import {
+  isCollectionTitleAvailable,
+  reclaimOwnUnconfirmedCollectionHold,
+} from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +27,26 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const available = await isCollectionTitleAvailable(format.title, {
+  let available = await isCollectionTitleAvailable(format.title, {
     excludeCollectionId,
   });
+
+  // Heal: signed-in creator's own failed/cancelled deploy soft-hold.
+  if (!available) {
+    const user = await getSessionUser(req);
+    if (user) {
+      const reclaim = await reclaimOwnUnconfirmedCollectionHold({
+        creatorId: user.id,
+        title: format.title,
+      });
+      if (reclaim.released.length) {
+        available = await isCollectionTitleAvailable(format.title, {
+          excludeCollectionId,
+        });
+      }
+    }
+  }
+
   if (!available) {
     return NextResponse.json({
       ok: false,

@@ -20,6 +20,8 @@ import {
   isCollectionSlugAvailable,
   isCollectionTitleAvailable,
   listCollectionsForUser,
+  reclaimOwnUnconfirmedCollectionHold,
+  releaseCollectionNameHold,
   updateCollectionDrop,
   followArtist,
   listPendingNominations,
@@ -257,6 +259,7 @@ describe("marketplace service (memory mode)", () => {
       slug: "global-name-set-base",
       network: "base",
     });
+    // Solana create confirms immediately in memory/sim — hold is permanent.
     expect(dupCase.ok).toBe(false);
     if (!dupCase.ok) expect(dupCase.errors).toContain("title_taken");
 
@@ -268,6 +271,108 @@ describe("marketplace service (memory mode)", () => {
     });
     expect(dupWhitespace.ok).toBe(false);
     if (!dupWhitespace.ok) expect(dupWhitespace.errors).toContain("title_taken");
+  });
+
+  it("releases soft-held title/slug after failed wallet deploy (unconfirmed)", async () => {
+    const boingCreator = `0x${"66".repeat(32)}`;
+    const pending = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Soft Hold Squad",
+      slug: "soft-hold-squad",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(pending.ok).toBe(true);
+    if (!pending.ok) return;
+    expect(pending.collection.deployStatus).toBe("pending_wallet");
+    expect(isCollectionDeployReady(pending.collection)).toBe(false);
+    await expect(
+      isCollectionTitleAvailable("Soft Hold Squad"),
+    ).resolves.toBe(false);
+
+    const released = await releaseCollectionNameHold({
+      collectionId: pending.collection.id,
+      creatorId: "artist-fresh",
+    });
+    expect(released.ok).toBe(true);
+    await expect(
+      isCollectionTitleAvailable("Soft Hold Squad"),
+    ).resolves.toBe(true);
+    await expect(
+      isCollectionSlugAvailable("soft-hold-squad"),
+    ).resolves.toBe(true);
+    expect(
+      getMemoryEngine().state.collections.has(pending.collection.id),
+    ).toBe(false);
+  });
+
+  it("reclaims own unconfirmed hold so create can retry the same name", async () => {
+    const boingCreator = `0x${"77".repeat(32)}`;
+    const stuck = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Retry Name Squad",
+      slug: "retry-name-squad",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(stuck.ok).toBe(true);
+    if (!stuck.ok) return;
+    expect(stuck.collection.deployStatus).toBe("pending_wallet");
+
+    const retry = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Retry Name Squad",
+      slug: "retry-name-squad",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.collection.id).not.toBe(stuck.collection.id);
+    expect(
+      getMemoryEngine().state.collections.has(stuck.collection.id),
+    ).toBe(false);
+
+    const foreign = await createCollectionForUser({
+      creatorId: "artist-other",
+      title: "Retry Name Squad",
+      slug: "retry-name-squad-other",
+      network: "boing",
+      creatorAddress: `0x${"88".repeat(32)}`,
+    });
+    expect(foreign.ok).toBe(false);
+    if (!foreign.ok) expect(foreign.errors).toContain("title_taken");
+  });
+
+  it("does not release a confirmed collection name hold", async () => {
+    const created = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Confirmed Hold Set",
+      slug: "confirmed-hold-set",
+      network: "ethereum",
+      creatorAddress: "",
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.collection.deployStatus).toBe("confirmed");
+
+    const released = await releaseCollectionNameHold({
+      collectionId: created.collection.id,
+      creatorId: "artist-fresh",
+    });
+    expect(released.ok).toBe(false);
+    if (!released.ok) {
+      expect(released.error).toBe("collection_hold_not_releasable");
+    }
+    await expect(
+      isCollectionTitleAvailable("Confirmed Hold Set"),
+    ).resolves.toBe(false);
+
+    const reclaim = await reclaimOwnUnconfirmedCollectionHold({
+      creatorId: "artist-fresh",
+      title: "Confirmed Hold Set",
+    });
+    expect(reclaim.released).toEqual([]);
   });
 
   it("treats the current collection's own title and slug as available when excluded", async () => {
@@ -800,8 +905,10 @@ describe("marketplace service (memory mode)", () => {
     expect(confirmed.ok).toBe(true);
   });
 
-  it("filters mine collections by network and deploy readiness", async () => {
-    const boingCreator = `0x${"11".repeat(32)}`;
+  it(
+    "filters mine collections by network and deploy readiness",
+    async () => {
+const boingCreator = `0x${"11".repeat(32)}`;
     const pendingBoing = await createCollectionForUser({
       creatorId: "artist-fresh",
       title: "Goon Squad",
@@ -809,7 +916,7 @@ describe("marketplace service (memory mode)", () => {
       network: "boing",
       creatorAddress: boingCreator,
     });
-    expect(pendingBoing.ok).toBe(true);
+expect(pendingBoing.ok).toBe(true);
     if (!pendingBoing.ok) return;
     expect(pendingBoing.collection.deployStatus).toBe("pending_wallet");
     expect(
@@ -884,7 +991,9 @@ describe("marketplace service (memory mode)", () => {
     expect(prep.ok).toBe(true);
     if (!prep.ok) return;
     expect(prep.alreadyDeployed).toBe(true);
-  });
+  },
+    15_000,
+  );
 
   it("syncs a Boing deploy after mempool ok (pending marker + real address)", async () => {
     const boingCreator = `0x${"44".repeat(32)}`;

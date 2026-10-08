@@ -70,6 +70,32 @@ function isDeployReadyOption(c: CollectionOption): boolean {
   return Boolean(addr && !addr.startsWith("pending:"));
 }
 
+/** Keep soft-hold when deploy may still be indexing after wallet accept. */
+function shouldReleaseCollectionHoldAfterDeployError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    /could not link|onchain_deploy_not_found|boing_contract_unresolved|wait a few seconds and retry/i.test(
+      msg,
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+async function abandonCollectionNameHold(collectionId: string): Promise<void> {
+  try {
+    await fetch(`/api/collections/${collectionId}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "abandon" }),
+    });
+  } catch {
+    // Best-effort — server reclaim on next create still frees the name.
+  }
+}
+
 type Intent = "drop" | "single" | "auction";
 type DropKind = "limited" | "open";
 
@@ -727,11 +753,23 @@ export function CreateWizard() {
         return collectionId;
       }
       if (prepData.deployIntent?.walletTx) {
-        await runDeployWalletAndConfirm({
-          id: collectionId,
-          deployIntent: prepData.deployIntent,
-          creatorAddress,
-        });
+        try {
+          await runDeployWalletAndConfirm({
+            id: collectionId,
+            deployIntent: prepData.deployIntent,
+            creatorAddress,
+          });
+        } catch (deployErr) {
+          if (shouldReleaseCollectionHoldAfterDeployError(deployErr)) {
+            await abandonCollectionNameHold(collectionId);
+            setCollectionId("");
+            setCollections((prev) =>
+              prev.filter((c) => c.id !== collectionId),
+            );
+            window.dispatchEvent(new Event("fm-collections-changed"));
+          }
+          throw deployErr;
+        }
         window.dispatchEvent(new Event("fm-collections-changed"));
         loadMine();
         return collectionId;
@@ -823,14 +861,29 @@ export function CreateWizard() {
       | null
       | undefined;
 
-    if (deployIntent?.walletTx) {
-      await runDeployWalletAndConfirm({
-        id,
-        deployIntent,
-        creatorAddress,
-      });
-    } else if (data.collection?.deployStatus === "confirmed") {
-      setDeployNote("Collection contract ready (simulated or already deployed).");
+    try {
+      if (deployIntent?.walletTx) {
+        await runDeployWalletAndConfirm({
+          id,
+          deployIntent,
+          creatorAddress,
+        });
+      } else if (data.collection?.deployStatus === "confirmed") {
+        setDeployNote(
+          "Collection contract ready (simulated or already deployed).",
+        );
+      }
+    } catch (deployErr) {
+      // Soft-hold was created before wallet confirm — free the unique name/slug
+      // when the chain deploy clearly did not land (reject / cancel / no send).
+      // Keep the row when mempool accepted but sync is still catching up.
+      if (shouldReleaseCollectionHoldAfterDeployError(deployErr)) {
+        await abandonCollectionNameHold(id);
+        setCollectionId("");
+        setCollections((prev) => prev.filter((c) => c.id !== id));
+        window.dispatchEvent(new Event("fm-collections-changed"));
+      }
+      throw deployErr;
     }
 
     const created = data.collection as CollectionOption | undefined;

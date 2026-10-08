@@ -1,8 +1,12 @@
+import { getSessionUser } from "@/lib/auth/session";
 import {
   collectionSlugIssueMessage,
   validateCollectionSlugFormat,
 } from "@/lib/marketplace/collection-slug";
-import { isCollectionSlugAvailable } from "@/lib/marketplace/service";
+import {
+  isCollectionSlugAvailable,
+  reclaimOwnUnconfirmedCollectionHold,
+} from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +26,25 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const available = await isCollectionSlugAvailable(format.slug, {
+  let available = await isCollectionSlugAvailable(format.slug, {
     excludeCollectionId,
   });
+
+  if (!available) {
+    const user = await getSessionUser(req);
+    if (user) {
+      const reclaim = await reclaimOwnUnconfirmedCollectionHold({
+        creatorId: user.id,
+        slug: format.slug,
+      });
+      if (reclaim.released.length) {
+        available = await isCollectionSlugAvailable(format.slug, {
+          excludeCollectionId,
+        });
+      }
+    }
+  }
+
   if (!available) {
     return NextResponse.json({
       ok: false,

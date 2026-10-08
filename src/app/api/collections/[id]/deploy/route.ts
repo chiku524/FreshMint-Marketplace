@@ -3,6 +3,7 @@ import {
   confirmCollectionDeploy,
   getDiscoveryEngine,
   prepareCollectionDeployForUser,
+  releaseCollectionNameHold,
   syncCollectionDeployFromChain,
 } from "@/lib/marketplace/service";
 import { resolveNetwork, vmFromNetwork } from "@/lib/chains/registry";
@@ -28,6 +29,10 @@ const prepareSchema = z.object({
   action: z.literal("prepare"),
   creatorAddress: z.string().min(1).optional(),
   forceRedeploy: z.boolean().optional(),
+});
+
+const abandonSchema = z.object({
+  action: z.literal("abandon"),
 });
 
 async function creatorAddressForCollection(
@@ -93,6 +98,18 @@ export async function POST(
       creatorId: user.id,
       creatorAddress,
       forceRedeploy: prepareBody.data.forceRedeploy,
+    });
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    return NextResponse.json(result);
+  }
+
+  const abandonBody = abandonSchema.safeParse(json);
+  if (abandonBody.success) {
+    const result = await releaseCollectionNameHold({
+      collectionId: id,
+      creatorId: user.id,
     });
     if (!result.ok) {
       return NextResponse.json(result, { status: 400 });
