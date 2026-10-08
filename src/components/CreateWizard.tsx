@@ -485,6 +485,7 @@ export function CreateWizard() {
           if (collectionId) params.set("excludeCollectionId", collectionId);
           const res = await fetch(
             `/api/collections/name-check?${params.toString()}`,
+            { credentials: "include" },
           );
           const data = (await res.json()) as {
             available?: boolean;
@@ -549,6 +550,7 @@ export function CreateWizard() {
           if (collectionId) params.set("excludeCollectionId", collectionId);
           const res = await fetch(
             `/api/collections/slug-check?${params.toString()}`,
+            { credentials: "include" },
           );
           const data = (await res.json()) as {
             available?: boolean;

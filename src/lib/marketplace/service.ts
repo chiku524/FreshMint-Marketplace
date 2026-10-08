@@ -990,10 +990,85 @@ async function engineForCollectionHold(): Promise<DiscoveryEngine> {
   return getDiscoveryEngine();
 }
 
+async function collectionHoldStorageMode(): Promise<{
+  useMemory: boolean;
+  engine: DiscoveryEngine;
+}> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  const useMemory = mode === "memory" || isMemoryMode();
+  return {
+    useMemory,
+    engine: useMemory ? getMemoryEngine() : await getDiscoveryEngine(),
+  };
+}
+
+/** Stamp that frees unique titleNormalized + slug without colliding. */
+function releasedUniquenessStamp(collectionId: string) {
+  const stamp = `released-${collectionId}`;
+  return {
+    title: stamp.slice(0, 120),
+    titleNormalized: stamp.toLowerCase(),
+    slug: stamp.slice(0, 64),
+  };
+}
+
+/**
+ * Free unique titleNormalized + slug on an unconfirmed draft when a full
+ * delete is not possible (FK edge cases). Row is marked failed.
+ */
+async function freeCollectionUniquenessKeys(input: {
+  collectionId: string;
+  useMemory: boolean;
+  engine: DiscoveryEngine;
+}) {
+  const stamp = releasedUniquenessStamp(input.collectionId);
+  const existing = input.engine.state.collections.get(input.collectionId);
+  if (input.useMemory) {
+    if (!existing) return;
+    input.engine.state.collections.set(input.collectionId, {
+      ...existing,
+      title: stamp.title,
+      slug: stamp.slug,
+      deployStatus: "failed",
+      contractAddress: null,
+      deployTxHash: null,
+    });
+    return;
+  }
+  await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: {
+      title: stamp.title,
+      titleNormalized: stamp.titleNormalized,
+      slug: stamp.slug,
+      deployStatus: "failed",
+      contractAddress: null,
+      deployTxHash: null,
+    },
+  });
+  if (existing) {
+    input.engine.state.collections.set(input.collectionId, {
+      ...existing,
+      title: stamp.title,
+      slug: stamp.slug,
+      deployStatus: "failed",
+      contractAddress: null,
+      deployTxHash: null,
+    });
+  } else {
+    input.engine.state.collections.delete(input.collectionId);
+  }
+}
+
 /**
  * Release a soft-held collection name/slug after failed, cancelled, or
  * never-confirmed on-chain deploy. Deletes the draft row (+ unminted draft
- * listings) so `titleNormalized` / `slug` can be reused.
+ * listings) so `titleNormalized` / `slug` can be reused. Falls back to
+ * renaming uniqueness keys if delete cannot complete.
  */
 export async function releaseCollectionNameHold(input: {
   collectionId: string;
@@ -1001,14 +1076,16 @@ export async function releaseCollectionNameHold(input: {
   /** When set, only release if the collection is at least this old. */
   minAgeMs?: number;
 }) {
-  const { ensureDatabaseReady } = await import("@/lib/db-ready");
-  const { isMemoryMode, getMemoryEngine } = await import(
-    "@/lib/data/memory-store"
-  );
-  const mode = await ensureDatabaseReady();
-  const useMemory = mode === "memory" || isMemoryMode();
-  const engine = useMemory ? getMemoryEngine() : await getDiscoveryEngine();
-  const collection = engine.state.collections.get(input.collectionId);
+  const { useMemory, engine } = await collectionHoldStorageMode();
+  let collection = engine.state.collections.get(input.collectionId) ?? null;
+
+  // Prisma is source of truth for unique slug/titleNormalized — engine can lag.
+  if (!collection && !useMemory) {
+    const row = await prisma.collection.findUnique({
+      where: { id: input.collectionId },
+    });
+    if (row) collection = toCollection(row);
+  }
   if (!collection) return { ok: false as const, error: "collection_not_found" };
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
@@ -1021,9 +1098,17 @@ export async function releaseCollectionNameHold(input: {
     }
   }
 
-  const listings = [...engine.state.listings.values()].filter(
+  let listings = [...engine.state.listings.values()].filter(
     (l) => l.collectionId === input.collectionId,
   );
+  if (!useMemory) {
+    const dbListings = await prisma.listing.findMany({
+      where: { collectionId: input.collectionId },
+    });
+    if (dbListings.length) {
+      listings = dbListings.map(toListing);
+    }
+  }
   if (!isReleasableCollectionNameHold(collection, listings)) {
     return { ok: false as const, error: "collection_hold_not_releasable" };
   }
@@ -1031,12 +1116,19 @@ export async function releaseCollectionNameHold(input: {
   const listingIds = listings.map((l) => l.id);
 
   if (useMemory) {
-    const mem = getMemoryEngine();
     for (const id of listingIds) {
-      mem.state.listings.delete(id);
+      engine.state.listings.delete(id);
     }
-    mem.state.collections.delete(input.collectionId);
-  } else {
+    engine.state.collections.delete(input.collectionId);
+    return {
+      ok: true as const,
+      releasedCollectionId: input.collectionId,
+      releasedListingIds: listingIds,
+      mode: "deleted" as const,
+    };
+  }
+
+  try {
     await prisma.$transaction(async (tx) => {
       if (listingIds.length) {
         // Draft-only children — clear FKs so listings + collection can go.
@@ -1075,18 +1167,39 @@ export async function releaseCollectionNameHold(input: {
       engine.state.listings.delete(id);
     }
     engine.state.collections.delete(input.collectionId);
+    return {
+      ok: true as const,
+      releasedCollectionId: input.collectionId,
+      releasedListingIds: listingIds,
+      mode: "deleted" as const,
+    };
+  } catch (err) {
+    // Still free unique URL + name so create/retry is not blocked.
+    console.warn(
+      "[freshmint] collection hold delete failed; freeing uniqueness keys",
+      input.collectionId,
+      err instanceof Error ? err.message : err,
+    );
+    await freeCollectionUniquenessKeys({
+      collectionId: input.collectionId,
+      useMemory: false,
+      engine,
+    });
+    return {
+      ok: true as const,
+      releasedCollectionId: input.collectionId,
+      releasedListingIds: listingIds,
+      mode: "keys_freed" as const,
+    };
   }
-
-  return {
-    ok: true as const,
-    releasedCollectionId: input.collectionId,
-    releasedListingIds: listingIds,
-  };
 }
 
 /**
  * If this creator already soft-holds `title` and/or `slug` with an unconfirmed
  * draft, release that hold so create/retry can proceed.
+ *
+ * Looks up by Prisma unique columns (slug / titleNormalized) first — the
+ * discovery engine alone can miss a stuck draft that still blocks the URL.
  */
 export async function reclaimOwnUnconfirmedCollectionHold(input: {
   creatorId: string;
@@ -1099,7 +1212,7 @@ export async function reclaimOwnUnconfirmedCollectionHold(input: {
   const { normalizeCollectionSlug } = await import(
     "@/lib/marketplace/collection-slug"
   );
-  const engine = await engineForCollectionHold();
+  const { useMemory, engine } = await collectionHoldStorageMode();
   const wantTitle = input.title?.trim()
     ? normalizeCollectionTitle(input.title)
     : null;
@@ -1110,22 +1223,44 @@ export async function reclaimOwnUnconfirmedCollectionHold(input: {
     return { ok: true as const, released: [] as string[] };
   }
 
-  const candidates = [...engine.state.collections.values()].filter((c) => {
-    if (c.creatorId !== input.creatorId) return false;
+  const candidateIds = new Set<string>();
+
+  for (const c of engine.state.collections.values()) {
+    if (c.creatorId !== input.creatorId) continue;
     const titleMatch =
       wantTitle && normalizeCollectionTitle(c.title) === wantTitle;
     const slugMatch =
       wantSlug && (c.slug || "").toLowerCase() === wantSlug.toLowerCase();
-    return Boolean(titleMatch || slugMatch);
-  });
+    if (titleMatch || slugMatch) candidateIds.add(c.id);
+  }
+
+  // Source of truth for unique constraints — find holders even if engine lagged.
+  if (!useMemory) {
+    if (wantTitle) {
+      const byTitle = await prisma.collection.findUnique({
+        where: { titleNormalized: wantTitle },
+      });
+      if (byTitle && byTitle.creatorId === input.creatorId) {
+        candidateIds.add(byTitle.id);
+      }
+    }
+    if (wantSlug) {
+      const bySlug = await prisma.collection.findUnique({
+        where: { slug: wantSlug },
+      });
+      if (bySlug && bySlug.creatorId === input.creatorId) {
+        candidateIds.add(bySlug.id);
+      }
+    }
+  }
 
   const released: string[] = [];
-  for (const c of candidates) {
+  for (const id of candidateIds) {
     const result = await releaseCollectionNameHold({
-      collectionId: c.id,
+      collectionId: id,
       creatorId: input.creatorId,
     });
-    if (result.ok) released.push(c.id);
+    if (result.ok) released.push(id);
   }
   return { ok: true as const, released };
 }
@@ -1141,21 +1276,72 @@ export async function cleanupAbandonedUnconfirmedCollections(input?: {
 }) {
   const maxAgeMs = input?.maxAgeMs ?? ABANDONED_COLLECTION_HOLD_MAX_AGE_MS;
   const limit = input?.limit ?? 50;
-  const engine = await engineForCollectionHold();
+  const { useMemory, engine } = await collectionHoldStorageMode();
   const now = Date.now();
-  const candidates = [...engine.state.collections.values()]
-    .filter((c) => {
-      if (input?.creatorId && c.creatorId !== input.creatorId) return false;
-      if (isCollectionDeployReady(c)) return false;
-      const createdAt = c.createdAt ?? 0;
-      if (!createdAt || now - createdAt < maxAgeMs) return false;
-      return true;
+  const cutoff = now - maxAgeMs;
+  const candidateIds = new Set<string>();
+  const creatorById = new Map<string, string>();
+
+  for (const c of engine.state.collections.values()) {
+    if (input?.creatorId && c.creatorId !== input.creatorId) continue;
+    if (isCollectionDeployReady(c)) continue;
+    const createdAt = c.createdAt ?? 0;
+    if (!createdAt || createdAt > cutoff) continue;
+    candidateIds.add(c.id);
+    creatorById.set(c.id, c.creatorId);
+  }
+
+  // Also scan Prisma so stuck slugs not present in a stale engine are freed.
+  if (!useMemory) {
+    const rows = await prisma.collection.findMany({
+      where: {
+        ...(input?.creatorId ? { creatorId: input.creatorId } : {}),
+        deployStatus: { in: ["pending_wallet", "failed", "none"] },
+        createdAt: { lt: new Date(cutoff) },
+      },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      select: {
+        id: true,
+        creatorId: true,
+        contractAddress: true,
+        deployStatus: true,
+        chain: true,
+        network: true,
+      },
+    });
+    for (const row of rows) {
+      if (
+        isCollectionDeployReady({
+          id: row.id,
+          deployStatus: row.deployStatus,
+          contractAddress: row.contractAddress,
+          chain: row.chain as Collection["chain"],
+          network: row.network,
+        })
+      ) {
+        continue;
+      }
+      candidateIds.add(row.id);
+      creatorById.set(row.id, row.creatorId);
+    }
+  }
+
+  const ordered = [...candidateIds]
+    .map((id) => {
+      const fromEngine = engine.state.collections.get(id);
+      return {
+        id,
+        creatorId: creatorById.get(id) || fromEngine?.creatorId || "",
+        createdAt: fromEngine?.createdAt ?? 0,
+      };
     })
-    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+    .filter((c) => c.creatorId)
+    .sort((a, b) => a.createdAt - b.createdAt)
     .slice(0, limit);
 
   const released: string[] = [];
-  for (const c of candidates) {
+  for (const c of ordered) {
     const result = await releaseCollectionNameHold({
       collectionId: c.id,
       creatorId: c.creatorId,
@@ -1163,7 +1349,7 @@ export async function cleanupAbandonedUnconfirmedCollections(input?: {
     });
     if (result.ok) released.push(c.id);
   }
-  return { ok: true as const, released, scanned: candidates.length };
+  return { ok: true as const, released, scanned: ordered.length };
 }
 
 export async function confirmCollectionDeploy(input: {

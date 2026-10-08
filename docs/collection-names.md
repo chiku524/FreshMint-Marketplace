@@ -28,15 +28,15 @@ lower(trim(collapse_whitespace(title)))
 
 Creating a collection inserts a draft row (`deployStatus: pending_wallet`) so the wallet deploy intent can reference a stable id. That row **soft-holds** the unique `titleNormalized` / `slug` only while deploy is in flight.
 
-| Event | Name/slug hold |
+| Event | Name **and** URL (`slug`) hold |
 |---|---|
 | Wallet reject / cancel / failed send | Released immediately (`POST …/deploy` `action: "abandon"`) |
 | Mempool accepted but sync still indexing | Hold kept so heal/sync can confirm |
 | Confirmed on-chain | Hold becomes permanent (real contract) |
-| Creator retries same title/slug | Own unconfirmed draft is reclaimed, then create proceeds |
-| Abandoned draft older than 2h, never deployed, no minted listings | Age cleanup frees the hold |
+| Creator retries same title and/or slug | Own unconfirmed draft is reclaimed (Prisma `titleNormalized` **and** `slug` lookup), then create proceeds |
+| Abandoned draft older than 2h, never deployed, no minted listings | Age cleanup frees both unique columns |
 
-`releaseCollectionNameHold` only deletes when the collection is **not** deploy-ready and has no minted/live listings. Confirmed contracts and minted NFTs are never removed.
+`releaseCollectionNameHold` only deletes when the collection is **not** deploy-ready and has no minted/live listings. If delete fails, uniqueness keys are renamed to `released-<id>` so the URL and name are still freed. Confirmed contracts and minted NFTs are never removed.
 
 ## Migration / existing duplicates
 

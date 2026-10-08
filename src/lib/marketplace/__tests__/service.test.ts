@@ -344,6 +344,47 @@ describe("marketplace service (memory mode)", () => {
     if (!foreign.ok) expect(foreign.errors).toContain("title_taken");
   });
 
+  it("reclaims a stuck slug even when the creator changed the title", async () => {
+    const boingCreator = `0x${"99".repeat(32)}`;
+    const stuck = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Old Title For Url",
+      slug: "desired-collection-url",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(stuck.ok).toBe(true);
+    if (!stuck.ok) return;
+
+    // Name is free under a new title, but the prior draft still holds the URL.
+    await expect(
+      isCollectionTitleAvailable("Brand New Title"),
+    ).resolves.toBe(true);
+    await expect(
+      isCollectionSlugAvailable("desired-collection-url"),
+    ).resolves.toBe(false);
+
+    const bySlugOnly = await reclaimOwnUnconfirmedCollectionHold({
+      creatorId: "artist-fresh",
+      slug: "desired-collection-url",
+    });
+    expect(bySlugOnly.released).toContain(stuck.collection.id);
+    await expect(
+      isCollectionSlugAvailable("desired-collection-url"),
+    ).resolves.toBe(true);
+
+    const retry = await createCollectionForUser({
+      creatorId: "artist-fresh",
+      title: "Brand New Title",
+      slug: "desired-collection-url",
+      network: "boing",
+      creatorAddress: boingCreator,
+    });
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.collection.slug).toBe("desired-collection-url");
+  });
+
   it("does not release a confirmed collection name hold", async () => {
     const created = await createCollectionForUser({
       creatorId: "artist-fresh",
