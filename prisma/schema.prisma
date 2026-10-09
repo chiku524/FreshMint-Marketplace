@@ -255,6 +255,9 @@ model Collection {
   instagramUrl    String?
   /// On-chain collection contract (EVM address / Solana / Boing id)
   contractAddress String?
+  /// Cache of on-chain registry peers (not authoritative). Shape: [{ address, label?, chain? }].
+  /// Source of truth: Boing linked NFT↔token registry via SDK — see linked-token-registry.ts
+  linkedTokensJson String @default("[]")
   deployTxHash    String?
   /// none | pending_wallet | confirmed | failed
   deployStatus    String  @default("none")
