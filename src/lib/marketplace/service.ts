@@ -1,1 +1,1 @@
-@file:/tmp/service-chunk-50000.txt
+file:///home/ubuntu/work/FreshMint-Marketplace/src/lib/marketplace/service.ts
