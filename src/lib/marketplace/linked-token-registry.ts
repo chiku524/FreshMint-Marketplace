@@ -1,16 +1,24 @@
 /**
  * On-chain linked NFT↔fungible registry adapter (source of truth).
  *
- * Nico pivot (2026-10-09): display-only metadata is **not** authoritative.
- * FreshMint reads/writes companion links via the Boing L1 registry (SDK helpers).
+ * Wires FreshMint to boing-sdk registry helpers (vendored from
+ * boing.network PR #42 / SHA abf8808 — selectors 0xE0–0xE6, dual claimer).
  * `Collection.linkedTokensJson` is a **cache** of registry state only.
- *
- * SDK surface (boing.network `cursor/linked-nft-token-sdk-277c` / PR #42 pivot):
- * expected exports will land in `boing-sdk` (register / update / unlink / list).
- * Until those helpers ship, prepare/read return `registry_sdk_pending`.
  */
 
 import type { Chain } from "@/lib/discovery/types";
+import {
+  asRegistryAccountId,
+  buildLinkedNftTokenRegisterFlowTxs,
+  buildLinkedNftTokenUnlinkAtTx,
+  decodeLinkedNftTokenGetLinkAtReturnData,
+  decodeLinkedNftTokenLinksCountReturnData,
+  encodeLinkedNftTokenGetLinkAtCalldataHex,
+  encodeLinkedNftTokenLinksCountCalldataHex,
+  LINKED_NFT_TOKEN_REGISTRY_MAX_LINKS,
+  type RegistryLinkSlot,
+} from "@/lib/onchain/linked-nft-token-registry";
+import { simulateBoingContractCall } from "@/lib/onchain/boing";
 import type { BoingWalletTx } from "@/lib/onchain/wallet-client";
 import {
   type LinkedTokenRef,
@@ -19,7 +27,7 @@ import {
 } from "@/lib/marketplace/linked-tokens";
 
 export type RegistrySyncResult =
-  | { ok: true; tokens: LinkedTokenRef[]; registryAddress: string }
+  | { ok: true; tokens: LinkedTokenRef[]; registryAddress: string; slots: RegistryLinkSlot[] }
   | { ok: false; error: string };
 
 export type RegistryWritePlan =
@@ -28,6 +36,8 @@ export type RegistryWritePlan =
       walletTxs: BoingWalletTx[];
       desired: LinkedTokenRef[];
       registryAddress: string;
+      /** Human-readable summary of planned claim/register/unlink steps. */
+      steps: string[];
     }
   | { ok: false; error: string; errors?: string[] };
 
@@ -37,73 +47,105 @@ export function linkedNftTokenRegistryAddress(): string | null {
     process.env.NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY?.trim() ||
     process.env.BOING_LINKED_NFT_TOKEN_REGISTRY?.trim() ||
     "";
-  return raw || null;
+  if (!raw) return null;
+  return asRegistryAccountId(raw);
 }
 
 export function collectionSupportsOnchainLinkedTokens(chain: Chain): boolean {
   return chain === "boing";
 }
 
-/**
- * Try to load SDK registry helpers. Returns null until boing-sdk ships them.
- * Kept dynamic so FreshMint builds without a hard pin while the SDK PR pivots.
- */
-type SdkRegistryModule = {
-  listLinkedNftTokenPeersForCollection?: (input: {
-    registry: string;
-    collection: string;
-    rpcUrl?: string;
-  }) => Promise<string[]>;
-  listLinkedNftTokenRegistryPeers?: (input: {
-    registry: string;
-    collection: string;
-    rpcUrl?: string;
-  }) => Promise<string[]>;
-  buildLinkedNftTokenRegistryLinkTxs?: (input: {
-    registry: string;
-    collection: string;
-    tokens: string[];
-    from: string;
-  }) => Array<Record<string, unknown>>;
-  buildLinkedNftTokenRegistryUpdateTxs?: (input: {
-    registry: string;
-    collection: string;
-    tokens: string[];
-    from: string;
-  }) => Array<Record<string, unknown>>;
-};
+function toWalletTx(tx: Record<string, unknown>): BoingWalletTx {
+  return {
+    chain: "boing",
+    network: "boing",
+    method: "boing_sendTransaction",
+    tx,
+  };
+}
+
+/** Preserve display labels from prior cache / desired draft when re-reading chain. */
+export function mergeLinkedTokenLabels(
+  registryTokens: LinkedTokenRef[],
+  ...labelSources: Array<LinkedTokenRef[] | undefined | null>
+): LinkedTokenRef[] {
+  const labels = new Map<string, string>();
+  for (const source of labelSources) {
+    if (!source) continue;
+    for (const t of source) {
+      const key = t.address.trim().toLowerCase();
+      const label = t.label?.trim();
+      if (key && label) labels.set(key, label);
+    }
+  }
+  return registryTokens.map((t) => {
+    const label = labels.get(t.address.trim().toLowerCase()) ?? t.label ?? null;
+    return { ...t, label };
+  });
+}
+
+async function simulateReturnData(
+  registry: string,
+  calldata: string,
+  sender?: string | null,
+): Promise<string> {
+  const sim = await simulateBoingContractCall({
+    contract: registry,
+    calldata,
+    sender: sender ?? null,
+  });
+  if (!sim.success) {
+    throw new Error(sim.error ?? "registry_simulate_failed");
+  }
+  return (sim.return_data ?? "0x").trim();
+}
 
 /**
- * Optional dependency bridge. Set `BOING_SDK_REGISTRY_MODULE` to a resolvable
- * path/package once SDK registry helpers ship (e.g. `boing-sdk`). Avoids a hard
- * build-time dependency while PR #42 pivots to on-chain registry.
+ * Scan registry slots for active (collection, token) edges.
+ * Tombstones (zero pair) are skipped; indices stay stable after unlink.
  */
-async function loadSdkRegistry(): Promise<null | {
-  listPeersForCollection?: SdkRegistryModule["listLinkedNftTokenPeersForCollection"];
-  buildLinkTxs?: SdkRegistryModule["buildLinkedNftTokenRegistryLinkTxs"];
-}> {
-  const spec =
-    process.env.BOING_SDK_REGISTRY_MODULE?.trim() ||
-    process.env.NEXT_PUBLIC_BOING_SDK_REGISTRY_MODULE?.trim() ||
-    "";
-  if (!spec) return null;
-  try {
-    // Dynamic string keeps Next from bundling a missing package at build time.
-    const mod = (await Function(
-      "s",
-      "return import(s)",
-    )(spec)) as SdkRegistryModule;
-    const list =
-      mod.listLinkedNftTokenPeersForCollection ??
-      mod.listLinkedNftTokenRegistryPeers;
-    const build =
-      mod.buildLinkedNftTokenRegistryLinkTxs ??
-      mod.buildLinkedNftTokenRegistryUpdateTxs;
-    if (!list && !build) return null;
-    return { listPeersForCollection: list, buildLinkTxs: build };
-  } catch {
-    return null;
+export async function listRegistryLinkSlots(input: {
+  registry: string;
+  collection: string;
+  sender?: string | null;
+}): Promise<RegistryLinkSlot[]> {
+  const registry = asRegistryAccountId(input.registry);
+  const collection = asRegistryAccountId(input.collection);
+  if (!registry || !collection) {
+    throw new Error("invalid_registry_or_collection");
   }
+
+  const countRaw = await simulateReturnData(
+    registry,
+    encodeLinkedNftTokenLinksCountCalldataHex(),
+    input.sender,
+  );
+  const countBn = decodeLinkedNftTokenLinksCountReturnData(countRaw);
+  const count = Number(
+    countBn > BigInt(LINKED_NFT_TOKEN_REGISTRY_MAX_LINKS)
+      ? LINKED_NFT_TOKEN_REGISTRY_MAX_LINKS
+      : countBn,
+  );
+
+  const slots: RegistryLinkSlot[] = [];
+  for (let i = 0; i < count; i++) {
+    const raw = await simulateReturnData(
+      registry,
+      encodeLinkedNftTokenGetLinkAtCalldataHex(i),
+      input.sender,
+    );
+    const decoded = decodeLinkedNftTokenGetLinkAtReturnData(raw);
+    if (!decoded.active) continue;
+    if (decoded.collectionHex.toLowerCase() !== collection.toLowerCase()) {
+      continue;
+    }
+    slots.push({
+      index: i,
+      collectionHex: decoded.collectionHex,
+      tokenHex: decoded.tokenHex,
+    });
+  }
+  return slots;
 }
 
 /** Read authoritative peers from the on-chain registry (Boing only). */
@@ -111,7 +153,11 @@ export async function readLinkedTokensFromRegistry(input: {
   chain: Chain;
   collectionAddress: string | null | undefined;
   rpcUrl?: string;
+  sender?: string | null;
+  /** Optional label hints (cache / draft) merged onto registry peers. */
+  labelHints?: LinkedTokenRef[] | null;
 }): Promise<RegistrySyncResult> {
+  void input.rpcUrl;
   if (!collectionSupportsOnchainLinkedTokens(input.chain)) {
     return { ok: false, error: "registry_boing_only" };
   }
@@ -119,28 +165,32 @@ export async function readLinkedTokensFromRegistry(input: {
   if (!registry) {
     return { ok: false, error: "registry_address_unset" };
   }
-  const collection = input.collectionAddress?.trim();
+  const collection = asRegistryAccountId(input.collectionAddress ?? undefined);
   if (!collection) {
     return { ok: false, error: "collection_not_deployed" };
   }
 
-  const sdk = await loadSdkRegistry();
-  if (!sdk?.listPeersForCollection) {
-    return { ok: false, error: "registry_sdk_pending" };
-  }
-
   try {
-    const peers = await sdk.listPeersForCollection({
+    const slots = await listRegistryLinkSlots({
       registry,
       collection,
-      rpcUrl: input.rpcUrl,
+      sender: input.sender,
     });
-    const tokens: LinkedTokenRef[] = (peers ?? []).map((address) => ({
-      address,
-      label: null,
-      chain: "boing" as const,
-    }));
-    return { ok: true, tokens, registryAddress: registry };
+    // Dedupe tokens (re-register after unlink can leave duplicates historically).
+    const seen = new Set<string>();
+    const tokens: LinkedTokenRef[] = [];
+    for (const slot of slots) {
+      const address = slot.tokenHex.toLowerCase();
+      if (seen.has(address)) continue;
+      seen.add(address);
+      tokens.push({ address, label: null, chain: "boing" });
+    }
+    return {
+      ok: true,
+      tokens: mergeLinkedTokenLabels(tokens, input.labelHints),
+      registryAddress: registry,
+      slots,
+    };
   } catch (err) {
     return {
       ok: false,
@@ -150,7 +200,9 @@ export async function readLinkedTokensFromRegistry(input: {
 }
 
 /**
- * Build wallet txs to make on-chain registry match `desiredTokens`.
+ * Build wallet txs so on-chain registry matches `desiredTokens`.
+ * - New tokens → claim×2 + register_link (SDK `buildLinkedNftTokenRegisterFlowTxs`)
+ * - Removed tokens → unlink_at(index) per active slot
  * Does **not** write the FreshMint DB — caller confirms after chain acceptance.
  */
 export async function planLinkedTokenRegistryWrite(input: {
@@ -166,9 +218,13 @@ export async function planLinkedTokenRegistryWrite(input: {
   if (!registry) {
     return { ok: false, error: "registry_address_unset" };
   }
-  const collection = input.collectionAddress?.trim();
+  const collection = asRegistryAccountId(input.collectionAddress ?? undefined);
   if (!collection) {
     return { ok: false, error: "collection_not_deployed" };
+  }
+  const sender = asRegistryAccountId(input.creatorAddress);
+  if (!sender) {
+    return { ok: false, error: "invalid_creator_address" };
   }
 
   const checked = validateLinkedTokensInput(input.desiredTokens, "boing");
@@ -176,29 +232,80 @@ export async function planLinkedTokenRegistryWrite(input: {
     return { ok: false, error: "invalid_tokens", errors: checked.issues };
   }
 
-  const sdk = await loadSdkRegistry();
-  if (!sdk?.buildLinkTxs) {
-    return { ok: false, error: "registry_sdk_pending" };
+  // Official registry is Boing AccountIds only.
+  for (const t of checked.tokens) {
+    if (t.chain && t.chain !== "boing") {
+      return {
+        ok: false,
+        error: "registry_boing_only",
+        errors: ["registry_boing_only"],
+      };
+    }
   }
 
   try {
-    const rawTxs = sdk.buildLinkTxs({
+    const slots = await listRegistryLinkSlots({
       registry,
       collection,
-      tokens: checked.tokens.map((t) => t.address),
-      from: input.creatorAddress,
+      sender,
     });
-    const walletTxs: BoingWalletTx[] = rawTxs.map((tx) => ({
-      chain: "boing",
-      network: "boing",
-      method: "boing_sendTransaction",
-      tx,
-    }));
+    const currentByToken = new Map<string, number[]>();
+    for (const slot of slots) {
+      const key = slot.tokenHex.toLowerCase();
+      const list = currentByToken.get(key) ?? [];
+      list.push(slot.index);
+      currentByToken.set(key, list);
+    }
+
+    const desiredKeys = new Set(
+      checked.tokens.map((t) => t.address.trim().toLowerCase()),
+    );
+
+    const walletTxs: BoingWalletTx[] = [];
+    const steps: string[] = [];
+
+    // Unlink first (tombstone). Highest index first for readability only — slots don't shift.
+    const unlinkIndices: number[] = [];
+    for (const [token, indices] of currentByToken) {
+      if (!desiredKeys.has(token)) {
+        unlinkIndices.push(...indices);
+      }
+    }
+    unlinkIndices.sort((a, b) => b - a);
+    for (const index of unlinkIndices) {
+      walletTxs.push(
+        toWalletTx(
+          buildLinkedNftTokenUnlinkAtTx({
+            senderHex32: sender,
+            registryHex32: registry,
+            index,
+          }),
+        ),
+      );
+      steps.push(`unlink_at(${index})`);
+    }
+
+    for (const token of checked.tokens) {
+      const key = token.address.trim().toLowerCase();
+      if (currentByToken.has(key)) continue;
+      const flow = buildLinkedNftTokenRegisterFlowTxs({
+        senderHex32: sender,
+        registryHex32: registry,
+        collectionHex32: collection,
+        tokenHex32: key,
+      });
+      for (const tx of flow) {
+        walletTxs.push(toWalletTx(tx));
+      }
+      steps.push(`claim×2+register_link(${key.slice(0, 10)}…)`);
+    }
+
     return {
       ok: true,
       walletTxs,
       desired: checked.tokens,
       registryAddress: registry,
+      steps,
     };
   } catch (err) {
     return {
