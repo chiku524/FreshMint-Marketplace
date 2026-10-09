@@ -156,6 +156,15 @@ export interface Collection {
   discordUrl?: string | null;
   instagramUrl?: string | null;
   contractAddress?: string | null;
+  /**
+   * Cached companion fungible tokens from the on-chain registry (many, mutable).
+   * Parsed from `linkedTokensJson` — registry is SoT; see linked-token-registry.ts.
+   */
+  linkedTokens?: Array<{
+    address: string;
+    label?: string | null;
+    chain?: Chain | null;
+  }>;
   deployTxHash?: string | null;
   deployStatus?: "none" | "pending_wallet" | "confirmed" | "failed" | string;
   /** Boing reference NFT template version (`"1"` | `"2"` | `"3"`). Defaults to `"1"`. */
