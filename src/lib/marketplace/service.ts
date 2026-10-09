@@ -1,1 +1,1 @@
-PLACEHOLDER_TEST
+@file:/tmp/service-patched.ts
