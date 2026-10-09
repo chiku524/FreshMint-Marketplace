@@ -148,34 +148,24 @@ export function CollectionProfileEditor({
       <div className="collection-profile-editor__media">
         <div>
           <span className="collection-profile-editor__label">Logo</span>
-          <div
+          <button
+            type="button"
             className="collection-profile-editor__preview collection-profile-editor__preview--logo"
             style={
               imageUrl
                 ? { backgroundImage: `url(${imageUrl})` }
                 : undefined
             }
-          />
-          <div className="collection-profile-editor__media-actions">
-            <button
-              type="button"
-              className="badge"
-              disabled={busy}
-              onClick={() => imageRef.current?.click()}
-            >
-              Upload logo
-            </button>
-            {imageUrl ? (
-              <button
-                type="button"
-                className="badge"
-                disabled={busy}
-                onClick={() => setImageUrl(null)}
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
+            disabled={busy}
+            onClick={() => imageRef.current?.click()}
+            aria-label={imageUrl ? "Change logo" : "Upload logo"}
+          >
+            {imageUrl ? null : (
+              <span className="collection-profile-editor__preview-hint">
+                Click to upload
+              </span>
+            )}
+          </button>
           <input
             ref={imageRef}
             type="file"
@@ -186,34 +176,24 @@ export function CollectionProfileEditor({
         </div>
         <div>
           <span className="collection-profile-editor__label">Banner</span>
-          <div
+          <button
+            type="button"
             className="collection-profile-editor__preview collection-profile-editor__preview--banner"
             style={
               bannerUrl
                 ? { backgroundImage: `url(${bannerUrl})` }
                 : undefined
             }
-          />
-          <div className="collection-profile-editor__media-actions">
-            <button
-              type="button"
-              className="badge"
-              disabled={busy}
-              onClick={() => bannerRef.current?.click()}
-            >
-              Upload banner
-            </button>
-            {bannerUrl ? (
-              <button
-                type="button"
-                className="badge"
-                disabled={busy}
-                onClick={() => setBannerUrl(null)}
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
+            disabled={busy}
+            onClick={() => bannerRef.current?.click()}
+            aria-label={bannerUrl ? "Change banner" : "Upload banner"}
+          >
+            {bannerUrl ? null : (
+              <span className="collection-profile-editor__preview-hint">
+                Click to upload
+              </span>
+            )}
+          </button>
           <input
             ref={bannerRef}
             type="file"
