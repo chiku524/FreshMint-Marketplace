@@ -51,6 +51,7 @@ export function normalizeTokenAddress(
     return t.toLowerCase();
   }
   if (chain === "boing") {
+    // Accept 0X… / mixed-case hex; store canonical lowercase AccountId.
     const normalized = normalizeBoingAccountId(t);
     if (!isBoingNativeAccountIdHex(normalized)) return null;
     return normalized;
@@ -101,6 +102,10 @@ export function serializeLinkedTokens(tokens: LinkedTokenRef[]): string {
   );
 }
 
+/**
+ * Validate and normalize a full replacement list for a collection.
+ * Dedupes by normalized address (case-folded for EVM/Boing). No size cap.
+ */
 export function validateLinkedTokensInput(
   input: unknown,
   defaultChain: Chain,
@@ -172,14 +177,21 @@ export function validateLinkedTokensInput(
   return { ok: true, tokens };
 }
 
+/** Shorten addresses for UI chips. */
 export function shortTokenAddress(address: string, chars = 6): string {
   const a = address.trim();
   if (a.length <= chars * 2 + 3) return a;
   return `${a.slice(0, chars + (a.startsWith("0x") ? 2 : 0))}…${a.slice(-chars)}`;
 }
 
+/**
+ * Documented convention payload (for SDK / finance interoperability).
+ * FreshMint does not write this on-chain in the MVP; encode helpers live in boing-sdk.
+ */
 export type LinkedNftTokenSchemaV1 = {
   schema: typeof LINKED_NFT_TOKEN_SCHEMA;
+  /** Collection AccountId / contract */
   collection: string;
+  /** Linked fungible AccountIds / contracts (many) */
   tokens: string[];
 };
