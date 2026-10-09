@@ -93,6 +93,7 @@ describe("linked-nft-token-registry helpers (SDK abf8808)", () => {
   it("encodes claim / register / unlink lengths and selectors", () => {
     const claim = encodeLinkedNftTokenClaimAssetCalldataHex(A);
     expect(claim.length).toBe(2 + 64 * 2);
+    // selector is last byte of first 32-byte word
     expect(claim.slice(2, 66).endsWith("e0")).toBe(true);
     expect(SELECTOR_LINKED_NFT_TOKEN_CLAIM_ASSET).toBe(0xe0);
 
