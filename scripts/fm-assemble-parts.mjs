@@ -1,17 +1,41 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, readdirSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+import { gunzipSync } from "zlib";
 
-function assemble(dir, outPath) {
-  const files = readdirSync(dir)
-    .filter((f) => f.startsWith("part-") && f.endsWith(".txt"))
-    .sort();
-  if (!files.length) throw new Error(`no parts in ${dir}`);
-  const body = files.map((f) => readFileSync(join(dir, f), "utf8")).join("");
-  mkdirSync(join(outPath, ".."), { recursive: true });
-  writeFileSync(outPath, body);
-  console.log("wrote", outPath, body.length, "from", files.length, "parts");
+const root = process.cwd();
+
+function writeOut(out, body, note) {
+  mkdirSync(dirname(join(root, out)), { recursive: true });
+  writeFileSync(join(root, out), body);
+  console.log("wrote", out, "bytes", Buffer.byteLength(body), note);
 }
 
-assemble(".fm-assemble/boing", "src/lib/onchain/boing.ts");
-assemble(".fm-assemble/service", "src/lib/marketplace/service.ts");
+function assembleTxtParts(dir, out) {
+  const abs = join(root, dir);
+  if (!existsSync(abs)) return false;
+  const parts = readdirSync(abs).filter((f) => /^part-\d+\.txt$/.test(f)).sort();
+  if (!parts.length) return false;
+  writeOut(out, parts.map((f) => readFileSync(join(abs, f), "utf8")).join(""), `from ${parts.length} txt parts`);
+  return true;
+}
+
+function assembleB64GzParts(prefix, out) {
+  const parts = [];
+  for (let i = 0; i < 64; i++) {
+    const p = join(root, `${prefix}.part${i}.txt`);
+    if (!existsSync(p)) break;
+    parts.push(readFileSync(p, "utf8"));
+  }
+  const single = join(root, prefix + ".txt");
+  if (!parts.length && !existsSync(single)) return false;
+  const b64 = (parts.length ? parts.join("") : readFileSync(single, "utf8")).replace(/\s+/g, "");
+  const body = gunzipSync(Buffer.from(b64, "base64"));
+  writeOut(out, body, `from b64 gz ${prefix}`);
+  return true;
+}
+
+assembleTxtParts(".fm-assemble/boing", "src/lib/onchain/boing.ts") ||
+  assembleB64GzParts(".fm-assemble/boing.b64.gz", "src/lib/onchain/boing.ts");
+assembleTxtParts(".fm-assemble/service", "src/lib/marketplace/service.ts") ||
+  assembleB64GzParts(".fm-assemble/service.b64.gz", "src/lib/marketplace/service.ts");
