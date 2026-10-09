@@ -5,6 +5,8 @@ import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
 import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
 import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
 import { FollowButton } from "@/components/FollowButton";
+import { LinkedTokensList } from "@/components/LinkedTokensList";
+import { LinkedTokensModal } from "@/components/LinkedTokensModal";
 import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
 import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { getSessionUser } from "@/lib/auth/session";
@@ -175,6 +177,12 @@ export default async function CollectionDetailPage({
                   discordUrl={collection.discordUrl}
                   instagramUrl={collection.instagramUrl}
                 />
+                <LinkedTokensModal
+                  collectionId={collection.id}
+                  initialTokens={collection.linkedTokens ?? []}
+                  chain={collection.chain}
+                  contractAddress={collection.contractAddress}
+                />
                 <Link
                   href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
                   className="badge featured"
@@ -186,6 +194,14 @@ export default async function CollectionDetailPage({
           </>
         }
       />
+
+      {(collection.linkedTokens?.length ?? 0) > 0 ? (
+        <LinkedTokensList
+          tokens={collection.linkedTokens ?? []}
+          collectionChain={collection.chain}
+          collectionNetwork={collection.network}
+        />
+      ) : null}
 
       {isOwner ? (
         <div className="collection-detail__owner">
@@ -315,6 +331,19 @@ export default async function CollectionDetailPage({
                 <dt>Contract</dt>
                 <dd className="collection-about__mono">
                   {collection.contractAddress}
+                </dd>
+              </div>
+            ) : null}
+            {(collection.linkedTokens?.length ?? 0) > 0 ? (
+              <div>
+                <dt>Linked tokens</dt>
+                <dd>
+                  <LinkedTokensList
+                    tokens={collection.linkedTokens ?? []}
+                    collectionChain={collection.chain}
+                    collectionNetwork={collection.network}
+                    heading="Linked tokens"
+                  />
                 </dd>
               </div>
             ) : null}
