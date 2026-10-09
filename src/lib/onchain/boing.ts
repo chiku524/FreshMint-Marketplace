@@ -1,1 +1,1 @@
-PLACEHOLDER
+@file:///tmp/boing_extracted.txt
