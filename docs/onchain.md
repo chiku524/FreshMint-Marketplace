@@ -27,23 +27,19 @@ Creates stay on FreshMint; **primary buys are crypto-only** with ownership at pu
 2. **Soft-launch / publish** — creator wallet mints tokens **into that collection** (EVM `safeMintBatch` in chunks of 25). Each listing gets `tokenId` + `mintTxHash`. Soft-launch is **blocked** until mint confirms (`listing_not_minted`). Unminted listings cannot be bought. Track incomplete work in `/studio`.
 3. **Buy** — collector pays native on the listing network (or bridges via Relay when paying from another Relay network), then escrow `transferFrom` → buyer wallet. Purchase status: `pending_payment` → `pending_transfer` → `completed` (with `withdrawnAt` set when ownership is delivered). Interrupted buys can be resumed from `/me` via `POST /api/purchase/resume`.
 
-| Step | On-chain | Who pays gas |
-|------|----------|--------------|
-| Create collection | Deploy contract | Creator |
-| Publish / soft-launch | Batch mint into collection | Creator |
-| Buy (same-chain) | Pay native + NFT transfer | Collector |
-| Buy (cross-chain) | Relay bridge + NFT transfer on listing chain | Collector |
-| Withdraw | Legacy USD holds only | Collector |
+### Linked fungible tokens (on-chain registry)
 
-**Withdraw is not mint.** Mint happens at publish (step 2). Crypto buys transfer that NFT at purchase (step 3). Withdraw remains only for older USD holds that never settled on-chain. The `withdrawnAt` purchase field means ownership was delivered — not that a mint ran.
+Creators link **many** companion fungible tokens to a **Boing** collection via the **on-chain linked NFT↔token registry** (boing.network PR #42 / SDK `linkedNftTokenRegistry`, selectors `0xE0`–`0xE6`). **Dual asset-claimer auth:** the signer must `claim_asset` (or already be claimer of) **both** the collection and the token before `register_link` / `unlink_at`. Many-to-many and mutable (unlink tombstones a slot). `Collection.linkedTokensJson` is a **cache** of registry peers — not authoritative. Display-only metadata (`boing.linked_nft_token.v1`) is non-authoritative / superseded.
 
-**Cross-chain:** Relay covers EVM natives ↔ Solana (e.g. pay ETH for a Solana NFT). **Boing is not on Relay** — Boing listings are same-chain BOING only.
+FreshMint vendors the SDK encode/build helpers under `src/lib/onchain/linked-nft-token-registry.ts` and reads via `boing_simulateContractCall` (`links_count` + `get_link_at`).
 
-- **EVM:** Deploy bytecode from `src/lib/onchain/evm-artifacts/freshMintErc721Bytecode.ts`. Mint URI should point at media (Blob URL). Settlement prefers escrow `transferFrom` over listing `buy()`.
-- **Solana:** Metaplex Core asset per piece at publish; Phantom signs (or server key on Devnet for legacy paths only).
-- **Boing:** Collection deploy via `contract_deploy_meta` with pinned reference NFT bytecode; mints use `contract_call` when a collection address exists.
-- Confirm deploy: `POST /api/collections/[id]/deploy`. Confirm mint batches: `POST /api/collections/[id]/mint`.
-- Buy: `POST /api/purchase` (crypto fields), confirm steps: `POST /api/purchase/confirm`, quote: `POST /api/purchase/quote`.
+| Step | API | Notes |
+|------|-----|--------|
+| Plan | `PUT /api/collections/[id]/linked-tokens` | Diff desired set → `walletTxs` (`claim×2`+`register_link` and/or `unlink_at`) |
+| Confirm | `POST …/linked-tokens` | Re-reads registry → refreshes DB cache (optional label hints in body) |
+| Read | `GET …/linked-tokens` | Sync cache when owner; public sees cached chips |
+
+Env: `NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY` (deployed registry AccountId; CREATE2 salt `BOING_NFT_TOKEN_LINK_REG_V1`). UI: collection chips + About + **Linked tokens** modal. EVM/Solana collections cannot register official links until a cross-chain path exists.
 
 ## Platform fees (all FreshMint NFT sales)
 
