@@ -1,1 +1,1 @@
-@/home/ubuntu/work/FreshMint-Marketplace/src/lib/marketplace/service.ts
+file:///home/ubuntu/work/FreshMint-Marketplace/src/lib/marketplace/service.ts
