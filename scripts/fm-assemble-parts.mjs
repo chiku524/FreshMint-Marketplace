@@ -16,14 +16,25 @@ function assembleTxtParts(dir, out) {
   if (!existsSync(abs)) return false;
   const parts = readdirSync(abs).filter((f) => /^part-\d+\.txt$/.test(f)).sort();
   if (!parts.length) return false;
-  // Require a contiguous part-00..N set starting at 00 (avoid partial uploads).
   if (parts[0] !== "part-00.txt") return false;
   writeOut(out, parts.map((f) => readFileSync(join(abs, f), "utf8")).join(""), `from ${parts.length} txt parts`);
   return true;
 }
 
+function readHexChunks(prefix, i) {
+  const chunks = [];
+  for (let j = 0; j < 64; j++) {
+    const cp = join(root, `${prefix}.part${i}.h${String(j).padStart(2, "0")}.txt`);
+    if (!existsSync(cp)) break;
+    chunks.push(readFileSync(cp, "utf8").replace(/\s+/g, ""));
+  }
+  if (!chunks.length) return null;
+  return Buffer.from(chunks.join(""), "hex").toString("utf8");
+}
+
 function readPartOrChunks(prefix, i) {
-  // Prefer verified micro-chunks over a possibly-corrupt full part file.
+  const fromHex = readHexChunks(prefix, i);
+  if (fromHex != null) return fromHex;
   const chunkParts = [];
   for (let j = 0; j < 64; j++) {
     const cp = join(root, `${prefix}.part${i}.c${String(j).padStart(2, "0")}.txt`);
@@ -51,7 +62,6 @@ function assembleB64GzParts(prefix, out) {
   return true;
 }
 
-// Prefer complete gzip+base64 parts (used for large restores).
 assembleB64GzParts(".fm-assemble/boing.b64.gz", "src/lib/onchain/boing.ts") ||
   assembleTxtParts(".fm-assemble/boing", "src/lib/onchain/boing.ts");
 assembleB64GzParts(".fm-assemble/service.b64.gz", "src/lib/marketplace/service.ts") ||
