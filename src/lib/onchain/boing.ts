@@ -1,1 +1,1 @@
-FILE:/tmp/fm-boing-content-only.txt
+PLACEHOLDER
