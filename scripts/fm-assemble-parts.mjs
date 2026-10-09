@@ -22,12 +22,26 @@ function assembleTxtParts(dir, out) {
   return true;
 }
 
+function readPartOrChunks(prefix, i) {
+  // Prefer verified micro-chunks over a possibly-corrupt full part file.
+  const chunkParts = [];
+  for (let j = 0; j < 64; j++) {
+    const cp = join(root, `${prefix}.part${i}.c${String(j).padStart(2, "0")}.txt`);
+    if (!existsSync(cp)) break;
+    chunkParts.push(readFileSync(cp, "utf8").replace(/\s+/g, ""));
+  }
+  if (chunkParts.length) return chunkParts.join("");
+  const p = join(root, `${prefix}.part${i}.txt`);
+  if (!existsSync(p)) return null;
+  return readFileSync(p, "utf8");
+}
+
 function assembleB64GzParts(prefix, out) {
   const parts = [];
   for (let i = 0; i < 64; i++) {
-    const p = join(root, `${prefix}.part${i}.txt`);
-    if (!existsSync(p)) break;
-    parts.push(readFileSync(p, "utf8"));
+    const body = readPartOrChunks(prefix, i);
+    if (body == null) break;
+    parts.push(body);
   }
   const single = join(root, prefix + ".txt");
   if (!parts.length && !existsSync(single)) return false;
