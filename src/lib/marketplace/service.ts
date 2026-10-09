@@ -1,1 +1,1 @@
-PLACEHOLDER_USE_PYTHON_LOAD
+@file:/tmp/service-chunk-50000.txt
