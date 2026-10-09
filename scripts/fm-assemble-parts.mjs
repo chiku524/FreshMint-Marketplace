@@ -16,6 +16,8 @@ function assembleTxtParts(dir, out) {
   if (!existsSync(abs)) return false;
   const parts = readdirSync(abs).filter((f) => /^part-\d+\.txt$/.test(f)).sort();
   if (!parts.length) return false;
+  // Require a contiguous part-00..N set starting at 00 (avoid partial uploads).
+  if (parts[0] !== "part-00.txt") return false;
   writeOut(out, parts.map((f) => readFileSync(join(abs, f), "utf8")).join(""), `from ${parts.length} txt parts`);
   return true;
 }
@@ -35,7 +37,8 @@ function assembleB64GzParts(prefix, out) {
   return true;
 }
 
-assembleTxtParts(".fm-assemble/boing", "src/lib/onchain/boing.ts") ||
-  assembleB64GzParts(".fm-assemble/boing.b64.gz", "src/lib/onchain/boing.ts");
-assembleTxtParts(".fm-assemble/service", "src/lib/marketplace/service.ts") ||
-  assembleB64GzParts(".fm-assemble/service.b64.gz", "src/lib/marketplace/service.ts");
+// Prefer complete gzip+base64 parts (used for large restores).
+assembleB64GzParts(".fm-assemble/boing.b64.gz", "src/lib/onchain/boing.ts") ||
+  assembleTxtParts(".fm-assemble/boing", "src/lib/onchain/boing.ts");
+assembleB64GzParts(".fm-assemble/service.b64.gz", "src/lib/marketplace/service.ts") ||
+  assembleTxtParts(".fm-assemble/service", "src/lib/marketplace/service.ts");
