@@ -7,6 +7,7 @@ import type {
 } from "@/generated/prisma/client";
 import { resolveNetwork } from "@/lib/chains/registry";
 import { parseDropKind, parseTraits } from "@/lib/marketplace/drops";
+import { parseLinkedTokensJson } from "@/lib/marketplace/linked-tokens";
 import type {
   Collection,
   CreatorProfile,
@@ -125,6 +126,7 @@ export function toCollection(c: DbCollection): Collection {
     packageSellEnabled?: boolean;
     packagePriceUsd?: number | null;
     nftTemplateVersion?: string | null;
+    linkedTokensJson?: string | null;
   };
   return {
     id: c.id,
@@ -149,6 +151,7 @@ export function toCollection(c: DbCollection): Collection {
     discordUrl: row.discordUrl ?? null,
     instagramUrl: row.instagramUrl ?? null,
     contractAddress: c.contractAddress ?? null,
+    linkedTokens: parseLinkedTokensJson(row.linkedTokensJson),
     deployTxHash: c.deployTxHash ?? null,
     deployStatus: c.deployStatus ?? "none",
     nftTemplateVersion: row.nftTemplateVersion ?? "1",
