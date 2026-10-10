@@ -188,11 +188,13 @@ export function LinkedTokensModal({
         dialogClassName="linked-tokens-modal__dialog"
       >
         <p className="linked-tokens-modal__lead">
-          Companion fungible tokens are registered <strong>on-chain</strong>{" "}
-          (Boing linked-pair registry, selectors 0xE0–0xE6). Your wallet must be
-          the <strong>asset claimer</strong> of both the collection and each
-          token (claim runs in the same flow). FreshMint caches peers for
-          display after confirm. Mutable · many-to-many · claimer-gated.
+          Companion fungible tokens are registered <strong>on-chain</strong> via
+          the Boing linked NFT↔token registry (selectors 0xE0–0xE6; env{" "}
+          <code>NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY</code>). Your wallet
+          must be the <strong>asset claimer</strong> of both the collection and
+          each token (claim runs in the same flow). FreshMint caches peers for
+          display after confirm — the registry is the source of truth. Mutable ·
+          many-to-many · claimer-gated.
         </p>
 
         {!isBoing ? (
