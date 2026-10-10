@@ -202,6 +202,19 @@ export function DocsGuide() {
                   creator publish work.
                 </p>
               </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  Companion tokens
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  On Boing collections, link fungible companion tokens via the
+                  on-chain linked-pair registry (not a FreshMint-only flag). Your
+                  wallet must be asset claimer on both sides; FreshMint caches
+                  peers for chips after you confirm. Manage from the collection
+                  page <strong style={{ color: "var(--ink)" }}>Linked tokens</strong>{" "}
+                  control.
+                </p>
+              </div>
             </div>
           </section>
           ) : null}

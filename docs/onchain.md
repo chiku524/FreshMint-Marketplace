@@ -29,9 +29,27 @@ Creates stay on FreshMint; **primary buys are crypto-only** with ownership at pu
 
 ### Linked fungible tokens (on-chain registry)
 
-Creators link **many** companion fungible tokens to a **Boing** collection via the **on-chain linked NFT↔token registry** (boing.network PR #42 / SDK `linkedNftTokenRegistry`, selectors `0xE0`–`0xE6`). **Dual asset-claimer auth:** the signer must `claim_asset` (or already be claimer of) **both** the collection and the token before `register_link` / `unlink_at`. Many-to-many and mutable (unlink tombstones a slot). `Collection.linkedTokensJson` is a **cache** of registry peers — not authoritative. Display-only metadata (`boing.linked_nft_token.v1`) is non-authoritative / superseded.
+Creators link **many** companion fungible tokens to a **Boing** collection via the **on-chain linked NFT↔token registry** (boing.network PR #42 / SDK `linkedNftTokenRegistry`, selectors `0xE0`–`0xE6`). Wired in FreshMint [PR #16](https://github.com/chiku524/FreshMint-Marketplace/pull/16) (`900cd45`). **Dual asset-claimer auth:** the signer must `claim_asset` (or already be claimer of) **both** the collection and the token before `register_link` / `unlink_at`. Many-to-many and mutable (unlink tombstones a slot; registry max 4096). `Collection.linkedTokensJson` is a **cache** of registry peers — not authoritative. Display-only metadata (`boing.linked_nft_token.v1`) is non-authoritative / superseded.
 
-FreshMint vendors the SDK encode/build helpers under `src/lib/onchain/linked-nft-token-registry.ts` and reads via `boing_simulateContractCall` (`links_count` + `get_link_at`).
+FreshMint vendors the SDK encode/build helpers under `src/lib/onchain/linked-nft-token-registry.ts` and reads via `boing_simulateContractCall` (`links_count` + `get_link_at`). Adapter: `src/lib/marketplace/linked-token-registry.ts`.
+
+#### Live registry (public testnet)
+
+| Field | Value |
+|-------|--------|
+| Network | Boing public testnet (`https://testnet-rpc.boing.network/`) |
+| Registry AccountId | `0xebf9f0190f415852f90d0e60343126201248ab96273fdbf8acc5fe5fa03c3dd8` |
+| CREATE2 salt | `BOING_NFT_TOKEN_LINK_REG_V1` |
+| Env | `NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY` (set in `.env.example` + Vercel) |
+| Mainnet | Not deployed — leave unset until a mainnet registry ships |
+
+Verify (`links_count` selector `0xE3`):
+
+```bash
+curl -fsS -A boing-sdk/json-rpc -X POST https://testnet-rpc.boing.network/ \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"boing_simulateContractCall","params":["0xebf9f0190f415852f90d0e60343126201248ab96273fdbf8acc5fe5fa03c3dd8","0x00000000000000000000000000000000000000000000000000000000000000e3"]}'
+```
 
 | Step | API | Notes |
 |------|-----|--------|
@@ -39,7 +57,7 @@ FreshMint vendors the SDK encode/build helpers under `src/lib/onchain/linked-nft
 | Confirm | `POST …/linked-tokens` | Re-reads registry → refreshes DB cache (optional label hints in body) |
 | Read | `GET …/linked-tokens` | Sync cache when owner; public sees cached chips |
 
-Env: `NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY` (deployed registry AccountId; CREATE2 salt `BOING_NFT_TOKEN_LINK_REG_V1`). UI: collection chips + About + **Linked tokens** modal. EVM/Solana collections cannot register official links until a cross-chain path exists.
+UI: collection chips (`LinkedTokensList`) + About + **Linked tokens** modal (`LinkedTokensModal`). EVM/Solana collections cannot register official links until a cross-chain path exists.
 
 ## Platform fees (all FreshMint NFT sales)
 
