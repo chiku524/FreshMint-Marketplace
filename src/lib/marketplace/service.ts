@@ -837,6 +837,7 @@ export async function createCollectionForUser(input: {
       mediaBytes: 0,
       ...profile,
       contractAddress: null,
+      linkedTokens: [],
       deployTxHash: null,
       deployStatus: "pending_wallet",
       nftTemplateVersion:
@@ -2311,6 +2312,81 @@ export async function updateCollectionProfile(input: {
     ok: true as const,
     collection: mapped,
     errors: [] as string[],
+  };
+}
+
+/**
+ * Cache registry peers onto the collection row (DB is not authoritative).
+ * Soft-gated to the marketplace collection creator.
+ */
+export async function cacheCollectionLinkedTokens(input: {
+  collectionId: string;
+  creatorId: string;
+  tokens: unknown;
+  /** When true, skip chain validation (already read from registry). */
+  fromRegistry?: boolean;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, errors: ["collection_not_found"] };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+
+  const { serializeLinkedTokens, validateLinkedTokensInput } = await import(
+    "@/lib/marketplace/linked-tokens"
+  );
+  type LinkedTokenRef = import("@/lib/marketplace/linked-tokens").LinkedTokenRef;
+
+  let tokens: LinkedTokenRef[];
+  if (input.fromRegistry && Array.isArray(input.tokens)) {
+    tokens = input.tokens as LinkedTokenRef[];
+  } else {
+    const checked = validateLinkedTokensInput(input.tokens, existing.chain);
+    if (!checked.ok) {
+      return { ok: false as const, errors: checked.issues };
+    }
+    tokens = checked.tokens;
+  }
+
+  const linkedTokensJson = serializeLinkedTokens(tokens);
+  const next: Collection = {
+    ...existing,
+    linkedTokens: tokens,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(input.collectionId, next);
+    return { ok: true as const, collection: next, errors: [] as string[] };
+  }
+
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: { linkedTokensJson },
+  });
+  const mapped = toCollection(updated);
+  engine.state.collections.set(input.collectionId, mapped);
+  return {
+    ok: true as const,
+    collection: mapped,
+    errors: [] as string[],
+  };
+}
+
+/** @deprecated Display-only writes rejected — use registry plan + cache after confirm. */
+export async function updateCollectionLinkedTokens(input: {
+  collectionId: string;
+  creatorId: string;
+  tokens: unknown;
+}) {
+  void input;
+  return {
+    ok: false as const,
+    errors: ["registry_required"],
   };
 }
 

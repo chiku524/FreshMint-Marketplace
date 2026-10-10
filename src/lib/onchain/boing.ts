@@ -418,6 +418,48 @@ async function boingRpc<T>(method: string, params: unknown[] = []): Promise<T> {
   throw lastError ?? new Error("boing_rpc_unavailable");
 }
 
+/** Dry-run a `contract_call` (`boing_simulateContractCall`) for registry / NFT reads. */
+export async function simulateBoingContractCall(input: {
+  contract: string;
+  calldata: string;
+  sender?: string | null;
+  atBlock?: string;
+}): Promise<{
+  success: boolean;
+  return_data?: string;
+  error?: string;
+}> {
+  const contract = normalizeBoingAccountId(input.contract);
+  if (!isBoingNativeAccountIdHex(contract)) {
+    return { success: false, error: "invalid_boing_contract" };
+  }
+  const calldata = input.calldata.trim().startsWith("0x")
+    ? input.calldata.trim().toLowerCase()
+    : `0x${input.calldata.trim().toLowerCase()}`;
+  const sender =
+    input.sender != null && String(input.sender).trim()
+      ? normalizeBoingAccountId(String(input.sender))
+      : null;
+  const atBlock = input.atBlock ?? "latest";
+  try {
+    const sim = await boingRpc<{
+      success?: boolean;
+      return_data?: string;
+      error?: string;
+    }>("boing_simulateContractCall", [contract, calldata, sender, atBlock]);
+    return {
+      success: Boolean(sim.success),
+      return_data: sim.return_data,
+      error: sim.error,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "simulate_failed",
+    };
+  }
+}
+
 export async function getBoingAccount(accountId: string): Promise<{
   balance: string;
   nonce: number;

@@ -564,6 +564,17 @@ export function buildSeedState(): MarketplaceState {
     instagramUrl: null,
     deployStatus: "confirmed",
     contractAddress: "sol-col-static-garden",
+    // Seed cache demo only — Solana rows cannot write the Boing registry.
+    linkedTokens: [
+      {
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        label: "USDC",
+      },
+      {
+        address: "So11111111111111111111111111111111111111112",
+        label: "wSOL",
+      },
+    ],
     escrowAddress: null,
     createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
   });
