@@ -202,6 +202,19 @@ export function DocsGuide() {
                   creator publish work.
                 </p>
               </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  Companion tokens
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  On Boing collections, link fungible companion tokens via the
+                  on-chain linked-pair registry (not a FreshMint-only flag). Your
+                  wallet must be asset claimer on both sides; FreshMint caches
+                  peers for chips after you confirm. Manage from the collection
+                  page <strong style={{ color: "var(--ink)" }}>Linked tokens</strong>{" "}
+                  control.
+                </p>
+              </div>
             </div>
           </section>
           ) : null}
@@ -478,181 +491,8 @@ export function DocsGuide() {
                 <li key={stage} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <span className="badge">{stage.replace("_", " ")}</span>
                   {i < arr.length - 1 ? (
-                    <span style={{ color: "var(--ink-muted)" }}>→</span>
+                    <span style={{ color: "var(--ink-muted)">→</span>
                   ) : null}
                 </li>
               ))}
             </ol>
-            <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.7 }}>
-              <li>
-                <strong style={{ color: "var(--ink)" }}>Draft</strong> — private
-                until mint + soft-launch. Create will not list unminted work.
-              </li>
-              <li>
-                <strong style={{ color: "var(--ink)" }}>Soft launch</strong> — Open
-                Lane + profile only; gather early signals
-              </li>
-              <li>
-                <strong style={{ color: "var(--ink)" }}>Rising</strong> — after
-                quality gates and the weekly cap (
-                {cfg.risingEntriesPerCreatorPerWeek}/creator). A first work skips
-                the {hours(cfg.newWalletRisingCooldownMs)} new-wallet cooldown;
-                later works still wait.
-              </li>
-              <li>
-                <strong style={{ color: "var(--ink)" }}>Featured</strong> — scarce
-                editorial inventory; nomination + editor controls in{" "}
-                <Link href="/studio">Studio</Link>. Optional paid Featured boost
-                is promotional only and never feeds Rising scoring
-              </li>
-            </ul>
-            </div>
-
-            <div className="docs-discovery__block">
-            <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
-              Emerging
-            </h3>
-            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem" }}>
-              A creator is Emerging for the first{" "}
-              {cfg.emerging.maxDaysSinceFirstListing} days after their first
-              listing, unless they already cleared{" "}
-              {cfg.emerging.graduationThresholdsRequired} commercial thresholds.
-              After that window they leave the reserved Rising slice so true
-              newcomers are not crowded out. External follower fame is ignored.
-              Verification is not required for Rising.
-            </p>
-            <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--ink-muted)", lineHeight: 1.65 }}>
-              <li>
-                Lifetime primary volume under $
-                {cfg.emerging.maxLifetimePrimaryVolumeUsd.toLocaleString()}
-              </li>
-              <li>Fewer than {cfg.emerging.maxCompletedSales} completed sales</li>
-              <li>
-                First {cfg.emerging.maxDaysSinceFirstListing} days since first listing
-              </li>
-            </ul>
-            <p style={{ margin: "1.15rem 0 0", color: "var(--emergent)" }}>
-              Rising reserves {pct(cfg.emergingRisingQuota)} of its daily slots for
-              Emerging works ({budgets.risingEmergingReserved} of {budgets.risingTotal}{" "}
-              today). {budgets.risingExplore} never-shown explore slots are filled
-              first so debut work is not crowded out.
-            </p>
-            </div>
-
-            <div className="docs-discovery__block">
-            <h3 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.15rem" }}>
-              How works are scored
-            </h3>
-            <p
-              className="display"
-              style={{
-                margin: "0 0 0.75rem",
-                fontSize: "1.05rem",
-                color: "var(--accent-soft)",
-                letterSpacing: "-0.02em",
-              }}
-            >
-              quality × novelty × diversity × spam⁻¹ × decay × temporal
-            </p>
-            <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.65 }}>
-              Quality is a Bayesian engagement <em>rate</em> (saves, follows, dwell,
-              listing-page views versus feed impressions, and nominations per unique
-              viewer), not a raw popularity sum. Saves from
-              listings with fewer than {cfg.sybil.minUniqueViewersForSaveTrust} unique
-              viewers are discounted. Novelty lifts low-exposure artists, applies
-              listing-type weights, and gives never-shown Emerging a first-look
-              boost. Clean new wallets are not double-punished after they pass
-              Rising gates. Diversity allows at most one artist per screen;
-              artists already seen this session are downranked, not hidden, so a
-              new work can earn a second look. Impression fair-share (
-              {cfg.impressionFairSharePerDay.toLocaleString()}/day) applies decay so
-              winners cannot monopolize Rising forever. Singles get a short Rising-age
-              burst; open editions and timed drops keep their own clocks.
-            </p>
-            </div>
-
-            <div className="docs-discovery__block">
-            <h3 className="display" style={{ margin: "0 0 0.85rem", fontSize: "1.15rem" }}>
-              Congestion & trust
-            </h3>
-            <div className="docs-discovery__trust">
-              <div>
-                <h4 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
-                  Caps
-                </h4>
-                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-                  Open Lane {cfg.openLaneListingsPerCreatorPerDay}/creator/day · Rising{" "}
-                  {cfg.risingEntriesPerCreatorPerWeek}/week · OE starts ≤{" "}
-                  {cfg.calendar.maxOeStartsPerHour} collection drops/hour · timed drops ≤{" "}
-                  {cfg.calendar.maxAuctionStartsPerHour}/hour · ≤{" "}
-                  {cfg.maxConcurrentOeOnRising} concurrent OE on Rising
-                </p>
-              </div>
-              <div>
-                <h4 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
-                  Integrity
-                </h4>
-                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-                  Near-duplicate media checks, reports & appeals, nomination stake (
-                  {cfg.nominationStakePoints} pts · +{cfg.nominationRewardPoints} / −
-                  {cfg.nominationPenaltyPoints}), sybil-lite signal caps, wash-purchase
-                  heuristics. New accounts: {days(cfg.sybil.newAccountAgeMs)} soft
-                  engagement limits.
-                </p>
-              </div>
-              <div>
-                <h4 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
-                  Collectors
-                </h4>
-                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-                  Follow artists, collectors, and shelves to fill the Following slice.
-                  Collectors you follow contribute their graph. Nominate Emerging
-                  works into Rising with reputation at stake. Creators manage
-                  publishes and collectors curate shelves in{" "}
-                  <Link href="/studio" style={{ color: "var(--accent-soft)" }}>
-                    Studio
-                  </Link>
-                  .
-                </p>
-              </div>
-            </div>
-            </div>
-
-            <div className="docs-discovery__block">
-            <h3 className="display" style={{ margin: "0 0 0.85rem", fontSize: "1.15rem" }}>
-              Explore
-            </h3>
-            <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: 0 }}>
-              <Link href="/rising" className="badge emerging">
-                Rising
-              </Link>
-              <Link href="/open" className="badge">
-                Open Lane
-              </Link>
-              <Link href="/featured" className="badge featured">
-                Featured
-              </Link>
-              <Link href="/calendar" className="badge">
-                Calendar
-              </Link>
-              <Link href="/collections" className="badge">
-                Collections
-              </Link>
-              <Link href="/metrics" className="badge">
-                Metrics
-              </Link>
-              <Link href="/studio" className="badge emerging">
-                Studio
-              </Link>
-              <Link href="/create" className="badge emerging">
-                Soft-launch a work
-              </Link>
-            </p>
-            </div>
-          </section>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
