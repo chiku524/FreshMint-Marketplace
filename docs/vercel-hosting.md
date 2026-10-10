@@ -57,6 +57,7 @@ npm run db:seed   # optional cold-start catalog
 | `NEXT_PUBLIC_APP_URL` | Canonical public origin for OAuth redirects | `https://fresh-mint-marketplace.vercel.app` (or custom domain) |
 | `NEXT_PUBLIC_EVM_MARKET_ADDRESS` | Optional live Sepolia market | Optional |
 | `BOING_RPC_URL` | Boing JSON-RPC for live `/me` balances + NFT ownership | Optional; defaults to public CF gateway with Fly fallbacks. Prefer `https://boing-testnet-1.fly.dev/` if profile shows edge-blocked balances |
+| `NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY` | On-chain linked NFT↔fungible registry AccountId (companion tokens on Boing collections) | Public testnet: `0xebf9f0190f415852f90d0e60343126201248ab96273fdbf8acc5fe5fa03c3dd8` (see `.env.example` + `docs/onchain.md`). Required for register/unlink UI |
 | `CRON_SECRET` | Bearer auth for `/api/cron/*` | Required for English settle + Friday treasury buy |
 | `TREASURY_FRIDAY_BUDGET_USD` | Optional USD **ceiling** on the Friday buy (weekly 0.5% profit is the budget) | Optional |
 | `TREASURY_FRIDAY_RAFFLE_DISABLED` | Set `1` / `true` to skip drawing a raffle winner (buy path unchanged) | Optional |
