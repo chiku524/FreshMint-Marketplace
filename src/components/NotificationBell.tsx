@@ -49,6 +49,8 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (!open) return;
+    // Initial client fetch on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRecent();
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);

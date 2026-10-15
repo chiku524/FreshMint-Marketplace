@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { requestNow } from "@/lib/time";
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import { ResumeCryptoPurchaseButton } from "@/components/ResumeCryptoPurchaseButton";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
@@ -196,9 +197,11 @@ export function ListingActions({
   const payWalletReady = browserWalletAvailable(payVm);
   const recvWalletReady = browserWalletAvailable(chain);
 
-  useEffect(() => {
+  const [prevPendingPurchase, setPrevPendingPurchase] = useState(pendingPurchase);
+  if (pendingPurchase !== prevPendingPurchase) {
+    setPrevPendingPurchase(pendingPurchase);
     if (pendingPurchase) setHeldPurchase(pendingPurchase);
-  }, [pendingPurchase]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +238,8 @@ export function ListingActions({
     const cross = payNetwork !== listingNetwork;
     // Live Relay fee quotes require a connected payment wallet (P1).
     const canLiveBridge = cross && Boolean(paymentAddress);
+    // Quote state must reset synchronously when inputs change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuoteBusy(true);
     setBridgeQuoteLoading(canLiveBridge);
     if (cross && !paymentAddress) {
@@ -568,7 +573,7 @@ export function ListingActions({
             hashes.push(hash);
           }
         }
-        paymentHash = hashes[0] ?? `bridge:${bridgeRequestId || Date.now()}`;
+        paymentHash = hashes[0] ?? `bridge:${bridgeRequestId || requestNow()}`;
         setBuyStep("paying");
         await fetch("/api/bridge/confirm", {
           method: "POST",

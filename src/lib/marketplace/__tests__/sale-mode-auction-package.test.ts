@@ -188,7 +188,7 @@ describe("package eligibility", () => {
       },
     ];
     const ok = filterPackageEligibleListings({
-      listings: listings as any,
+      listings: listings as unknown as Parameters<typeof filterPackageEligibleListings>[0]["listings"],
       collectionId: "c1",
       soldIds: new Set(["sold"]),
     });
@@ -197,7 +197,7 @@ describe("package eligibility", () => {
     expect(ok.defaultPriceUsd).toBe(25);
 
     const one = filterPackageEligibleListings({
-      listings: listings.slice(0, 1) as any,
+      listings: listings.slice(0, 1) as unknown as Parameters<typeof filterPackageEligibleListings>[0]["listings"],
       collectionId: "c1",
       soldIds: new Set(),
     });
@@ -313,7 +313,7 @@ describe("package pay network validation", () => {
           tokenId: "2",
           mintTxHash: "0xm2",
         },
-      ] as any,
+      ] as unknown as Parameters<typeof filterPackageEligibleListings>[0]["listings"],
       collectionId: "c1",
       soldIds: new Set(),
     });

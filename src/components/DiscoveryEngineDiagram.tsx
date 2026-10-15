@@ -124,6 +124,8 @@ export function DiscoveryEngineDiagram() {
   const cfg = DISCOVERY_CONFIG;
 
   useEffect(() => {
+    // Autoplay only after the reduced-motion media query resolves on the client.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!reducedMotion) setPlaying(true);
   }, [reducedMotion]);
 

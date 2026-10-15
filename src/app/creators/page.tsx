@@ -1,3 +1,4 @@
+import { requestNow } from "@/lib/time";
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { CreatorsPagination } from "@/components/CreatorsPagination";
 import { CreatorsSortTabs } from "@/components/CreatorsSortTabs";
@@ -62,7 +63,7 @@ export default async function CreatorsIndexPage({
   const page = parseCreatorsPage(sp.page);
   const engine = await getDiscoveryEngine();
   const user = await getSessionUser();
-  const now = Date.now();
+  const now = requestNow();
 
   const allRows = await getCachedCreatorBrowseRows();
   const sorted = sortCreatorBrowseRows(allRows, sort, now);

@@ -2,8 +2,7 @@ import { createNotification, notificationDedupeKey } from "@/lib/notifications";
 import {
   ENGLISH_WINNER_PAYMENT_DEADLINE_MS,
 } from "@/lib/marketplace/lifecycle";
-import {
-  maybeEmailEnglishExpired,
+import {
   maybeEmailEnglishWin,
 } from "@/lib/mail/notify-email";
 

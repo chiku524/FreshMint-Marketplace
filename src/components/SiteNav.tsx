@@ -81,6 +81,8 @@ function NavDropdown({
 
   useEffect(() => {
     ignoreHoverUntilLeave.current = true;
+    // closeMenu also blurs focused DOM nodes, so it must run post-commit.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     closeMenu();
   }, [closeSignal]);
 
@@ -194,9 +196,11 @@ export function SiteNav({
   const [signedIn, setSignedIn] = useState(signedInInitial);
   const [role, setRole] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setCloseSignal((n) => n + 1);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     let cancelled = false;

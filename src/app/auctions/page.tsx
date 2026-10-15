@@ -1,3 +1,4 @@
+import { requestNow } from "@/lib/time";
 import { AuctionsSaleModeTabs } from "@/components/AuctionsSaleModeTabs";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { SoldAuctionCard } from "@/components/SoldAuctionCard";
@@ -74,7 +75,7 @@ export default async function AuctionsPage({
   const sp = await searchParams;
   const filter = auctionsSaleModeFromSearchParams(sp);
   const engine = await getDiscoveryEngine();
-  const now = Date.now();
+  const now = requestNow();
 
   const liveAll = [...engine.state.listings.values()]
     .filter((l) => isLiveAuctionListing(l, now))

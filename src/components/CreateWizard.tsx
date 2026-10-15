@@ -100,7 +100,7 @@ function stepDefs(intent: Intent | null) {
 export function CreateWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
 
   const [stepIndex, setStepIndex] = useState(0);
   const [intent, setIntent] = useState<Intent | null>(null);
@@ -152,6 +152,8 @@ export function CreateWizard() {
   useEffect(() => {
     const raw = searchParams.get("intent");
     if (raw === "drop" || raw === "single" || raw === "auction") {
+      // Deep-link sync from ?intent= (Timed drops / Calendar).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIntent(raw);
       // Skip the intent picker when deep-linked from Timed drops / Calendar.
       setStepIndex((idx) => (idx === 0 ? 1 : idx));

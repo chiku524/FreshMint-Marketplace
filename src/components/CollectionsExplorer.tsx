@@ -126,7 +126,9 @@ export function CollectionsExplorer({
 }) {
   const [view, setView] = useState<CollectionsViewId>(initialView);
   const viewRef = useRef(view);
-  viewRef.current = view;
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
   const sold = new Set(soldIds);
 
   useEffect(() => {

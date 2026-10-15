@@ -51,7 +51,7 @@ export async function checkSignalSybil(input: {
       return { allowed: true, trustWeight: 0.1 };
     }
     const accountAge = Date.now() - viewer.walletCreatedAt;
-    let trustWeight = accountAge < DISCOVERY_CONFIG.sybil.newAccountAgeMs ? 0.4 : 1;
+    const trustWeight = accountAge < DISCOVERY_CONFIG.sybil.newAccountAgeMs ? 0.4 : 1;
     return { allowed: true, trustWeight };
   }
 

@@ -10,8 +10,7 @@ import {
   buildEvmCollectionDeployIntent,
   buildEvmTransferIntent,
   EVM_MINT_BATCH_SIZE,
-  type BatchMintIntent,
-  type CollectionDeployIntent,
+  type BatchMintIntent,
   type WalletTxRequest,
 } from "@/lib/onchain/evm";
 import { buildSolanaMintIntent } from "@/lib/onchain/solana";

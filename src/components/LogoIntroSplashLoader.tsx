@@ -91,6 +91,8 @@ export function LogoIntroSplash() {
   useEffect(() => {
     if (shouldPlayIntro()) {
       concealSite();
+      // sessionStorage decides intro playback; only knowable after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhase("play");
       return;
     }

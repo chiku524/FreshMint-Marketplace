@@ -1,3 +1,4 @@
+import { requestNow } from "@/lib/time";
 import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
 import { EnglishAuctionHomeCard } from "@/components/EnglishAuctionHomeCard";
 import { FeaturedOfTheWeek } from "@/components/FeaturedOfTheWeek";
@@ -76,7 +77,7 @@ export default async function HomePage() {
   const taste = hasTaste(cookieTaste)
     ? cookieTaste
     : inferTasteFromCatalog(follows, engine.state.listings.values());
-  const home = engine.buildHomepage(viewerId, 12, Date.now(), {
+  const home = engine.buildHomepage(viewerId, 12, requestNow(), {
     session,
     taste,
     recordImpressions: false,

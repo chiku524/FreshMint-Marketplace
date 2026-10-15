@@ -2920,7 +2920,7 @@ export async function updateListingSaleMode(input: {
   auctionEndsAt?: string | null;
   priceUsd?: number | null;
 }) {
-  const { parseSaleMode, listingTypeForSaleMode, resolveSaleMode } = await import(
+  const { parseSaleMode, listingTypeForSaleMode } = await import(
     "@/lib/marketplace/sale-mode"
   );
   const saleMode = parseSaleMode(input.saleMode);

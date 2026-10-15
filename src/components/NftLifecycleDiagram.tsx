@@ -101,6 +101,8 @@ export function NftLifecycleDiagram() {
   const minted = step.realm === "chain";
 
   useEffect(() => {
+    // Autoplay only after the reduced-motion media query resolves on the client.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!reducedMotion) setPlaying(true);
   }, [reducedMotion]);
 

@@ -51,7 +51,7 @@ function nonceKey(chain: AuthChain, address: string): string {
   return `${chain}:${address}`;
 }
 
-async function useMemoryAuth(): Promise<boolean> {
+async function isMemoryAuthMode(): Promise<boolean> {
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
@@ -63,7 +63,7 @@ export async function issueNonce(chain: AuthChain, address: string) {
   const nonce = randomBytes(16).toString("hex");
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-  if (await useMemoryAuth()) {
+  if (await isMemoryAuthMode()) {
     memoryNonces().set(nonceKey(chain, normalized), {
       nonce,
       expiresAt: expiresAt.getTime(),
@@ -91,7 +91,7 @@ export async function issueNonce(chain: AuthChain, address: string) {
 export async function consumeNonce(chain: AuthChain, address: string) {
   const normalized = normalizeAddress(chain, address);
 
-  if (await useMemoryAuth()) {
+  if (await isMemoryAuthMode()) {
     const key = nonceKey(chain, normalized);
     const row = memoryNonces().get(key);
     if (!row || row.expiresAt < Date.now()) {
@@ -183,7 +183,7 @@ export async function upsertUserFromWallet(input: {
 }) {
   const address = normalizeAddress(input.chain, input.address);
 
-  if (await useMemoryAuth()) {
+  if (await isMemoryAuthMode()) {
     const { getMemoryState } = await import("@/lib/data/memory-store");
     const state = getMemoryState();
     for (const creator of state.creators.values()) {
@@ -249,7 +249,7 @@ export async function linkWalletToUser(input: {
 }) {
   const address = normalizeAddress(input.chain, input.address);
 
-  if (await useMemoryAuth()) {
+  if (await isMemoryAuthMode()) {
     const { getMemoryState } = await import("@/lib/data/memory-store");
     const { getMemoryAccount } = await import("@/lib/auth/account");
     const state = getMemoryState();

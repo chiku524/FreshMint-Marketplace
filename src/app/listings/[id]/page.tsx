@@ -1,3 +1,4 @@
+import { requestNow } from "@/lib/time";
 import { FollowButton } from "@/components/FollowButton";
 import { HowItWorksNote } from "@/components/HowItWorksNote";
 import { FeaturedBoostButton } from "@/components/FeaturedBoostButton";
@@ -65,7 +66,7 @@ export default async function ListingDetailPage({
   );
   const drop = dropWindowFor(listing, collection);
   const saleMode = resolveSaleMode(listing);
-  const now = Date.now();
+  const now = requestNow();
   const auctionLive =
     saleMode !== "fixed" &&
     listing.auctionStartsAt != null &&

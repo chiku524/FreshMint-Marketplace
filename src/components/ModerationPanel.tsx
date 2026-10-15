@@ -49,6 +49,8 @@ export function ModerationPanel() {
   }
 
   useEffect(() => {
+    // Initial client fetch on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
 

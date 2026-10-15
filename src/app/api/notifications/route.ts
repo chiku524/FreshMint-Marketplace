@@ -1,6 +1,5 @@
 import { getSessionUser } from "@/lib/auth/session";
 import {
-  countUnreadNotifications,
   listNotificationsForUser,
   markAllNotificationsRead,
   markNotificationRead,

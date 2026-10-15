@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   humanizeCheckoutError,
@@ -85,7 +85,7 @@ export function BidPanel({
   >(undefined);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  function load() {
+  const load = useCallback(() => {
     void fetch(`/api/listings/${listingId}/bids`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { bids: [] }))
       .then((d: { bids?: Bid[]; settle?: SettleInfo }) => {
@@ -93,13 +93,13 @@ export function BidPanel({
         if (d.settle) setSettle(d.settle);
       })
       .catch(() => setBids([]));
-  }
+  }, [listingId]);
 
   useEffect(() => {
     load();
     const t = window.setInterval(load, 12_000);
     return () => window.clearInterval(t);
-  }, [listingId]);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;

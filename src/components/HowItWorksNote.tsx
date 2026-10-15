@@ -47,6 +47,8 @@ export function HowItWorksNote({
   useEffect(() => {
     try {
       if (window.localStorage.getItem(storageKey) !== "1") {
+        // localStorage is client-only; reading it here avoids a hydration mismatch.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setVisible(true);
       }
     } catch {

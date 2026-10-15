@@ -12,7 +12,7 @@ import {
   requestBuyerAddress,
 } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 type Eligibility = {
   ok: boolean;
@@ -68,7 +68,7 @@ export function CollectionPackagePanel({
     string | null | undefined
   >(undefined);
 
-  function load() {
+  const load = useCallback(() => {
     void fetch(`/api/collections/${collectionId}/package`, {
       credentials: "include",
     })
@@ -85,11 +85,11 @@ export function CollectionPackagePanel({
         setPayNetwork(nets[0]!);
       })
       .catch(() => setData(null));
-  }
+  }, [collectionId]);
 
   useEffect(() => {
     load();
-  }, [collectionId]);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;

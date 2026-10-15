@@ -59,7 +59,7 @@ function emptyCreator(id: string, displayName: string): CreatorProfile {
   };
 }
 
-async function useMemory(): Promise<boolean> {
+async function isMemoryMode(): Promise<boolean> {
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
@@ -109,7 +109,7 @@ export async function registerWithPassword(input: {
 
   const passwordHash = hashPassword(input.password);
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     if (findMemoryByEmail(email)) throw new AccountError("email_taken", 409);
     const { getMemoryState } = await import("@/lib/data/memory-store");
     const userId = newUserId();
@@ -145,7 +145,7 @@ export async function loginWithPassword(input: {
 }): Promise<{ userId: string }> {
   const email = normalizeEmail(input.email);
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const account = findMemoryByEmail(email);
     if (!account?.passwordHash || !verifyPassword(input.password, account.passwordHash)) {
       throw new AccountError("invalid_credentials", 401);
@@ -171,7 +171,7 @@ export async function attachPasswordToUser(input: {
   }
   const passwordHash = hashPassword(input.password);
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const taken = findMemoryByEmail(email);
     if (taken && taken.userId !== input.userId) {
       throw new AccountError("email_taken", 409);
@@ -209,7 +209,7 @@ export async function upsertUserFromGoogle(
   const avatarUrl = profile.picture ?? null;
   const verifiedAt = profile.verified_email ? Date.now() : null;
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const byGoogle = findMemoryByGoogleId(profile.id);
     if (byGoogle) {
       putMemoryAccount({ ...byGoogle, email, avatarUrl, emailVerifiedAt: verifiedAt });
@@ -290,7 +290,7 @@ export async function linkGoogleToUser(input: {
 }): Promise<void> {
   const email = normalizeEmail(input.profile.email);
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const taken = findMemoryByGoogleId(input.profile.id);
     if (taken && taken.userId !== input.userId) {
       throw new AccountError("google_already_linked", 409);
@@ -335,7 +335,7 @@ export async function updateDisplayName(input: {
     throw new AccountError("invalid_display_name");
   }
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const { getMemoryState } = await import("@/lib/data/memory-store");
     const creator = getMemoryState().creators.get(input.userId);
     if (!creator) throw new AccountError("user_not_found", 404);
@@ -379,7 +379,7 @@ export async function updateAvatarUrl(input: {
     }
   }
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const { getMemoryState } = await import("@/lib/data/memory-store");
     const creator = getMemoryState().creators.get(input.userId);
     if (!creator) throw new AccountError("user_not_found", 404);
@@ -449,7 +449,7 @@ export async function updateCreatorProfileFields(input: {
     data.farcasterUrl = sanitizeProfileLink(input.farcasterUrl);
   }
 
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     const { getMemoryState } = await import("@/lib/data/memory-store");
     const creator = getMemoryState().creators.get(input.userId);
     if (!creator) throw new AccountError("user_not_found", 404);
@@ -467,7 +467,7 @@ export async function updateCreatorProfileFields(input: {
 export async function getAccountForUser(
   userId: string,
 ): Promise<AccountRecord | null> {
-  if (await useMemory()) {
+  if (await isMemoryMode()) {
     return getMemoryAccount(userId);
   }
   const user = await prisma.user.findUnique({
