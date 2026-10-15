@@ -1,3 +1,4 @@
+import { appBaseUrl } from "@/lib/auth/paths";
 import type { Metadata } from "next";
 import { Literata, Syne } from "next/font/google";
 import Link from "next/link";
@@ -25,10 +26,26 @@ const literata = Literata({
 
 export const dynamic = "force-dynamic";
 
+const SITE_TITLE = "FreshMint Marketplace — Fair Discovery for Digital Art";
+const SITE_DESCRIPTION =
+  "NFT marketplace for EVM and Solana with Emerging quotas, composed feeds, and anti-congestion discovery.";
+
 export const metadata: Metadata = {
-  title: "FreshMint Marketplace — Fair Discovery for Digital Art",
-  description:
-    "NFT marketplace for EVM and Solana with Emerging quotas, composed feeds, and anti-congestion discovery.",
+  metadataBase: new URL(appBaseUrl()),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  applicationName: "FreshMint Marketplace",
+  openGraph: {
+    type: "website",
+    siteName: "FreshMint Marketplace",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default async function RootLayout({

@@ -4,6 +4,12 @@
  */
 export function ensureEnv(): void {
   if (!process.env.AUTH_SECRET) {
+    if (process.env.VERCEL_ENV === "production") {
+      // Sessions signed with the public dev fallback can be forged by anyone.
+      console.error(
+        "[env] AUTH_SECRET is not set in production; falling back to an insecure dev secret. Set AUTH_SECRET now.",
+      );
+    }
     process.env.AUTH_SECRET =
       "freshmint-dev-secret-change-in-production-32b";
   }
