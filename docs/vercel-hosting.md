@@ -113,3 +113,15 @@ Setup: Vercel → Storage / Marketplace → **Upstash for Redis** (free plan) �
 | `POST /api/media/upload` | user | 60 / 10 min |
 
 Exceeding a limit returns `429 { error: "rate_limited", retryAfterSec }` with a `Retry-After` header.
+### Build-time migrations (`scripts/migrate-deploy.mjs`)
+
+`npm run build` runs `prisma migrate deploy` before `next build`, with these rules:
+
+| Situation | Behaviour |
+| --- | --- |
+| `VERCEL_ENV=production` (or local/CI) with `DATABASE_URL` | Migrates; retries transient errors (connection budget) with backoff; **fails the build** on errors retrying can't fix (e.g. `P1001` can't reach database) |
+| `VERCEL_ENV=preview` | **Skipped** (Preview shares the production `DATABASE_URL`). Set `MIGRATE_ON_PREVIEW=1` only on a Preview-scoped database |
+| No `DATABASE_URL` | Skipped (memory catalog mode) |
+| `SKIP_DB_MIGRATE=1` | Skipped (explicit escape hatch; don't leave it on in Production) |
+
+Branch previews that add migrations therefore build against the current schema; run those migrations through a Production deploy (or manually) when merging.
