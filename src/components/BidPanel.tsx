@@ -332,7 +332,7 @@ export function BidPanel({
       ) : null}
       {loadError ? (
         <p role="alert" style={{ color: "var(--ink-muted)", fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
-          Couldn�t refresh bids.{" "}
+          Couldn’t refresh bids.{" "}
           <button type="button" className="badge" style={{ cursor: "pointer", background: "transparent" }} onClick={() => setReloadKey((k) => k + 1)}>
             Retry
           </button>

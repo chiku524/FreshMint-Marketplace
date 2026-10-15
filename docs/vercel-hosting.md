@@ -97,8 +97,8 @@ present (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, or the `KV_REST_
 instances via `@upstash/ratelimit` (sliding window). Without them, or if Redis errors, a
 per-process in-memory limiter is used.
 
-Setup: Vercel ? Storage / Marketplace ? **Upstash for Redis** (free plan) ? create a database ?
-**Connect Project** ? `fresh-mint-marketplace` (all environments). Redeploy.
+Setup: Vercel → Storage / Marketplace → **Upstash for Redis** (free plan) → create a database →
+**Connect Project** → `fresh-mint-marketplace` (all environments). Redeploy.
 
 | Route | Key | Limit |
 | --- | --- | --- |

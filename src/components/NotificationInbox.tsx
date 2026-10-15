@@ -94,7 +94,7 @@ export function NotificationInbox() {
       ) : null}
       {items.length === 0 && busy ? (
         <p role="status" aria-live="polite" style={{ color: "var(--ink-muted)" }}>
-          Loading notifications�
+          Loading notifications…
         </p>
       ) : items.length === 0 ? (
         <p style={{ color: "var(--ink-muted)" }}>

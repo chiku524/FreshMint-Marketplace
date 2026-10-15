@@ -202,7 +202,7 @@ export function CollectionPackagePanel({
   if (!data) {
     return loadError ? (
       <p role="alert" style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
-        Couldn�t load package sale details.{" "}
+        Couldn’t load package sale details.{" "}
         <button
           type="button"
           className="badge"

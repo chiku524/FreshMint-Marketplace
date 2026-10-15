@@ -8,7 +8,7 @@ export function RouteLoading({
 }) {
   return (
     <div className="page-wrap" role="status" aria-live="polite" aria-busy="true">
-      <span className="sr-only">{label}…</span>
+      <span className="sr-only">{label}â€¦</span>
       <div className="fm-skeleton" style={{ height: "2.4rem", width: "min(22rem, 70%)", marginBottom: "0.75rem" }} />
       <div className="fm-skeleton" style={{ height: "1rem", width: "min(34rem, 90%)", marginBottom: "2rem" }} />
       {variant === "detail" ? (

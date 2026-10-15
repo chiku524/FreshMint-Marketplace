@@ -217,7 +217,7 @@ export function OfferPanel({
                   className="fm-btn fm-btn--primary"
                   disabled={busy}
                   onClick={() => {
-                    if (!window.confirm("Accept this offer? The sale settles to this buyer and can�t be undone.")) return;
+                    if (!window.confirm("Accept this offer? The sale settles to this buyer and can’t be undone.")) return;
                     void guard(() => accept(o.id));
                   }}
                 >
