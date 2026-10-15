@@ -27,6 +27,25 @@ function clearPkce(res: NextResponse) {
   return res;
 }
 
+/** Prisma Postgres / pool exhaustion must not look like a Google OAuth bug. */
+function authErrorCode(err: unknown): string {
+  if (err instanceof AccountError) return err.message;
+  const message = err instanceof Error ? err.message : String(err);
+  const code =
+    typeof err === "object" && err && "code" in err
+      ? String((err as { code?: unknown }).code ?? "")
+      : "";
+  if (
+    code === "P2037" ||
+    /too many connections/i.test(message) ||
+    /postgres unreachable/i.test(message) ||
+    /Can't reach database/i.test(message)
+  ) {
+    return "auth_unavailable";
+  }
+  return "google_failed";
+}
+
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const stateToken = req.nextUrl.searchParams.get("state");
@@ -70,8 +89,7 @@ export async function GET(req: NextRequest) {
     applySessionCookie(res, login.jwt, login.expiresAt);
     return clearPkce(res);
   } catch (e) {
-    if (e instanceof AccountError) return fail(req, e.message);
     console.error("[auth/google/callback]", e);
-    return fail(req, "google_failed");
+    return fail(req, authErrorCode(e));
   }
 }

@@ -23,8 +23,17 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+    const networkParam = req.nextUrl.searchParams.get("network");
+    const network =
+      networkParam && isNetworkId(networkParam) ? networkParam : null;
+    const deployedOnly =
+      req.nextUrl.searchParams.get("deployed") === "1" ||
+      req.nextUrl.searchParams.get("deployedOnly") === "1";
     return NextResponse.json({
-      collections: await listCollectionsForUser(user.id),
+      collections: await listCollectionsForUser(user.id, {
+        network,
+        deployedOnly,
+      }),
     });
   }
 
@@ -38,14 +47,27 @@ export async function GET(req: NextRequest) {
   });
 }
 
+const optionalUrl = z
+  .union([z.string().max(2048), z.null()])
+  .optional()
+  .transform((v) => (v === "" ? null : v));
+
 const createSchema = z
   .object({
     title: z.string().min(1).max(120),
+    slug: z.string().min(1).max(64),
     chain: z.enum(["evm", "solana", "boing"]).optional(),
     network: z
       .enum(["ethereum", "base", "arbitrum", "optimism", "solana", "boing"])
       .optional(),
     creatorAddress: z.string().min(1).max(128).optional(),
+    description: z.string().max(2000).optional(),
+    imageUrl: optionalUrl,
+    bannerUrl: optionalUrl,
+    websiteUrl: optionalUrl,
+    twitterUrl: optionalUrl,
+    discordUrl: optionalUrl,
+    instagramUrl: optionalUrl,
   })
   .refine((v) => Boolean(v.network || v.chain), {
     message: "network_required",
@@ -80,9 +102,17 @@ export async function POST(req: NextRequest) {
   const result = await createCollectionForUser({
     creatorId: user.id,
     title: body.data.title,
+    slug: body.data.slug,
     network,
     chain: vmFromNetwork(network),
     creatorAddress,
+    description: body.data.description,
+    imageUrl: body.data.imageUrl,
+    bannerUrl: body.data.bannerUrl,
+    websiteUrl: body.data.websiteUrl,
+    twitterUrl: body.data.twitterUrl,
+    discordUrl: body.data.discordUrl,
+    instagramUrl: body.data.instagramUrl,
   });
   if (!result.ok) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });

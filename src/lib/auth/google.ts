@@ -132,6 +132,12 @@ export async function exchangeGoogleCode(input: {
     }),
   });
   if (!tokenRes.ok) {
+    const detail = await tokenRes.text().catch(() => "");
+    console.error(
+      "[auth/google] token exchange failed",
+      tokenRes.status,
+      detail.slice(0, 400),
+    );
     throw new Error("google_token_failed");
   }
   const tokens = (await tokenRes.json()) as { access_token?: string };

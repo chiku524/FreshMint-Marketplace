@@ -214,7 +214,7 @@ async function profileFromPrisma(
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        wallets: true,
+        wallets: { orderBy: { createdAt: "asc" } },
         purchases: {
           orderBy: { createdAt: "desc" },
           include: { listing: true },
@@ -357,4 +357,34 @@ export async function findListingsByWalletNfts(
   }
 
   return [...getMemoryState().listings.values()].filter(match);
+}
+
+/**
+ * FreshMint-known Boing listings used as ownership-scan candidates.
+ * Prefer confirmed (non-provisional) contract addresses when collectionId is set.
+ */
+export async function listBoingNftScanCandidates(): Promise<Listing[]> {
+  const isBoingListing = (listing: Listing) =>
+    listing.chain === "boing" || listing.network === "boing";
+
+  if (isPostgresConfigured()) {
+    try {
+      const listings = await prisma.listing.findMany({
+        where: {
+          OR: [{ chain: "boing" }, { network: "boing" }],
+          contractAddress: { not: null },
+          tokenId: { not: null },
+        },
+        take: 200,
+        orderBy: { createdAt: "desc" },
+      });
+      return listings.map(toListing).filter(isBoingListing);
+    } catch {
+      // fall through
+    }
+  }
+
+  return [...getMemoryState().listings.values()]
+    .filter(isBoingListing)
+    .filter((l) => Boolean(l.contractAddress && l.tokenId));
 }

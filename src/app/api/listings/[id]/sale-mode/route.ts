@@ -6,7 +6,7 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
-  saleMode: z.enum(["fixed", "timed_window", "english"]),
+  saleMode: z.enum(["fixed", "timed_window", "english", "dutch"]),
   startingBidUsd: z.number().nonnegative().nullable().optional(),
   reserveUsd: z.number().nonnegative().nullable().optional(),
   auctionStartsAt: z.string().nullable().optional(),
@@ -29,6 +29,7 @@ export async function PATCH(
   }
   const result = await updateListingSaleMode({
     listingId: id,
+    actorId: user.id,
     creatorId: user.id,
     ...parsed.data,
   });

@@ -11,7 +11,12 @@ const TOC = [
   {
     id: "flow",
     label: "The life of a work",
-    blurb: "Mint at publish. Buy with crypto. Own in your wallet.",
+    blurb: "Draft → deploy → mint → live. Buy with crypto. Own in-wallet.",
+  },
+  {
+    id: "studio",
+    label: "Studio",
+    blurb: "Finish incomplete publishes. Profile shows minted collections.",
   },
   {
     id: "settlement",
@@ -27,6 +32,11 @@ const TOC = [
     id: "ownership",
     label: "Ownership",
     blurb: "Mint happens at publish. Buys transfer that NFT — withdraw is legacy only.",
+  },
+  {
+    id: "rarity",
+    label: "Trait rarity",
+    blurb: "Collection pages rank pieces from trait frequency when traits exist.",
   },
   {
     id: "discovery",
@@ -100,8 +110,10 @@ export function DocsGuide() {
             maxWidth: "42ch",
           }}
         >
-          Collect on FreshMint with crypto. Creators deploy a collection and mint
-          at publish; buyers receive that NFT in-wallet at purchase — not at withdraw.
+          Collect on FreshMint with crypto. Creators move collections through
+          draft → deploy → mint → live in Studio; buyers list, buy, and offer
+          with a {PLATFORM_FEE_PERCENT.total}% treasury fee — NFT in-wallet at
+          purchase, not at withdraw.
         </p>
       </header>
 
@@ -140,6 +152,73 @@ export function DocsGuide() {
           </section>
           ) : null}
 
+          {active === "studio" ? (
+          <section id="studio">
+            <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+              Studio &amp; profile
+            </h2>
+            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+              <Link href="/studio">Studio</Link> is the creator workspace: every
+              collection you own with draft → deploy → mint → live status, a clear
+              next action, and links into Create or the collection page. Incomplete
+              publishes stay visible here until they soft-launch.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gap: "1.25rem 2rem",
+                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+              }}
+            >
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  Publish lifecycle
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  Deploy the collection contract, mint pieces (you pay gas), then
+                  soft-launch to Open Lane. On Boing, FreshMint only asks for a
+                  re-deploy when the on-chain contract is actually missing — not on
+                  every mint retry.
+                </p>
+              </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  Profile
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  <Link href="/me">Your profile</Link> and public creator pages are
+                  collections-first: only minted, published sets. Browse them as
+                  gallery, grid, or list. Listing and collection pages show an
+                  activity timeline for mint, list, offer, and sale.
+                </p>
+              </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  Shelves &amp; Featured
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  Collectors still curate shelves from Studio. Editors and
+                  moderators pin Featured inventory there too — separate from
+                  creator publish work.
+                </p>
+              </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  Companion tokens
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  On Boing collections, link fungible companion tokens via the
+                  on-chain linked-pair registry (not a FreshMint-only flag). Your
+                  wallet must be asset claimer on both sides; FreshMint caches
+                  peers for chips after you confirm. Manage from the collection
+                  page <strong style={{ color: "var(--ink)" }}>Linked tokens</strong>{" "}
+                  control.
+                </p>
+              </div>
+            </div>
+          </section>
+          ) : null}
+
           {active === "settlement" ? (
           <section id="settlement">
             <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
@@ -148,7 +227,7 @@ export function DocsGuide() {
             <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
               Primary sales settle on-chain. Discovery — saving, following,
               nominating, browsing — stays on the FreshMint ledger so ranking
-              stays cheap.
+              stays cheap. Commerce UX mirrors familiar list / buy / offer flows.
             </p>
             <div
               style={{
@@ -162,8 +241,9 @@ export function DocsGuide() {
                   At publish
                 </h3>
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
-                  Create deploys your collection and mints pieces into it. You pay
-                  gas on those steps. Unminted drafts stay off Open Lane.
+                  Create or Studio deploys your collection and mints pieces into
+                  it. You pay gas on those steps. Unminted drafts stay off Open
+                  Lane until soft-launch.
                 </p>
               </div>
               <div>
@@ -186,7 +266,7 @@ export function DocsGuide() {
               Treasury fee
             </h2>
             <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
-              Every primary sale takes{" "}
+              Every NFT sale on FreshMint takes{" "}
               <strong style={{ color: "var(--ink)" }}>
                 {PLATFORM_FEE_PERCENT.total}%
               </strong>{" "}
@@ -194,12 +274,15 @@ export function DocsGuide() {
               <strong style={{ color: "var(--ink)" }}>
                 {PLATFORM_FEE_PERCENT.sellerNet}%
               </strong>
-              . Quote is in USD; you pay the native amount shown at checkout.
+              . That includes buy now, timed listings, English and Dutch auctions,
+              accepted offers, collection packages, and resales. Quote is in USD;
+              you pay the native amount shown at checkout.
             </p>
             <p style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
               That cut funds community events, future updates, and running the
               market — not a hidden operator take on top. You can see the split
-              before you confirm a buy.
+              before you confirm a buy. Weekly fee profit can fund the{" "}
+              <Link href="/treasury#friday-raffle">Friday treasury raffle</Link>.
             </p>
           </section>
           ) : null}
@@ -222,6 +305,48 @@ export function DocsGuide() {
               is only for older USD holds that never settled on-chain at purchase.
               Link a matching wallet in <Link href="/me/settings">Settings</Link>.
             </p>
+          </section>
+          ) : null}
+
+          {active === "rarity" ? (
+          <section id="rarity">
+            <h2 className="display" style={{ margin: "0 0 0.75rem", fontSize: "1.45rem" }}>
+              Trait rarity
+            </h2>
+            <p style={{ color: "var(--ink-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+              When a collection has trait metadata (CSV import or hand-entered traits
+              at create), each piece gets a{" "}
+              <strong style={{ color: "var(--ink)" }}>statistical rarity</strong>{" "}
+              rank on the collection page and NFT detail.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gap: "1.25rem 2rem",
+                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+              }}
+            >
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  How the score works
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  For each trait value, score contribution is collection size ÷ how
+                  often that value appears. A piece’s score is the sum of its trait
+                  contributions. Rank 1 is the rarest. Sort the Items tab by Rarity
+                  to browse that order.
+                </p>
+              </div>
+              <div>
+                <h3 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+                  No traits
+                </h3>
+                <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  Collections or pieces without traits show no rarity rank or fake
+                  percentages — rarity stays hidden until real trait data exists.
+                </p>
+              </div>
+            </div>
           </section>
           ) : null}
 
@@ -389,8 +514,9 @@ export function DocsGuide() {
               </li>
               <li>
                 <strong style={{ color: "var(--ink)" }}>Featured</strong> — scarce
-                editorial inventory; nomination + Studio controls. Optional paid
-                Featured boost is promotional only and never feeds Rising scoring
+                editorial inventory; nomination + editor controls in{" "}
+                <Link href="/studio">Studio</Link>. Optional paid Featured boost
+                is promotional only and never feeds Rising scoring
               </li>
             </ul>
             </div>
@@ -470,7 +596,7 @@ export function DocsGuide() {
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
                   Open Lane {cfg.openLaneListingsPerCreatorPerDay}/creator/day · Rising{" "}
                   {cfg.risingEntriesPerCreatorPerWeek}/week · OE starts ≤{" "}
-                  {cfg.calendar.maxOeStartsPerHour}/hour · timed drops ≤{" "}
+                  {cfg.calendar.maxOeStartsPerHour} collection drops/hour · timed drops ≤{" "}
                   {cfg.calendar.maxAuctionStartsPerHour}/hour · ≤{" "}
                   {cfg.maxConcurrentOeOnRising} concurrent OE on Rising
                 </p>
@@ -494,8 +620,8 @@ export function DocsGuide() {
                 <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem", lineHeight: 1.55 }}>
                   Follow artists, collectors, and shelves to fill the Following slice.
                   Collectors you follow contribute their graph. Nominate Emerging
-                  works into Rising with reputation at stake. Create shelves
-                  in{" "}
+                  works into Rising with reputation at stake. Creators manage
+                  publishes and collectors curate shelves in{" "}
                   <Link href="/studio" style={{ color: "var(--accent-soft)" }}>
                     Studio
                   </Link>
@@ -527,6 +653,9 @@ export function DocsGuide() {
               </Link>
               <Link href="/metrics" className="badge">
                 Metrics
+              </Link>
+              <Link href="/studio" className="badge emerging">
+                Studio
               </Link>
               <Link href="/create" className="badge emerging">
                 Soft-launch a work

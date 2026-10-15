@@ -7,6 +7,7 @@ import type {
 } from "@/generated/prisma/client";
 import { resolveNetwork } from "@/lib/chains/registry";
 import { parseDropKind, parseTraits } from "@/lib/marketplace/drops";
+import { parseLinkedTokensJson } from "@/lib/marketplace/linked-tokens";
 import type {
   Collection,
   CreatorProfile,
@@ -113,9 +114,24 @@ export function toListing(listing: DbListing): Listing {
 }
 
 export function toCollection(c: DbCollection): Collection {
+  const row = c as DbCollection & {
+    slug?: string | null;
+    imageUrl?: string | null;
+    bannerUrl?: string | null;
+    description?: string | null;
+    websiteUrl?: string | null;
+    twitterUrl?: string | null;
+    discordUrl?: string | null;
+    instagramUrl?: string | null;
+    packageSellEnabled?: boolean;
+    packagePriceUsd?: number | null;
+    nftTemplateVersion?: string | null;
+    linkedTokensJson?: string | null;
+  };
   return {
     id: c.id,
     title: c.title,
+    slug: row.slug ?? null,
     creatorId: c.creatorId,
     chain: c.chain as Collection["chain"],
     network: resolveNetwork(c.network, c.chain as Collection["chain"]),
@@ -127,12 +143,21 @@ export function toCollection(c: DbCollection): Collection {
     dropEndsAt: c.dropEndsAt?.getTime() ?? null,
     dropPriceUsd: c.dropPriceUsd,
     mediaBytes: c.mediaBytes,
+    imageUrl: row.imageUrl ?? null,
+    bannerUrl: row.bannerUrl ?? null,
+    description: row.description ?? "",
+    websiteUrl: row.websiteUrl ?? null,
+    twitterUrl: row.twitterUrl ?? null,
+    discordUrl: row.discordUrl ?? null,
+    instagramUrl: row.instagramUrl ?? null,
     contractAddress: c.contractAddress ?? null,
+    linkedTokens: parseLinkedTokensJson(row.linkedTokensJson),
     deployTxHash: c.deployTxHash ?? null,
     deployStatus: c.deployStatus ?? "none",
+    nftTemplateVersion: row.nftTemplateVersion ?? "1",
     escrowAddress: c.escrowAddress ?? null,
-    packageSellEnabled: Boolean((c as { packageSellEnabled?: boolean }).packageSellEnabled),
-    packagePriceUsd: (c as { packagePriceUsd?: number | null }).packagePriceUsd ?? null,
+    packageSellEnabled: Boolean(row.packageSellEnabled),
+    packagePriceUsd: row.packagePriceUsd ?? null,
     createdAt: c.createdAt instanceof Date ? c.createdAt.getTime() : null,
   };
 }

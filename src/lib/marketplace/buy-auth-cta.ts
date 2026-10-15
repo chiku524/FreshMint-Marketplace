@@ -22,7 +22,7 @@ export type BuyPrimaryKind =
 
 /**
  * Single primary buy button states:
- * Checking sign-in → Sign in → Continue → Connect wallet → Bridge & pay / Pay / Resume.
+ * Checking sign-in → Sign in → Buy now → Connect wallet → Bridge & pay / Pay / Resume.
  */
 export function resolveBuyPrimaryCta(input: {
   sessionUserId: string | null | undefined;
@@ -47,13 +47,13 @@ export function resolveBuyPrimaryCta(input: {
     };
   }
   if (auth === "sign_in") {
-    return { kind: "sign_in", label: "Sign in to continue" };
+    return { kind: "sign_in", label: "Sign in to buy" };
   }
   if (input.canResume) {
     return { kind: "resume", label: "Resume payment" };
   }
   if (!input.confirmOpen) {
-    return { kind: "continue", label: "Continue" };
+    return { kind: "continue", label: "Buy now" };
   }
   if (!input.paymentAddress) {
     return { kind: "connect_wallet", label: "Connect wallet" };

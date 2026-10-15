@@ -1,6 +1,7 @@
 "use client";
 
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import {
   humanizeCheckoutError,
   resolveBuyPrimaryCta,
@@ -42,9 +43,11 @@ function vmForNetwork(network: string): Chain {
 
 export function CollectionPackagePanel({
   collectionId,
+  collectionSlug,
   isOwner,
 }: {
   collectionId: string;
+  collectionSlug?: string | null;
   isOwner: boolean;
 }) {
   const router = useRouter();
@@ -306,8 +309,14 @@ export function CollectionPackagePanel({
         {data.defaultPriceUsd != null ? ` · default $${data.defaultPriceUsd}` : ""}
         {data.network ? ` · receive on ${data.network}` : ""}.
         Pay on the listing network or bridge once via Relay for the package total.
+        FreshMint takes 0.5% of the package price for the treasury.
       </p>
       {isOwner ? (
+        <>
+          <PlatformFeeBreakdown
+            priceUsd={Number(price) > 0 ? Number(price) : data.defaultPriceUsd}
+            compact
+          />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
           <label style={{ fontSize: "0.85rem" }}>
             Package price USD
@@ -327,9 +336,18 @@ export function CollectionPackagePanel({
             {data.packageSellEnabled ? "Disable package sell" : "Sell remaining as package"}
           </button>
         </div>
+        </>
       ) : null}
       {!isOwner && data.packageSellEnabled && count >= 2 ? (
         <div style={{ display: "grid", gap: "0.55rem" }}>
+          <PlatformFeeBreakdown
+            priceUsd={
+              Number(packagePriceLabel) > 0
+                ? Number(packagePriceLabel)
+                : data.defaultPriceUsd
+            }
+            compact
+          />
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
             <label style={{ fontSize: "0.85rem" }}>
               Pay from
@@ -370,9 +388,12 @@ export function CollectionPackagePanel({
                 );
               }
               if (primary.kind === "sign_in") {
+                const nextPath = `/collections/${
+                  collectionSlug?.trim() || collectionId
+                }`;
                 return (
                   <Link
-                    href={`/sign-in?next=/collections/${collectionId}`}
+                    href={`/sign-in?next=${encodeURIComponent(nextPath)}`}
                     className="badge featured"
                   >
                     {primary.label}

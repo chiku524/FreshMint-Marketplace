@@ -238,4 +238,10 @@ export const WALLET_AUTH_ERRORS: Record<string, string> = {
   evm_wallet_required: "Choose an EVM wallet to continue.",
   nonce_expired: "Sign-in expired. Try again.",
   invalid_signature: "Signature did not match. Try another wallet.",
+  wallet_not_found: "That wallet is not linked to this account.",
+  last_sign_in_method:
+    "Add email, Google, or another wallet before unlinking your last wallet.",
+  open_checkout:
+    "Finish or cancel the open checkout on this chain before unlinking.",
+  unlink_failed: "Could not unlink that wallet. Try again.",
 };

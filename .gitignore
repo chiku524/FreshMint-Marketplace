@@ -44,3 +44,4 @@ next-env.d.ts
 
 # Generated platform wallets / private keys — never commit
 .wallets/
+.env*

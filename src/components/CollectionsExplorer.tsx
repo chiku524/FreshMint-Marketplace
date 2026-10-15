@@ -11,6 +11,7 @@ import {
 import {
   COLLECTION_INDEX_MIN_VOLUME_USD,
 } from "@/lib/marketplace/collections-browse-config";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import type { Listing } from "@/lib/discovery/types";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -18,6 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export type CollectionBrowseItem = {
   id: string;
   title: string;
+  slug?: string | null;
   creatorId: string;
   creatorName: string;
   chain: string;
@@ -50,7 +52,7 @@ function coverStyle(item: CollectionBrowseItem) {
   const hue = hueFromId(item.id);
   if (hero?.mediaUrl) {
     return {
-      backgroundImage: `linear-gradient(180deg, transparent 36%, rgba(9,9,11,0.72)), url(${hero.mediaUrl})`,
+      backgroundImage: `linear-gradient(180deg, transparent 36%, var(--media-scrim)), url(${hero.mediaUrl})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -113,7 +115,7 @@ function ViewIcon({ name }: { name: CollectionsViewId }) {
 export function CollectionsExplorer({
   items,
   soldIds,
-  initialView = "gallery",
+  initialView = "grid",
   lane = "top",
   children,
 }: {
@@ -157,30 +159,21 @@ export function CollectionsExplorer({
     <>
       <div className="collections-head">
         <div>
-          <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-            {title}
-          </h1>
-          <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", margin: 0 }}>
+          <h1 className="display collections-head__title">{title}</h1>
+          <p className="collections-head__copy">
             {blurb}{" "}
             <Link href="/create">Start a collection</Link>.
           </p>
-          <p
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.45rem",
-              margin: "0.85rem 0 0",
-            }}
-          >
+          <p className="collections-lane-tabs">
             <Link
               href="/collections"
-              className={`badge${lane === "top" ? " featured" : ""}`}
+              className={`fm-filter-tab${lane === "top" ? " is-active" : ""}`}
             >
               Top
             </Link>
             <Link
               href="/collections/new"
-              className={`badge${lane === "new" ? " featured" : ""}`}
+              className={`fm-filter-tab${lane === "new" ? " is-active" : ""}`}
             >
               New this week
             </Link>
@@ -204,19 +197,11 @@ export function CollectionsExplorer({
       {children}
       {items.length === 0 ? (
         lane === "top" ? (
-          <section
-            style={{
-              marginTop: "1.25rem",
-              border: "1px solid var(--line)",
-              padding: "1.1rem 1.15rem",
-              background: "var(--panel)",
-              maxWidth: "40rem",
-            }}
-          >
-            <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
+          <section className="fm-empty-state">
+            <h2 className="display fm-empty-state__title">
               No collections at the volume bar yet
             </h2>
-            <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
+            <p className="fm-form-note">
               The Top list only shows collections with at least $
               {COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} in completed
               primary sales (including package sales). Browse{" "}
@@ -226,7 +211,7 @@ export function CollectionsExplorer({
             </p>
           </section>
         ) : (
-          <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
+          <p className="fm-empty-copy" style={{ marginTop: "1rem" }}>
             No new published collections in the last 7 days.{" "}
             <Link href="/collections">Back to Top</Link>.
           </p>
@@ -236,10 +221,10 @@ export function CollectionsExplorer({
       {view === "gallery"
         ? items.map((collection) => (
             <section key={collection.id} className="collections-gallery-block">
-              <h2 className="display" style={{ margin: "0 0 0.35rem", fontSize: "1.5rem" }}>
-                <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+              <h2 className="display me-section__title">
+                <Link href={collectionHref(collection)}>{collection.title}</Link>
               </h2>
-              <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)" }}>
+              <p className="me-section__lead">
                 {collection.creatorName} · {collection.chain} · {collection.totalItems}{" "}
                 items
                 {formatVolume(collection.volumeUsd)
@@ -267,25 +252,64 @@ export function CollectionsExplorer({
 
       {view === "grid" ? (
         <div className="collections-grid">
-          {items.map((collection) => (
-            <Link
-              key={collection.id}
-              href={`/collections/${collection.id}`}
-              className="collections-card"
-            >
-              <div className="collections-card__cover" style={coverStyle(collection)} />
-              <div className="collections-card__body">
-                <h2 className="display">{collection.title}</h2>
-                <p>
-                  {collection.creatorName} · {collection.chain} ·{" "}
-                  {collection.totalItems} items
-                  {formatVolume(collection.volumeUsd)
-                    ? ` · ${formatVolume(collection.volumeUsd)}`
-                    : ""}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {items.map((collection) => {
+            const hero =
+              collection.listings.find(
+                (listing) => listing.id === collection.heroListingId,
+              ) ?? collection.listings[0];
+            const coverUrl = hero?.mediaUrl ?? null;
+            return (
+              <Link
+                key={collection.id}
+                href={collectionHref(collection)}
+                className="collections-card collections-card--profile"
+              >
+                <div
+                  className="collections-card__banner"
+                  style={coverStyle(collection)}
+                />
+                <div className="collections-card__body">
+                  <span
+                    className={
+                      coverUrl
+                        ? "collections-card__avatar collections-card__avatar--media"
+                        : "collections-card__avatar"
+                    }
+                    style={
+                      coverUrl
+                        ? { backgroundImage: `url(${coverUrl})` }
+                        : {
+                            background: `linear-gradient(145deg, hsla(${hueFromId(collection.id)}, 55%, 48%, 0.9), hsla(${(hueFromId(collection.id) + 40) % 360}, 40%, 28%, 0.95))`,
+                          }
+                    }
+                    aria-hidden
+                  />
+                  <h2 className="display">{collection.title}</h2>
+                  <p className="collections-card__byline">
+                    {collection.creatorName}
+                  </p>
+                  <dl className="collections-card__stats">
+                    <div>
+                      <dt>Items</dt>
+                      <dd>{collection.totalItems}</dd>
+                    </div>
+                    <div>
+                      <dt>Volume</dt>
+                      <dd>
+                        {collection.volumeUsd != null && collection.volumeUsd > 0
+                          ? `$${Math.round(collection.volumeUsd).toLocaleString()}`
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Chain</dt>
+                      <dd>{collection.chain}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       ) : null}
 
@@ -294,7 +318,7 @@ export function CollectionsExplorer({
           {items.map((collection) => (
             <Link
               key={collection.id}
-              href={`/collections/${collection.id}`}
+              href={collectionHref(collection)}
               className="collections-row"
             >
               <div className="collections-row__thumb" style={coverStyle(collection)} />

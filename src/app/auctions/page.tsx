@@ -18,7 +18,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Auctions — FreshMint Marketplace",
+  title: "Auctions",
   description:
     "Live timed drops and English auctions, plus cleared past primary sales.",
 };
@@ -49,7 +49,7 @@ function DiscoverLinks() {
         Calendar
       </Link>
       <Link href="/create?intent=auction" className="badge">
-        Schedule a timed drop
+        Create timed / auction listing
       </Link>
     </p>
   );
@@ -57,13 +57,15 @@ function DiscoverLinks() {
 
 function liveHeading(filter: AuctionsSaleModeFilter, count: number): string {
   if (filter === "english") return `Live English auctions (${count})`;
-  if (filter === "timed_window") return `Live timed drops (${count})`;
+  if (filter === "dutch") return `Live Dutch auctions (${count})`;
+  if (filter === "timed_window") return `Live timed listings (${count})`;
   return `Live now (${count})`;
 }
 
 function archiveHeading(filter: AuctionsSaleModeFilter, count: number): string {
   if (filter === "english") return `Cleared English auctions (${count})`;
-  if (filter === "timed_window") return `Cleared timed drops (${count})`;
+  if (filter === "dutch") return `Cleared Dutch auctions (${count})`;
+  if (filter === "timed_window") return `Cleared timed listings (${count})`;
   return `Cleared sales (${count})`;
 }
 
@@ -91,14 +93,13 @@ export default async function AuctionsPage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Auctions
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1rem" }}>
-        Timed windows (buy at list price) and English auctions (open bidding).
-        Filter is shareable via the URL. Cleared primary sales stay as proof of
-        discovery converting.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Auctions</h1>
+        <p className="page-lead__copy">
+          Timed listings (Buy now in a window), English auctions (highest bid),
+          and Dutch auctions (declining price). Filters stay in the URL.
+        </p>
+      </header>
 
       <AuctionsSaleModeTabs active={filter} />
 

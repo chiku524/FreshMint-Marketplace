@@ -1,16 +1,32 @@
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
 import { searchCatalog } from "@/lib/marketplace/search";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Search — FreshMint Marketplace",
-  description: "Find works, collections, and creators.",
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" ? sp.q.trim() : "";
+  if (q) {
+    return {
+      title: `Search: ${q}`,
+      description: `Works, collections, and creators matching “${q}”.`,
+    };
+  }
+  return {
+    title: "Search",
+    description: "Find works, collections, and creators.",
+  };
+}
 
 export default async function SearchPage({
   searchParams,
@@ -36,21 +52,15 @@ export default async function SearchPage({
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Search
       </h1>
-      <form role="search" action="/search" method="get" style={{ marginBottom: "1.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <form action="/search" method="get" className="lane-filters__search" style={{ marginBottom: "1.5rem" }}>
         <input aria-label="Search the marketplace"
           name="q"
           defaultValue={qRaw}
           placeholder="Works, collections, creators…"
           maxLength={80}
-          style={{
-            flex: "1 1 16rem",
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            color: "var(--ink)",
-            padding: "0.55rem 0.75rem",
-          }}
+          className="fm-field"
         />
-        <button type="submit" className="badge featured" style={{ cursor: "pointer", background: "transparent" }}>
+        <button type="submit" className="fm-btn fm-btn--primary">
           Search
         </button>
       </form>
@@ -99,7 +109,7 @@ export default async function SearchPage({
                 {collections.map((h) =>
                   h.kind === "collection" ? (
                     <li key={h.collection.id}>
-                      <Link href={`/collections/${h.collection.id}`} className="badge">
+                      <Link href={collectionHref(h.collection)} className="badge">
                         {h.collection.title}
                       </Link>
                     </li>

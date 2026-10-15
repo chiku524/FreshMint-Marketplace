@@ -31,6 +31,8 @@ Step-by-step Vercel Blob + Neon/Prisma Postgres setup: [`docs/vercel-hosting.md`
 
 Discovery system reference: [`docs/discovery.md`](docs/discovery.md) · live in-app: [`/docs`](https://fresh-mint-marketplace.vercel.app/docs).
 
+Companion (linked) fungible tokens on Boing collections use the **on-chain linked NFT↔token registry** — see [`docs/onchain.md`](docs/onchain.md#linked-fungible-tokens-on-chain-registry). Set `NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY` (testnet AccountId is in `.env.example`).
+
 ### Object storage
 
 - With `BLOB_READ_WRITE_TOKEN` (Vercel Blob) → uploads go to Blob CDN URLs.
@@ -56,7 +58,7 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 ### Platform layer
 - **Postgres + Prisma** persistence (memory fallback)
 - **Wallet auth**: EVM `personal_sign` + Solana ed25519 verify; HTTP-only session cookies
-- **Cross-chain wallet linking** via `/api/auth/link-wallet`
+- **Cross-chain wallet linking / unlinking** via `/api/auth/link-wallet` and `/api/auth/unlink-wallet`
 - **Demo personas** for local cold-start without a browser extension
 - **Create / soft-launch** with Sepolia / Devnet mint intents + optional live wallet txs
 - **Phase 2 signals**: impressions, dwell/meaningful views, saves, nominations, purchases
@@ -66,11 +68,12 @@ Without a market address, EVM stays **simulated**. With it, create/buy returns `
 - **Sybil-lite** signal rate limits, new-account caps, self-engagement block, wash-purchase detection
 - **OE / auction calendar** with hourly start caps + Rising concurrency limits (`/calendar`)
 - **Moderation queue** for reports & appeals (`/moderate` — demo as Ops Moderator)
-- **Studio** for Featured editorial controls + collector shelf creation (`/studio`)
+- **Studio** creator hub: collection draft → deploy → mint → live status + next actions; also shelves + Featured editorial (`/studio`)
 
 ### Media & chains
 - **Media upload** via `POST /api/media/upload` → Vercel Blob or local disk
 - **On-chain intents** in `src/lib/onchain/*` + `POST /api/onchain/prepare`
+- **Companion linked tokens** (Boing): on-chain registry plan/confirm via `PUT`/`POST`/`GET /api/collections/:id/linked-tokens` — registry is source of truth; DB caches peers for chips
 
 ## Scripts
 
@@ -91,6 +94,7 @@ The homepage plays a 7.5s FreshMint logo intro on first visit (skip, or `?intro=
 - `POST /api/listings` · `POST /api/listings/:id/stage`
 - `POST /api/signals` · `POST /api/nominate` · `POST /api/purchase`
 - `POST /api/media/upload` · `POST /api/onchain/prepare` · `POST /api/onchain/confirm`
+- `GET` / `PUT` / `POST /api/collections/:id/linked-tokens` (Boing companion-token registry)
 - `POST /api/follow` · listing detail `/listings/:id` · creator `/creators/:id`
 - `GET /api/feed` · `/api/rising` · `/api/open` · `/api/metrics` · `/api/health`
 

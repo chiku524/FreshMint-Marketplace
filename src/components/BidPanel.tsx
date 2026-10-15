@@ -1,7 +1,8 @@
 "use client";
 
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   humanizeCheckoutError,
@@ -85,7 +86,7 @@ export function BidPanel({
   >(undefined);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  const load = useCallback(() => {
+  function load() {
     void fetch(`/api/listings/${listingId}/bids`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { bids: [] }))
       .then((d: { bids?: Bid[]; settle?: SettleInfo }) => {
@@ -93,13 +94,13 @@ export function BidPanel({
         if (d.settle) setSettle(d.settle);
       })
       .catch(() => setBids([]));
-  }, [listingId]);
+  }
 
   useEffect(() => {
     load();
     const t = window.setInterval(load, 12_000);
     return () => window.clearInterval(t);
-  }, [load]);
+  }, [listingId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,23 +174,21 @@ export function BidPanel({
   }, [remainingMs]);
 
   return (
-    <div
-      style={{
-        marginTop: "1rem",
-        border: "1px solid var(--line)",
-        padding: "0.9rem 1rem",
-        background: "var(--panel)",
-      }}
-    >
+    <div className="fm-listing-form">
       <h3 className="display" style={{ margin: "0 0 0.5rem", fontSize: "1.15rem" }}>
         English auction
       </h3>
       {live ? (
         <>
-          <p style={{ margin: "0 0 0.65rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-            Open bidding in USD. Min next bid ${minBidUsd}.
+          <p className="fm-form-note" style={{ marginBottom: "0.65rem" }}>
+            Open bidding in USD. Min next bid ${minBidUsd}. Winning bid settles
+            on FreshMint with a 0.5% treasury fee.
           </p>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <PlatformFeeBreakdown
+            priceUsd={Number(amount) > 0 ? Number(amount) : minBidUsd}
+            compact
+          />
+          <div className="fm-form-actions">
             <input aria-label="Bid amount in USD"
               type="number"
               min={minBidUsd}
@@ -197,33 +196,24 @@ export function BidPanel({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               disabled={busy || resolveBuyAuthCta(sessionUserId) !== "ready"}
-              style={{
-                background: "var(--bg)",
-                border: "1px solid var(--line)",
-                color: "var(--ink)",
-                padding: "0.45rem 0.6rem",
-                width: "8rem",
-              }}
+              className="fm-field fm-field--narrow"
             />
             {resolveBuyAuthCta(sessionUserId) === "checking" ? (
-              <button
-                type="button"
-                className="badge featured"
-                disabled
-                style={{ cursor: "wait", background: "transparent" }}
-              >
+              <button type="button" className="fm-btn fm-btn--primary" disabled>
                 Checking sign-in…
               </button>
             ) : resolveBuyAuthCta(sessionUserId) === "sign_in" ? (
-              <Link href={`/sign-in?next=/listings/${listingId}`} className="badge featured">
+              <Link
+                href={`/sign-in?next=/listings/${listingId}`}
+                className="fm-btn fm-btn--primary"
+              >
                 Sign in to continue
               </Link>
             ) : (
               <button
                 type="button"
-                className="badge featured"
+                className="fm-btn fm-btn--primary"
                 disabled={busy}
-                style={{ cursor: busy ? "wait" : "pointer", background: "transparent" }}
                 onClick={() => void onBid()}
               >
                 {busy ? "Placing bid…" : "Place bid"}
@@ -295,8 +285,8 @@ export function BidPanel({
                   <>You have 48 hours to complete payment.</>
                 )}{" "}
                 {purchaseId
-                  ? "A checkout at the winning bid is ready — use Resume / Continue buy below (wallet required for crypto)."
-                  : "Use Buy / Continue below at the winning bid (wallet required for crypto)."}
+                  ? "A checkout at the winning bid is ready — use Resume payment / Buy now below (wallet required for crypto)."
+                  : "Use Buy now below at the winning bid (wallet required for crypto)."}
               </p>
             </>
           ) : awardedOrClaim ? (

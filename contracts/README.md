@@ -20,7 +20,7 @@ forge create contracts/FreshMintERC721.sol:FreshMintERC721 \
   --chain sepolia
 ```
 
-Also set `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA` / `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA` for Solana fee legs.
+Also set `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA` / `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA` for Solana fee legs, and `NEXT_PUBLIC_PLATFORM_TREASURY_BTC` for the Bitcoin treasury address (ops / future; not used by settlement yet).
 
 Repeat per network with the matching RPC:
 
@@ -50,24 +50,36 @@ Boing is a native L1 (chain id **6913** / `0x1b01`), not EVM. Marketplace deploy
 | Field | Value |
 |-------|--------|
 | Artifact | `boing.reference_nft_collection.v0` |
-| Version | `1` |
-| Vendored file | `src/lib/onchain/boing-artifacts/defaultReferenceNftCollectionTemplateBytecodeHex.ts` |
-| Upstream | `boing-sdk/src/defaultReferenceNftCollectionTemplateBytecodeHex.ts` in [boing.network](https://github.com/Boing-Network/boing.network) |
+| Preferred version | `3` (`REFERENCE_NFT_COLLECTION_TEMPLATE_VERSION`) |
+| Vendored v1 | `src/lib/onchain/boing-artifacts/defaultReferenceNftCollectionTemplateBytecodeHex.ts` |
+| Vendored v3 | `src/lib/onchain/boing-artifacts/defaultReferenceNftCollectionTemplateV3BytecodeHex.ts` |
+| Upstream | `boing-sdk` in [boing.network](https://github.com/Boing-Network/boing.network) |
 | Rust source | `crates/boing-execution/src/reference_nft.rs` → `reference_nft_collection_template_bytecode()` |
-| Regenerate | `cargo run -p boing-execution --example dump_reference_token_artifacts` (stdout **line 3**) |
-| Override | `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX` |
+| Regenerate | `cargo run -p boing-execution --example dump_reference_token_artifacts` (stdout **line 3** = current template) |
+| Override (v3) | `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX` |
+| Override (legacy v2) | `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V2_BYTECODE_HEX` |
+| Override (v1 shared) | `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_BYTECODE_HEX` |
 
 Protocol QA **rejects empty bytecode** (`MALFORMED_BYTECODE`). The wallet payload must include `bytecode` on `contract_deploy_meta`.
 
 ### Calldata (after a collection exists)
 
-Reference ABI is 96 bytes: selector in the **last byte** of word 0, then two argument words ([BOING-REFERENCE-NFT.md](https://github.com/Boing-Network/boing.network/blob/main/docs/BOING-REFERENCE-NFT.md)):
+Reference ABI for **template v1** is 96 bytes: selector in the **last byte** of word 0, then two argument words ([BOING-REFERENCE-NFT.md](https://github.com/Boing-Network/boing.network/blob/main/docs/BOING-REFERENCE-NFT.md)):
 
 | Selector | Name | Use |
 |----------|------|-----|
 | `0x03` | `owner_of` | Read holder |
 | `0x04` | `transfer_nft` | Transfer, or admin mint when owner is zero |
 | `0x05` | `set_metadata_hash` | Bind metadata hash to `token_id` |
+| `0x06` | `mint_batch` | **Template v2/v3** — v2 ≤50 tokens / tx; v3 ≤500 tokens / tx |
+
+**Existing collections keep their stamped version** — v1 never gains `0x06`; existing v2 stays `n` ≤ 50. FreshMint records `Collection.nftTemplateVersion` at deploy (`"1"` \| `"2"` \| `"3"`). Mint prepare uses `mint_batch` when that field is `"2"` or `"3"`, with chunk size 50 vs 500.
+
+**`mint_batch`** calldata is `96 + 64n` bytes: selector word + `to` + `n` + token ids + metadata hashes. Encode with `encodeReferenceMintBatchCalldata` / `encodeReferenceMintBatchCalldataHex` in `src/lib/onchain/boing.ts` (same names as `boing-sdk`).
+
+New collection deploys stamp **`"3"`** when v3 bytecode is present (vendored pin or `BOING_REFERENCE_NFT_COLLECTION_TEMPLATE_V3_BYTECODE_HEX`). Otherwise v2 if available, else pinned v1. Heal/redeploy of **pending** collections can pick up the current preferred template; confirmed addresses are never switched.
+
+Mint confirm waits for `boing_getTransactionReceipt(tx_id)` and does **not** treat mempool `{ tx_hash: "ok" }` as a tx id.
 
 ### App flow
 

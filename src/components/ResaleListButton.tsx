@@ -1,5 +1,6 @@
 "use client";
 
+import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -53,44 +54,30 @@ export function ResaleListButton({
         style={{ cursor: "pointer", background: "transparent" }}
         onClick={() => setOpen(true)}
       >
-        List for resale
+        List for sale
       </button>
     );
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} style={{ display: "grid", gap: "0.4rem" }}>
-      <label style={{ fontSize: "0.85rem", color: "var(--ink-muted)" }}>
-        Resale price (USD)
+    <form onSubmit={(e) => void submit(e)} className="fm-form-stack" style={{ maxWidth: "16rem" }}>
+      <label>
+        List price (USD)
         <input
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           inputMode="decimal"
           required
-          style={{
-            display: "block",
-            width: "100%",
-            marginTop: "0.25rem",
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            color: "var(--ink)",
-            padding: "0.4rem 0.55rem",
-          }}
+          className="fm-field"
         />
       </label>
-      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-        <button
-          type="submit"
-          disabled={busy}
-          className="badge featured"
-          style={{ cursor: "pointer", background: "transparent" }}
-        >
-          {busy ? "Listing…" : "Publish secondary"}
+      <div className="fm-form-actions">
+        <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
+          {busy ? "Listing…" : "List for sale"}
         </button>
         <button
           type="button"
-          className="badge"
-          style={{ cursor: "pointer", background: "transparent" }}
+          className="fm-btn fm-btn--ghost"
           onClick={() => setOpen(false)}
         >
           Cancel
@@ -99,10 +86,11 @@ export function ResaleListButton({
       {error ? (
         <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
       ) : (
-        <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-          Fixed-price secondary. Platform 0.5% + creator royalty (default 5%) come from the listed
-          price.
-        </p>
+        <PlatformFeeBreakdown
+          priceUsd={Number(price) > 0 ? Number(price) : defaultPriceUsd}
+          compact
+          isSecondary
+        />
       )}
     </form>
   );

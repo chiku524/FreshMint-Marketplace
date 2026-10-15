@@ -6,6 +6,20 @@ function formatUsd(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
 }
 
+function creatorStatsLine(item: CreatorBrowseRow, volumeBit: string | null) {
+  return [
+    volumeBit,
+    item.emerging
+      ? "Emerging"
+      : item.establishedBadge
+        ? "Established"
+        : null,
+    item.verifiedCreator ? "Verified" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function HomeCreatorCard({ item }: { item: CreatorBrowseRow }) {
   const volumeBit =
     item.source === "trending_7d" && item.volumeUsd7d > 0
@@ -13,6 +27,7 @@ export function HomeCreatorCard({ item }: { item: CreatorBrowseRow }) {
       : item.volumeUsdAllTime > 0
         ? `${formatUsd(item.volumeUsdAllTime)} vol`
         : null;
+  const stats = creatorStatsLine(item, volumeBit);
 
   return (
     <Link href={`/creators/${item.id}`} className="fm-home-creator-card">
@@ -31,16 +46,9 @@ export function HomeCreatorCard({ item }: { item: CreatorBrowseRow }) {
             ? ` · ${item.collectionCount} collection${item.collectionCount === 1 ? "" : "s"}`
             : ""}
         </div>
-        {volumeBit ? (
-          <div className="fm-home-creator-card__stats">{volumeBit}</div>
+        {stats ? (
+          <div className="fm-home-creator-card__stats">{stats}</div>
         ) : null}
-        <div className="fm-home-creator-card__badges">
-          {item.emerging ? <span className="badge emerging">Emerging</span> : null}
-          {item.establishedBadge ? (
-            <span className="badge featured">Established</span>
-          ) : null}
-          {item.verifiedCreator ? <span className="badge">Verified</span> : null}
-        </div>
       </div>
     </Link>
   );

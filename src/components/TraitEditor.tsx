@@ -2,14 +2,6 @@
 
 import type { NftTrait } from "@/lib/discovery/types";
 
-const fieldStyle: React.CSSProperties = {
-  width: "100%",
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  color: "var(--ink)",
-  padding: "0.45rem 0.55rem",
-};
-
 export function TraitEditor({
   traits,
   onChange,
@@ -31,14 +23,14 @@ export function TraitEditor({
             aria-label="Trait type"
             placeholder="Trait (Background)"
             value={trait.trait_type}
-            style={fieldStyle}
+            className="fm-field fm-field--compact"
             onChange={(e) => update(index, { trait_type: e.target.value })}
           />
           <input
             aria-label="Trait value"
             placeholder="Value (Gold)"
             value={trait.value}
-            style={fieldStyle}
+            className="fm-field fm-field--compact"
             onChange={(e) => update(index, { value: e.target.value })}
           />
           <button

@@ -7,22 +7,12 @@ const globalReady = globalThis as unknown as {
   __freshmintDbReady?: Promise<DataMode>;
 };
 
-async function canQuery(url: string): Promise<boolean> {
+async function canQuery(): Promise<boolean> {
   try {
-    const { PrismaPg } = await import("@prisma/adapter-pg");
-    const { PrismaClient } = await import("@/generated/prisma/client");
-    const client = new PrismaClient({
-      adapter: new PrismaPg({
-        connectionString: url,
-        ssl:
-          url.includes("sslmode=require") || url.includes("prisma.io")
-            ? { rejectUnauthorized: false }
-            : undefined,
-      }),
-    });
-    await client.$connect();
-    await client.user.count();
-    await client.$disconnect();
+    // Reuse the process-wide singleton — do not open a second throwaway pool.
+    const { prisma } = await import("@/lib/db");
+    await prisma.$connect();
+    await prisma.user.count();
     return true;
   } catch {
     return false;
@@ -50,7 +40,7 @@ export async function ensureDatabaseReady(): Promise<DataMode> {
           return "memory" as const;
         }
 
-        if (await canQuery(url)) {
+        if (await canQuery()) {
           console.info("[freshmint] postgres ready");
           return "prisma" as const;
         }

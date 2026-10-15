@@ -8,6 +8,12 @@ import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Open Lane",
+  description:
+    "Browse the Open Lane: filter by chain, medium, price, and sale mode.",
+};
+
 export default async function OpenLanePage({
   searchParams,
 }: {
@@ -62,14 +68,13 @@ export default async function OpenLanePage({
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Open Lane
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.25rem" }}>
-        Permissionless browse across Ethereum, Base, Arbitrum, Optimism, Solana, and Boing.
-        Soft-launched works appear here, lightly ranked by quality — not dumped
-        onto the homepage firehose.
-      </p>
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Open Lane</h1>
+        <p className="page-lead__copy">
+          Browse soft-launched works across Ethereum, Base, Arbitrum, Optimism,
+          Solana, and Boing — ranked lightly by quality, not dump-fed.
+        </p>
+      </header>
       <OpenLaneFilters
         chain={chain}
         network={network}
@@ -81,11 +86,9 @@ export default async function OpenLanePage({
         saleMode={saleMode}
         endingSoon={endingSoon ? "1" : undefined}
       />
-      <p style={{ color: "var(--ink-muted)", margin: "1rem 0 1.5rem" }}>
-        {ranked.length} works
-      </p>
+      <p className="lane-count">{ranked.length} works</p>
       {ranked.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
+        <p className="fm-empty-copy">
           No works match these filters. Clear filters or soft-launch something new.
         </p>
       ) : (

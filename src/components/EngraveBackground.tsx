@@ -32,19 +32,19 @@ export function EngraveBackground({
       >
         <defs>
           <linearGradient id={`${gid}-line`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#a1a1aa" stopOpacity="0.14" />
-            <stop offset="40%" stopColor="#e4e4e7" stopOpacity="0.28" />
-            <stop offset="70%" stopColor="#6ecf9a" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#a1a1aa" stopOpacity="0.12" />
+            <stop offset="0%" stopColor="var(--ink-muted)" stopOpacity="0.14" />
+            <stop offset="40%" stopColor="var(--ink)" stopOpacity="0.22" />
+            <stop offset="70%" stopColor="var(--emergent)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="var(--ink-muted)" stopOpacity="0.12" />
           </linearGradient>
           <linearGradient id={`${gid}-gold`} x1="100%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#d4ae66" stopOpacity="0.1" />
-            <stop offset="45%" stopColor="#6ecf9a" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#d4ae66" stopOpacity="0.08" />
+            <stop offset="0%" stopColor="var(--accent-soft)" stopOpacity="0.1" />
+            <stop offset="45%" stopColor="var(--emergent)" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="var(--accent-soft)" stopOpacity="0.08" />
           </linearGradient>
           <radialGradient id={`${gid}-soft`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#e4e4e7" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#6ecf9a" stopOpacity="0.05" />
+            <stop offset="0%" stopColor="var(--ink)" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="var(--emergent)" stopOpacity="0.05" />
           </radialGradient>
           <filter id={`${gid}-glow`} x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="1.4" result="blur" />

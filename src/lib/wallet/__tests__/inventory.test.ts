@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Listing } from "@/lib/discovery/types";
+import { provisionalBoingCollectionAddress } from "@/lib/onchain/boing";
 import {
+  boingScanCandidatesFromListings,
   extractAlchemyApiKey,
+  fetchLinkedWalletNfts,
   isUsableWalletAddress,
   matchWalletNftsToListings,
   mergeWalletHeldListings,
@@ -12,6 +15,7 @@ import {
   parseReservoirTokens,
   resolveMediaUrl,
   walletNftsNotOnMarketplace,
+  type LinkedWalletScanMeta,
   type WalletNft,
 } from "@/lib/wallet/inventory";
 
@@ -100,6 +104,19 @@ describe("wallet inventory helpers", () => {
       isUsableWalletAddress("evm", "0x1111111111111111111111111111111111111111"),
     ).toBe(true);
     expect(isUsableWalletAddress("solana", "not-a-key")).toBe(false);
+    expect(isUsableWalletAddress("boing", `0x${"11".repeat(32)}`)).toBe(true);
+    expect(isUsableWalletAddress("boing", "0xabc")).toBe(false);
+  });
+
+  it("keys Boing assets by account id + 32-byte token word", () => {
+    const collection = `0x${"22".repeat(32)}`;
+    const tid = `0x${"aa".repeat(32)}`;
+    expect(nftAssetKey("boing", collection, tid)).toBe(
+      `boing:${collection}:${tid}`,
+    );
+    expect(nftAssetKey("boing", collection, tid.slice(2))).toBe(
+      `boing:${collection}:${tid}`,
+    );
   });
 });
 
@@ -226,5 +243,166 @@ describe("marketplace matching", () => {
       [],
     );
     expect(leftover).toHaveLength(1);
+  });
+});
+
+describe("Boing wallet scan MVP", () => {
+  const owner = `0x${"11".repeat(32)}`;
+  const other = `0x${"33".repeat(32)}`;
+  const collection = `0x${"22".repeat(32)}`;
+  const tokenId = `0x${"aa".repeat(32)}`;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("skips provisional collection addresses from candidate set", () => {
+    const collectionId = "col-provisional";
+    const candidates = boingScanCandidatesFromListings([
+      listing({
+        id: "boing-real",
+        chain: "boing",
+        network: "boing",
+        contractAddress: collection,
+        tokenId,
+        title: "Real",
+      }),
+      listing({
+        id: "boing-fake",
+        chain: "boing",
+        network: "boing",
+        collectionId,
+        contractAddress: provisionalBoingCollectionAddress(collectionId),
+        tokenId,
+        title: "Provisional",
+      }),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].listingId).toBe("boing-real");
+  });
+
+  it("returns owned FreshMint-known Boing NFTs instead of silent []", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          method?: string;
+        };
+        if (body.method === "boing_getBalance") {
+          return new Response(JSON.stringify({ result: { balance: "42" } }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (body.method === "boing_getContractStorage") {
+          return new Response(JSON.stringify({ result: { value: owner } }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: { message: "unexpected" } }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const meta: LinkedWalletScanMeta = { warnings: [], boingBalances: [] };
+    const nfts = await fetchLinkedWalletNfts(
+      [{ chain: "boing", network: "boing", address: owner }],
+      [
+        listing({
+          id: "lst-boing-1",
+          chain: "boing",
+          network: "boing",
+          contractAddress: collection,
+          tokenId,
+          title: "Boing Latch",
+          mediaUrl: "https://img.example/boing.png",
+        }),
+      ],
+      { skipCache: true, meta },
+    );
+
+    expect(nfts).toHaveLength(1);
+    expect(nfts[0].listingId).toBe("lst-boing-1");
+    expect(nfts[0].title).toBe("Boing Latch");
+    expect(nfts[0].chain).toBe("boing");
+    expect(meta.boingBalances).toHaveLength(1);
+    expect(meta.boingBalances[0]).toMatchObject({
+      ok: true,
+      balance: "42",
+      address: owner,
+    });
+  });
+
+  it("does not include tokens owned by another account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          method?: string;
+        };
+        if (body.method === "boing_getBalance") {
+          return new Response(JSON.stringify({ result: { balance: "1" } }), {
+            status: 200,
+          });
+        }
+        if (body.method === "boing_getContractStorage") {
+          return new Response(JSON.stringify({ result: { value: other } }), {
+            status: 200,
+          });
+        }
+        return new Response(JSON.stringify({ result: {} }), { status: 200 });
+      }),
+    );
+
+    const nfts = await fetchLinkedWalletNfts(
+      [{ chain: "boing", network: "boing", address: owner }],
+      [
+        listing({
+          id: "lst-boing-2",
+          chain: "boing",
+          network: "boing",
+          contractAddress: collection,
+          tokenId,
+          title: "Elsewhere",
+        }),
+      ],
+      { skipCache: true },
+    );
+    expect(nfts).toEqual([]);
+  });
+
+  it("surfaces a soft warning when Boing RPC is gated", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response("<html>cloudflare</html>", {
+          status: 403,
+          headers: { "Content-Type": "text/html" },
+        });
+      }),
+    );
+
+    const meta: LinkedWalletScanMeta = { warnings: [], boingBalances: [] };
+    const nfts = await fetchLinkedWalletNfts(
+      [{ chain: "boing", network: "boing", address: owner }],
+      [
+        listing({
+          id: "lst-boing-3",
+          chain: "boing",
+          network: "boing",
+          contractAddress: collection,
+          tokenId,
+          title: "Gated",
+        }),
+      ],
+      { skipCache: true, meta },
+    );
+    expect(nfts).toEqual([]);
+    expect(meta.warnings.length).toBeGreaterThan(0);
+    expect(meta.boingBalances[0]?.ok).toBe(false);
   });
 });

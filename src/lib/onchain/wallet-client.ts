@@ -184,7 +184,190 @@ export async function sendSolanaWalletTx(
   return result.signature;
 }
 
+export type BoingSendResult = {
+  /** Real 32-byte tx id when the wallet/node returns one; null for mempool `"ok"`. */
+  txHash: string | null;
+  contractAddress?: string | null;
+  /**
+   * True when Boing accepted the tx into the mempool without a stable tx id
+   * (`"ok"` / `{ tx_hash: "ok" }` per boing-node RPC).
+   */
+  mempoolAccepted: boolean;
+  raw?: unknown;
+};
+
+function isBoingMempoolAcceptedClient(result: unknown): boolean {
+  if (typeof result === "string") {
+    const t = result.trim().toLowerCase();
+    return t === "ok" || t === "0xok" || t === "accepted" || t === "success";
+  }
+  if (Array.isArray(result)) {
+    return result.some((item) => isBoingMempoolAcceptedClient(item));
+  }
+  if (!result || typeof result !== "object") return false;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "tx_hash",
+    "txHash",
+    "hash",
+    "tx_id",
+    "txId",
+    "status",
+    "result",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string") {
+      const t = v.trim().toLowerCase();
+      if (t === "ok" || t === "0xok" || t === "accepted" || t === "success") {
+        return true;
+      }
+    }
+  }
+  if ("result" in o && isBoingMempoolAcceptedClient(o.result)) return true;
+  if ("data" in o && isBoingMempoolAcceptedClient(o.data)) return true;
+  return false;
+}
+
+function normalizeExtractedBoingTxIdClient(value: string): string | null {
+  const t = value.trim();
+  if (!t) return null;
+  if (
+    t === "ok" ||
+    t === "0xok" ||
+    t.toLowerCase() === "accepted" ||
+    t.toLowerCase() === "success"
+  ) {
+    return null;
+  }
+  if (/^0x[0-9a-fA-F]{64}$/.test(t)) return t.toLowerCase();
+  if (/^[0-9a-fA-F]{64}$/.test(t)) return `0x${t.toLowerCase()}`;
+  if (t.length >= 8) return t.startsWith("0x") ? t : `0x${t}`;
+  return null;
+}
+
+function extractBoingTxHashClient(result: unknown): string | null {
+  if (typeof result === "string") {
+    return normalizeExtractedBoingTxIdClient(result);
+  }
+  if (Array.isArray(result)) {
+    for (const item of result) {
+      const found = extractBoingTxHashClient(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!result || typeof result !== "object") return null;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "tx_id",
+    "txId",
+    "hash",
+    "tx_hash",
+    "txHash",
+    "transactionHash",
+    "transaction_id",
+    "transactionId",
+    "id",
+    "signature",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string") {
+      const found = normalizeExtractedBoingTxIdClient(v);
+      if (found) return found;
+    }
+  }
+  if ("result" in o) {
+    const nested = extractBoingTxHashClient(o.result);
+    if (nested) return nested;
+  }
+  if ("data" in o) {
+    const nested = extractBoingTxHashClient(o.data);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function extractBoingContractAddressClient(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const o = result as Record<string, unknown>;
+  for (const key of [
+    "contractAddress",
+    "contract_address",
+    "contract",
+    "account_id",
+    "accountId",
+  ]) {
+    const v = o[key];
+    if (typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v.trim())) {
+      return v.trim().toLowerCase();
+    }
+  }
+  if ("result" in o) {
+    const nested = extractBoingContractAddressClient(o.result);
+    if (nested) return nested;
+  }
+  if ("data" in o) {
+    const nested = extractBoingContractAddressClient(o.data);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+/** Placeholder hash when node only returns mempool `"ok"` (not a real tx id). */
+export function pendingBoingAcceptedTxHash(): string {
+  const entropy =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().replace(/-/g, "")
+      : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  return `pending:boing-accepted:${entropy.slice(0, 24)}`;
+}
+
 export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
+  const sent = await sendBoingWalletTxDetailed(tx);
+  if (sent.txHash) return sent.txHash;
+  if (sent.mempoolAccepted) return pendingBoingAcceptedTxHash();
+  throw new Error("boing_tx_hash_missing");
+}
+
+/**
+ * Prefer a real 32-byte tx id. When Boing only returns mempool `{ tx_hash: "ok" }`,
+ * return a pending marker so confirm can wait for on-chain token ownership
+ * (same pattern as deploy sync) instead of failing the mint immediately.
+ */
+export async function sendBoingMintWalletTx(tx: BoingWalletTx): Promise<string> {
+  const sent = await sendBoingWalletTxDetailed(tx);
+  if (sent.txHash && /^0x[0-9a-fA-F]{64}$/.test(sent.txHash.trim())) {
+    return sent.txHash.trim().toLowerCase();
+  }
+  if (sent.mempoolAccepted) {
+    return pendingBoingAcceptedTxHash();
+  }
+  throw new Error("boing_tx_id_required");
+}
+
+/** Surface wallet/provider errors as a plain message (not opaque objects). */
+function boingProviderErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err && typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    for (const key of ["message", "error", "reason"]) {
+      const v = o[key];
+      if (typeof v === "string" && v.trim()) return v.trim();
+      if (v && typeof v === "object") {
+        const nested = (v as { message?: unknown }).message;
+        if (typeof nested === "string" && nested.trim()) return nested.trim();
+      }
+    }
+    if (typeof o.data === "string" && o.data.trim()) return o.data.trim();
+  }
+  return "boing_tx_failed";
+}
+
+/** Prefer this when deploy confirm needs the real contract AccountId. */
+export async function sendBoingWalletTxDetailed(
+  tx: BoingWalletTx,
+): Promise<BoingSendResult> {
   const provider = getBoingProvider();
   await provider.request({ method: "boing_requestAccounts" });
   try {
@@ -195,15 +378,24 @@ export async function sendBoingWalletTx(tx: BoingWalletTx): Promise<string> {
   } catch {
     // Wallet may already be on testnet or omit switch.
   }
-  const result = await provider.request({
-    method: "boing_sendTransaction",
-    params: [tx.tx],
-  });
-  if (typeof result === "string") return result;
-  if (result && typeof result === "object" && "hash" in result) {
-    return String((result as { hash: unknown }).hash);
+  let result: unknown;
+  try {
+    result = await provider.request({
+      method: "boing_sendTransaction",
+      params: [tx.tx],
+    });
+  } catch (err) {
+    throw new Error(boingProviderErrorMessage(err));
   }
-  throw new Error("boing_tx_hash_missing");
+
+  const txHash = extractBoingTxHashClient(result);
+  const contractAddress = extractBoingContractAddressClient(result);
+  const mempoolAccepted = isBoingMempoolAcceptedClient(result);
+  // Boing node accepts with `{ tx_hash: "ok" }` — that is success, not a missing hash.
+  if (!txHash && !mempoolAccepted) {
+    throw new Error("boing_tx_hash_missing");
+  }
+  return { txHash, contractAddress, mempoolAccepted, raw: result };
 }
 
 export async function requestBuyerAddress(

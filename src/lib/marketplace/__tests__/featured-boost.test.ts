@@ -22,9 +22,9 @@ beforeEach(() => {
   resetMemoryStoreForTests();
   enableMemoryMode("unit-test");
   process.env.NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS =
-    "0x6E481562F3ecC39405Dc8F8B17F6c754B36D0C14";
+    "0xDde8Ec0A27467a8Eb6E7a3245e07d2D67B6B56bb";
   process.env.NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA =
-    "96rDHepuNiz1eDDMikrkHqtM51Sw8s6miUxKhwtTn7YR";
+    "3u2DbBkCqoSQmcreHfwQWDekJ8HPctgns3v6L3LdupwW";
 });
 
 function fromSeed(
@@ -87,7 +87,7 @@ describe("featured boost", () => {
     expect(prepared.feeUsd).toBe(15);
     expect(prepared.settlement).toBe("pay_treasury_native");
     expect(prepared.settlementAddress.toLowerCase()).toBe(
-      "0x6e481562f3ecc39405dc8f8b17f6c754b36d0c14",
+      "0xdde8ec0a27467a8eb6e7a3245e07d2d67b6b56bb",
     );
     expect(prepared.walletTx.to).toBe(prepared.settlementAddress);
     expect(prepared.walletTx.chain).toBe("evm");

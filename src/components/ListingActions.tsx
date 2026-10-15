@@ -73,13 +73,12 @@ function stepLabel(step: BuyStep, crossChain: boolean): string {
     case "done":
       return "Owned on-chain";
     default:
-      return crossChain ? "Bridge & buy" : "Confirm buy";
+      return crossChain ? "Bridge & buy" : "Confirm purchase";
   }
 }
 
 export function ListingActions({
   listingId,
-  creatorId,
   priceUsd,
   stage,
   sold = false,
@@ -93,8 +92,12 @@ export function ListingActions({
   pendingPurchase = null,
   layout = "inline",
   showSave = true,
+  showCommunityActions = true,
   isSecondary = false,
   creatorRoyaltyBps = null,
+  /** Hide Buy now while an English auction is live (use Place bid instead). */
+  suppressBuy = false,
+  dense = false,
 }: {
   listingId: string;
   creatorId?: string;
@@ -117,6 +120,11 @@ export function ListingActions({
   layout?: "inline" | "menu";
   /** When false, Save lives on the WorkCard caption instead. */
   showSave?: boolean;
+  /** When false, Save / Nominate / Report are omitted (use ListingMoreActionsModal). */
+  showCommunityActions?: boolean;
+  suppressBuy?: boolean;
+  /** Compact checkout chrome for preview modals (less vertical scroll). */
+  dense?: boolean;
 }) {
   const router = useRouter();
   const listingNetwork = (network ??
@@ -185,6 +193,7 @@ export function ListingActions({
   const crossChain = payNetwork !== listingNetwork;
   const uniqueSold = (sold || justSold) && !heldPurchase && !pendingPurchase;
   const canBuy =
+    !suppressBuy &&
     minted &&
     priceUsd != null &&
     !uniqueSold &&
@@ -358,6 +367,10 @@ export function ListingActions({
                     ? "This listing isn't minted on-chain yet"
                     : raw === "boing_same_chain_only"
                       ? "Boing listings are same-chain only (pay with BOING)"
+                      : raw === "boing_settlement_unavailable"
+                        ? "Boing payout address isn't configured — seller needs a linked Boing wallet"
+                        : raw === "boing_account_id_required"
+                          ? "Connect a Boing Express account (32-byte id) to pay"
                       : raw === "wash_blocked" || raw === "high_velocity_low_dwell"
                         ? "Purchase blocked"
                         : raw === "invalid_body"
@@ -616,6 +629,24 @@ export function ListingActions({
         return;
       }
 
+      // Boing settles on payment (buyer cannot sign transfer_nft while creator owns the token).
+      if (paid.status === "completed" || paid.boingPaymentSettled) {
+        setBuyStep("done");
+        finishPurchase(
+          {
+            ...data,
+            ...paid,
+            fees: data.fees,
+            transferTxHash:
+              typeof paid.txHash === "string" ? paid.txHash : paymentHash,
+          },
+          paid.boingPaymentSettled
+            ? "Purchased on Boing"
+            : "Owned on-chain",
+        );
+        return;
+      }
+
       setBuyStep("transferring");
       const transferTx = paid.transferWalletTx ?? data.transferWalletTx;
       let transferHash: string | null = null;
@@ -693,28 +724,17 @@ export function ListingActions({
     settleQuote?.formatted ??
     `$${priceUsd}`;
 
+  const menuLayout = layout === "menu";
+  const hideCommunityInDenseConfirm = dense && confirmBuy;
+
   return (
     <div
-      className={`listing-actions${layout === "menu" ? " listing-actions--menu" : ""}`}
+      className={`listing-actions${menuLayout ? " listing-actions--menu" : ""}${dense ? " listing-actions--dense" : ""}`}
     >
-      {creatorId ? (
-        <button
-          type="button"
-          className="badge emerging"
-          style={{ cursor: "pointer", background: "transparent" }}
-          onClick={() =>
-            void post("/api/follow", { artistId: creatorId }).then((d) => {
-              if (d && !("error" in d)) {
-                setMsg("Following");
-                router.refresh();
-              }
-            })
-          }
-        >
-          Follow
-        </button>
-      ) : null}
-      {showSave ? (
+      {!menuLayout &&
+      showCommunityActions &&
+      showSave &&
+      !hideCommunityInDenseConfirm ? (
         <button
           type="button"
           className="badge"
@@ -731,7 +751,10 @@ export function ListingActions({
           Save
         </button>
       ) : null}
-      {sessionUserId &&
+      {!menuLayout &&
+      showCommunityActions &&
+      !hideCommunityInDenseConfirm &&
+      sessionUserId &&
       stage !== "draft" &&
       (curatorScore ?? 0) >= DISCOVERY_CONFIG.nominationStakePoints ? (
         <button
@@ -759,7 +782,11 @@ export function ListingActions({
         >
           Nominate
         </button>
-      ) : sessionUserId && stage !== "draft" ? (
+      ) : !menuLayout &&
+        showCommunityActions &&
+        !hideCommunityInDenseConfirm &&
+        sessionUserId &&
+        stage !== "draft" ? (
         <span
           className="badge"
           title={`Need ${DISCOVERY_CONFIG.nominationStakePoints}+ curator points to nominate`}
@@ -769,10 +796,10 @@ export function ListingActions({
         </span>
       ) : null}
       {uniqueSold ? <span className="badge featured">Sold</span> : null}
-      {dropState === "upcoming" ? (
+      {showCommunityActions && dropState === "upcoming" ? (
         <span className="badge emerging">Drop scheduled</span>
       ) : null}
-      {dropState === "ended" && !uniqueSold ? (
+      {showCommunityActions && dropState === "ended" && !uniqueSold ? (
         <span className="badge">Drop ended</span>
       ) : null}
       {!minted && !uniqueSold && priceUsd != null ? (
@@ -781,7 +808,7 @@ export function ListingActions({
         </span>
       ) : null}
       {canBuy && !confirmBuy ? (
-        layout === "menu" ? (
+        menuLayout ? (
           <Link href={`/listings/${listingId}`} className="badge featured">
             Buy{priceUsd != null ? ` $${priceUsd}` : ""}
           </Link>
@@ -812,7 +839,7 @@ export function ListingActions({
           if (primary.kind === "sign_in") {
             return (
               <Link href={signInHref} className="badge featured">
-                Continue
+                Buy now
               </Link>
             );
           }
@@ -823,7 +850,7 @@ export function ListingActions({
               style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void openCheckout()}
             >
-              Continue
+              Buy now
               {settleQuote?.formatted || priceUsd != null ? (
                 <span style={{ opacity: 0.75 }}>
                   {" "}
@@ -834,47 +861,30 @@ export function ListingActions({
           );
         })()
       ) : null}
-      {canBuy && confirmBuy && layout !== "menu" ? (
+      {canBuy && confirmBuy && !menuLayout ? (
         <div
-          style={{
-            width: "100%",
-            maxWidth: "24rem",
-            marginTop: "0.15rem",
-            padding: "0.75rem 0.85rem",
-            border: "1px solid var(--line)",
-            background: "var(--panel-solid)",
-          }}
+          className={
+            dense
+              ? "listing-actions__checkout listing-actions__checkout--dense"
+              : "listing-actions__checkout"
+          }
         >
-          <p
-            className="display"
-            style={{ margin: "0 0 0.25rem", fontSize: "1rem" }}
-          >
-            {payAmountLabel}
-            {priceUsd != null ? (
-              <span
-                style={{
-                  marginLeft: "0.35rem",
-                  color: "var(--ink-muted)",
-                  fontSize: "0.85rem",
-                  fontWeight: 400,
-                }}
-              >
-                ≈ ${priceUsd}
-              </span>
-            ) : null}
-          </p>
-          <p
-            style={{
-              margin: "0 0 0.45rem",
-              color: "var(--ink-muted)",
-              fontSize: "0.8rem",
-              lineHeight: 1.45,
-            }}
-          >
-            Lands in your {chain} wallet.
-          </p>
+          <div className="listing-actions__checkout-price">
+            <p className="display listing-actions__pay-amount">
+              {payAmountLabel}
+              {priceUsd != null ? (
+                <span className="listing-actions__pay-usd">≈ ${priceUsd}</span>
+              ) : null}
+            </p>
+            <p className="listing-actions__pay-meta">
+              {listingNetwork === "boing"
+                ? "Pay with BOING · settles on payment"
+                : `Lands in your ${chain} wallet`}
+            </p>
+          </div>
           <PlatformFeeBreakdown
             priceUsd={priceUsd}
+            compact={dense}
             isSecondary={isSecondary}
             creatorRoyaltyBps={creatorRoyaltyBps}
           />
@@ -891,42 +901,38 @@ export function ListingActions({
             />
           ) : null}
 
-          <ol
-            style={{
-              margin: "0 0 0.75rem",
-              paddingLeft: "1.1rem",
-              color: "var(--ink-muted)",
-              fontSize: "0.78rem",
-              lineHeight: 1.45,
-            }}
-          >
-            <li style={{ opacity: buyStep === "connecting" ? 1 : 0.75 }}>
-              Connect {WALLET_HINT[payVm]}
-              {crossChain ? ` + ${WALLET_HINT[chain]}` : ""}
-            </li>
-            <li
-              style={{
-                opacity:
-                  buyStep === "bridging" || buyStep === "paying" ? 1 : 0.75,
-              }}
-            >
+          {!dense ? (
+            <ol className="listing-actions__steps">
+              <li style={{ opacity: buyStep === "connecting" ? 1 : 0.75 }}>
+                Connect {WALLET_HINT[payVm]}
+                {crossChain ? ` + ${WALLET_HINT[chain]}` : ""}
+              </li>
+              <li
+                style={{
+                  opacity:
+                    buyStep === "bridging" || buyStep === "paying" ? 1 : 0.75,
+                }}
+              >
+                {crossChain
+                  ? `Bridge ${PAY_LABELS[payNetwork] ?? payNetwork} → ${PAY_LABELS[listingNetwork] ?? listingNetwork}`
+                  : `Pay on ${PAY_LABELS[listingNetwork] ?? listingNetwork}`}
+              </li>
+              <li style={{ opacity: buyStep === "transferring" ? 1 : 0.75 }}>
+                Receive NFT transfer on {chain}
+              </li>
+            </ol>
+          ) : (
+            <p className="listing-actions__steps-dense">
+              {WALLET_HINT[payVm]}
+              {" → "}
               {crossChain
-                ? `Bridge ${PAY_LABELS[payNetwork] ?? payNetwork} → ${PAY_LABELS[listingNetwork] ?? listingNetwork}`
-                : `Pay on ${PAY_LABELS[listingNetwork] ?? listingNetwork}`}
-            </li>
-            <li style={{ opacity: buyStep === "transferring" ? 1 : 0.75 }}>
-              Receive NFT transfer on {chain}
-            </li>
-          </ol>
+                ? `bridge to ${PAY_LABELS[listingNetwork] ?? listingNetwork}`
+                : `pay on ${PAY_LABELS[listingNetwork] ?? listingNetwork}`}
+              {listingNetwork === "boing" ? "" : " → receive NFT"}
+            </p>
+          )}
 
-          <label
-            style={{
-              display: "block",
-              marginBottom: "0.55rem",
-              fontSize: "0.8rem",
-              color: "var(--ink-muted)",
-            }}
-          >
+          <label className="listing-actions__pay-network">
             Pay with
             <select
               value={payNetwork}
@@ -936,12 +942,6 @@ export function ListingActions({
                 setPaymentAddress(null);
                 setReceiveAddress(null);
                 setMsg(null);
-              }}
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.35rem 0.45rem",
               }}
             >
               {payNetworks.map((n) => (
@@ -953,14 +953,7 @@ export function ListingActions({
             </select>
           </label>
 
-          <p
-            style={{
-              margin: "0 0 0.65rem",
-              fontSize: "0.75rem",
-              color: "var(--ink-muted)",
-              lineHeight: 1.4,
-            }}
-          >
+          <p className="listing-actions__wallet-note">
             {quoteBusy ? "Updating quote…" : null}
             {!quoteBusy && crossChain ? (
               <>
@@ -991,19 +984,12 @@ export function ListingActions({
           </p>
 
           {buying || buyStep !== "idle" ? (
-            <p
-              style={{
-                margin: "0 0 0.55rem",
-                fontSize: "0.8rem",
-                color: "var(--accent-soft)",
-              }}
-              aria-live="polite"
-            >
+            <p className="listing-actions__busy" aria-live="polite">
               {stepLabel(buyStep === "idle" && buying ? "connecting" : buyStep, crossChain)}
             </p>
           ) : null}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+          <div className="listing-actions__cta-row">
             {(() => {
               const primary = resolveBuyPrimaryCta({
                 sessionUserId,
@@ -1059,7 +1045,7 @@ export function ListingActions({
           </div>
         </div>
       ) : null}
-      {stage === "soft_launch" && canStageRising ? (
+      {!menuLayout && !hideCommunityInDenseConfirm && stage === "soft_launch" && canStageRising ? (
         <button
           type="button"
           className="badge emerging"
@@ -1078,7 +1064,11 @@ export function ListingActions({
           Push to Rising
         </button>
       ) : null}
-      {stage === "draft" && minted && canStageRising ? (
+      {!menuLayout &&
+      !hideCommunityInDenseConfirm &&
+      stage === "draft" &&
+      minted &&
+      canStageRising ? (
         <button
           type="button"
           className="badge emerging"
@@ -1097,25 +1087,27 @@ export function ListingActions({
           Soft-launch
         </button>
       ) : null}
-      <button
-        type="button"
-        className="badge"
-        style={{
-          cursor: "pointer",
-          background: "transparent",
-          color: "var(--danger)",
-        }}
-        onClick={() =>
-          void post("/api/report", {
-            listingId,
-            reason: "spam",
-          }).then((d) => {
-            if (d && !("error" in d)) setMsg("Reported");
-          })
-        }
-      >
-        Report
-      </button>
+      {!menuLayout && showCommunityActions && !hideCommunityInDenseConfirm ? (
+        <button
+          type="button"
+          className="badge"
+          style={{
+            cursor: "pointer",
+            background: "transparent",
+            color: "var(--danger)",
+          }}
+          onClick={() =>
+            void post("/api/report", {
+              listingId,
+              reason: "spam",
+            }).then((d) => {
+              if (d && !("error" in d)) setMsg("Reported");
+            })
+          }
+        >
+          Report
+        </button>
+      ) : null}
       {heldPurchase || pendingPurchase ? (
         <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "0.4rem" }}>
           <ResumeCryptoPurchaseButton
@@ -1129,7 +1121,7 @@ export function ListingActions({
       ) : null}
       {msg === "sign_in" ? (
         <span style={{ fontSize: "0.8rem", maxWidth: "22rem" }}>
-          <Link href={signInHref}>Continue</Link> to sign in, then pay from your
+          <Link href={signInHref}>Sign in</Link> to buy, then pay from your
           wallet. Link wallets anytime under{" "}
           <Link href="/me/settings">/me/settings</Link>.
         </span>

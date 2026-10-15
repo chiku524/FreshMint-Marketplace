@@ -1,4 +1,7 @@
 import { ModerationPanel } from "@/components/ModerationPanel";
+import { noIndexMetadata } from "@/lib/seo/site";
+
+export const metadata = noIndexMetadata("Moderation");
 
 export default function ModeratePage() {
   return (

@@ -1,5 +1,5 @@
+import { ListingPreviewOpener } from "@/components/ListingPreviewModal";
 import { getFeaturedOfTheWeek } from "@/lib/marketplace/featured-week";
-import Link from "next/link";
 
 function hueFromId(id: string): number {
   let h = 0;
@@ -17,7 +17,12 @@ export async function FeaturedOfTheWeek() {
 
   return (
     <aside className="fm-featured-week" aria-label="Featured artwork of the week">
-      <Link href={`/listings/${listing.id}`} className="fm-featured-week__link">
+      <ListingPreviewOpener
+        listing={listing}
+        creatorName={creatorName}
+        className="fm-featured-week__link"
+        ariaLabel={`Preview ${listing.title}`}
+      >
         <div
           className="fm-featured-week__media"
           style={
@@ -44,7 +49,7 @@ export async function FeaturedOfTheWeek() {
           </span>
           <span className="fm-featured-week__week">{weekLabel}</span>
         </div>
-      </Link>
+      </ListingPreviewOpener>
     </aside>
   );
 }

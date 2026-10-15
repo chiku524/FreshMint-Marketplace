@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { appBaseUrl } from "@/lib/auth/paths";
+import { ROBOTS_DISALLOW } from "@/lib/seo/site";
 
 export default function robots(): MetadataRoute.Robots {
   const base = appBaseUrl();
@@ -7,8 +8,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/me", "/moderate", "/studio", "/notifications", "/sign-in", "/sign-up"],
+      disallow: [...ROBOTS_DISALLOW],
     },
-    sitemap: `${base}/sitemap.xml`,
+    sitemap: `${base.replace(/\/$/, "")}/sitemap.xml`,
+    host: base,
   };
 }

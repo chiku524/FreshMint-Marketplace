@@ -132,6 +132,8 @@ export interface Listing {
 export interface Collection {
   id: string;
   title: string;
+  /** Public URL segment; prefer over id in links when present. */
+  slug?: string | null;
   creatorId: string;
   chain: Chain;
   network?: NetworkId | string;
@@ -143,9 +145,30 @@ export interface Collection {
   dropEndsAt?: number | null;
   dropPriceUsd?: number | null;
   mediaBytes?: number;
+  /** Square logo / avatar for the collection header. */
+  imageUrl?: string | null;
+  /** Wide banner / cover for the collection header. */
+  bannerUrl?: string | null;
+  /** Public about blurb on the collection page. */
+  description?: string;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
   contractAddress?: string | null;
+  /**
+   * Cached companion fungible tokens from the on-chain registry (many, mutable).
+   * Parsed from `linkedTokensJson` — registry is SoT; see linked-token-registry.ts.
+   */
+  linkedTokens?: Array<{
+    address: string;
+    label?: string | null;
+    chain?: Chain | null;
+  }>;
   deployTxHash?: string | null;
   deployStatus?: "none" | "pending_wallet" | "confirmed" | "failed" | string;
+  /** Boing reference NFT template version (`"1"` | `"2"` | `"3"`). Defaults to `"1"`. */
+  nftTemplateVersion?: string | null;
   escrowAddress?: string | null;
   packageSellEnabled?: boolean;
   packagePriceUsd?: number | null;

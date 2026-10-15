@@ -103,6 +103,13 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M16 8l4 4-4 4" />
     </>
   ),
+  treasury: (
+    <>
+      <path d="M6 8h12v10.5H6z" />
+      <path d="M9 8V6.2c0-1.5 1.3-2.7 3-2.7s3 1.2 3 2.7V8" />
+      <path d="M6 12.5h12" />
+    </>
+  ),
   signin: (
     <>
       <path d="M13.5 12H4" />
@@ -184,6 +191,7 @@ export const NAV_ITEM_ICON: Record<string, string> = {
   "/create": "create",
   "/studio": "panel",
   "/bridge": "bridge",
+  "/treasury": "treasury",
   "/sign-in": "signin",
   "/sign-up": "signup",
   "/me": "profile",

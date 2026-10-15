@@ -10,7 +10,7 @@ import { cookies } from "next/headers";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "New collections — FreshMint Marketplace",
+  title: "New collections",
   description:
     "Collections created in the last 7 days with at least one published work.",
 };

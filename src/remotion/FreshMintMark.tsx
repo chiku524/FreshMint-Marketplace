@@ -1,46 +1,89 @@
 import { Easing, interpolate, useCurrentFrame } from "remotion";
+import {
+  MINT_JUNCTION,
+  MINT_LATERAL_LEFT,
+  MINT_LATERAL_RIGHT,
+  MINT_LEAF_ANGLE,
+  MINT_LEAF_UP,
+  MINT_STEM,
+  MINT_VEIN_UP,
+  mintLeafTransform,
+} from "../lib/brand/mint-mark";
+import { LOGO_INTRO } from "./meta";
+
+function loopFrame(frame: number, loop: number): number {
+  return ((frame % loop) + loop) % loop;
+}
 
 export const FreshMintMark: React.FC = () => {
   const frame = useCurrentFrame();
+  const loop = LOGO_INTRO.durationInFrames;
+  const t = loopFrame(frame, loop);
+
+  const stemLen = 18;
+  const veinLen = 28;
+  const ease = Easing.bezier(0.22, 1, 0.36, 1);
+  const open = interpolate(t, [8, 34, 122, 148], [14, MINT_LEAF_ANGLE, MINT_LEAF_ANGLE, 14], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
+  const leafScale = interpolate(t, [8, 34, 122, 148], [0.28, 1, 1, 0.28], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
+  const leafOpacity = interpolate(t, [8, 22, 124, 148], [0, 1, 1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const veinDraw = interpolate(t, [20, 40, 124, 146], [veinLen, 0, 0, veinLen], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
+  const veinOpacity = interpolate(t, [20, 36, 124, 146], [0, 0.42, 0.42, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 64 64"
       fill="none"
-      width={168}
-      height={168}
+      width={176}
+      height={176}
     >
       <defs>
         <linearGradient
           id="fm-field"
-          x1="12"
-          y1="6"
-          x2="54"
-          y2="58"
+          x1="10"
+          y1="4"
+          x2="56"
+          y2="60"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#163528" />
-          <stop offset="0.55" stopColor="#0c1a14" />
-          <stop offset="1" stopColor="#07110d" />
+          <stop stopColor="#1a3a2c" />
+          <stop offset="0.5" stopColor="#0d1c15" />
+          <stop offset="1" stopColor="#08110d" />
         </linearGradient>
         <radialGradient
           id="fm-wash"
           cx="32"
-          cy="28"
-          r="28"
+          cy="26"
+          r="30"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#7ed9a8" stopOpacity="0.28" />
-          <stop offset="0.55" stopColor="#4db884" stopOpacity="0.1" />
+          <stop stopColor="#7ed9a8" stopOpacity="0.22" />
           <stop offset="1" stopColor="#07110d" stopOpacity="0" />
         </radialGradient>
         <linearGradient
           id="fm-leafR"
-          x1="38"
+          x1="26"
           y1="14"
-          x2="46"
-          y2="32"
+          x2="40"
+          y2="40"
           gradientUnits="userSpaceOnUse"
         >
           <stop stopColor="#7ed9a8" />
@@ -48,97 +91,99 @@ export const FreshMintMark: React.FC = () => {
         </linearGradient>
         <linearGradient
           id="fm-leafL"
-          x1="16"
+          x1="24"
           y1="14"
-          x2="30"
-          y2="32"
+          x2="38"
+          y2="40"
           gradientUnits="userSpaceOnUse"
         >
           <stop stopColor="#4db884" />
           <stop offset="1" stopColor="#2f8a5e" />
         </linearGradient>
       </defs>
-      <rect width="64" height="64" rx="18" fill="url(#fm-field)" />
-      <rect width="64" height="64" rx="18" fill="url(#fm-wash)" />
+      <rect width="64" height="64" rx="16" fill="url(#fm-field)" />
+      <rect width="64" height="64" rx="16" fill="url(#fm-wash)" />
       <rect
         x="0.75"
         y="0.75"
         width="62.5"
         height="62.5"
-        rx="17.25"
+        rx="15.25"
         stroke="#4db884"
-        strokeOpacity="0.22"
+        strokeOpacity="0.28"
       />
       <path
-        d="M32 58c.2-9 .6-17 1.2-28"
+        d={MINT_STEM}
         stroke="#3d6b52"
-        strokeWidth="2.6"
+        strokeWidth="2.35"
         strokeLinecap="round"
-        strokeDasharray={32}
-        strokeDashoffset={interpolate(frame, [8, 28], [32, 0], {
+        strokeDasharray={stemLen}
+        strokeDashoffset={interpolate(t, [0, 18, 132, 150], [stemLen, 0, 0, stemLen], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          easing: ease,
         })}
       />
-      <path
-        d="M33.2 30C38 24 44 18 50 13C51.5 14.8 51.2 16.5 50 17.2C52 18.5 52.2 20.2 50.8 21.2C53 22.8 53 24.8 51.2 26C48 28.5 41 32 33.2 30Z"
-        fill="url(#fm-leafR)"
-        opacity={interpolate(frame, [16, 32], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
-        })}
-      />
-      <path
-        d="M33.2 30C28.5 24 22.5 18 16.5 13.5C15 15.3 15.3 17 16.5 17.7C14.5 19 14.3 20.7 15.7 21.7C13.5 23.3 13.5 25.3 15.3 26.5C18.5 29 26 32 33.2 30Z"
-        fill="url(#fm-leafL)"
-        opacity={interpolate(frame, [18, 34], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
-        })}
-      />
+      <g opacity={leafOpacity} transform={mintLeafTransform(-open, leafScale)}>
+        <path d={MINT_LEAF_UP} fill="url(#fm-leafL)" />
+        <path
+          d={MINT_VEIN_UP}
+          stroke="#0e2418"
+          strokeWidth="1.1"
+          strokeLinecap="round"
+          opacity={veinOpacity}
+          strokeDasharray={veinLen}
+          strokeDashoffset={veinDraw}
+        />
+        <path
+          d={MINT_LATERAL_LEFT}
+          stroke="#0e2418"
+          strokeWidth="0.7"
+          strokeLinecap="round"
+          opacity={veinOpacity * 0.7}
+        />
+        <path
+          d={MINT_LATERAL_RIGHT}
+          stroke="#0e2418"
+          strokeWidth="0.7"
+          strokeLinecap="round"
+          opacity={veinOpacity * 0.7}
+        />
+      </g>
+      <g opacity={leafOpacity} transform={mintLeafTransform(open, leafScale)}>
+        <path d={MINT_LEAF_UP} fill="url(#fm-leafR)" />
+        <path
+          d={MINT_VEIN_UP}
+          stroke="#0e2418"
+          strokeWidth="1.1"
+          strokeLinecap="round"
+          opacity={veinOpacity}
+          strokeDasharray={veinLen}
+          strokeDashoffset={veinDraw}
+        />
+        <path
+          d={MINT_LATERAL_LEFT}
+          stroke="#0e2418"
+          strokeWidth="0.7"
+          strokeLinecap="round"
+          opacity={veinOpacity * 0.72}
+        />
+        <path
+          d={MINT_LATERAL_RIGHT}
+          stroke="#0e2418"
+          strokeWidth="0.7"
+          strokeLinecap="round"
+          opacity={veinOpacity * 0.72}
+        />
+      </g>
       <circle
-        cx="33.2"
-        cy="30.4"
-        r="2.1"
+        cx={MINT_JUNCTION.cx}
+        cy={MINT_JUNCTION.cy}
+        r={MINT_JUNCTION.r}
         fill="#3d6b52"
-        opacity={interpolate(frame, [22, 34], [0, 1], {
+        opacity={interpolate(t, [14, 28, 126, 148], [0, 1, 1, 0], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
-        })}
-      />
-      <path
-        d="M33.2 30C40 23.5 46.5 17.5 51.5 13.5"
-        stroke="#0e2418"
-        strokeWidth="1.25"
-        strokeLinecap="round"
-        opacity={interpolate(frame, [24, 40], [0, 0.45], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        })}
-        strokeDasharray={28}
-        strokeDashoffset={interpolate(frame, [24, 42], [28, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
-        })}
-      />
-      <path
-        d="M33.2 30C26.5 23.5 20 18 15 14"
-        stroke="#0e2418"
-        strokeWidth="1.15"
-        strokeLinecap="round"
-        opacity={interpolate(frame, [26, 42], [0, 0.4], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        })}
-        strokeDasharray={28}
-        strokeDashoffset={interpolate(frame, [26, 44], [28, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
         })}
       />
     </svg>

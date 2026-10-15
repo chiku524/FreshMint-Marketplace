@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
     mediaUrl: origin!.mediaUrl ?? undefined,
     saleMode: "fixed",
     publishSoftLaunch: false,
+    allowDuplicateMedia: true,
   });
 
   if (!created.ok || !created.listing) {

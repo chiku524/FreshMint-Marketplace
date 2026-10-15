@@ -5,7 +5,12 @@ import {
 } from "@/lib/marketplace/auctions-filter";
 import Link from "next/link";
 
-const TABS: AuctionsSaleModeFilter[] = ["all", "timed_window", "english"];
+const TABS: AuctionsSaleModeFilter[] = [
+  "all",
+  "timed_window",
+  "english",
+  "dutch",
+];
 
 export function AuctionsSaleModeTabs({
   active,

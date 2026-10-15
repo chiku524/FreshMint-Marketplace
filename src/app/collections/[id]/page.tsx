@@ -1,30 +1,73 @@
-import { PuzzleRail } from "@/components/PuzzleRail";
-import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
+import { CollectionDetailTabs } from "@/components/CollectionDetailTabs";
+import { CollectionEditModal } from "@/components/CollectionEditModal";
+import { CollectionItemsWithRarity } from "@/components/CollectionItemsWithRarity";
 import { CollectionPackagePanel } from "@/components/CollectionPackagePanel";
-import { WorkCard } from "@/components/WorkCard";
+import { CollectionProfileHeader } from "@/components/CollectionProfileHeader";
+import { CollectionPublishPanel } from "@/components/CollectionPublishPanel";
+import { FollowButton } from "@/components/FollowButton";
+import { LinkedTokensList } from "@/components/LinkedTokensList";
+import { LinkedTokensModal } from "@/components/LinkedTokensModal";
+import { ListingActivityTimeline } from "@/components/ListingActivityTimeline";
+import { UpdateFeeRecipientsButton } from "@/components/UpdateFeeRecipientsButton";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
+import { listCollectionActivity } from "@/lib/marketplace/activity";
 import { formatBytes, COLLECTION_MEDIA_CAP_BYTES } from "@/lib/marketplace/drops";
+import { aggregateCollectionVolumesUsd } from "@/lib/marketplace/collections-browse";
+import { deriveCollectionFloorUsd } from "@/lib/marketplace/home-discovery";
+import {
+  listingVisibleOnCollectionPage,
+} from "@/lib/marketplace/listing-manage";
+import { computeCollectionRarity } from "@/lib/marketplace/rarity";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
+import { collectionPageMetadata } from "@/lib/seo/site";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id: idOrSlug } = await params;
+  const engine = await getDiscoveryEngine();
+  const surface = engine.getCollectionSurface(idOrSlug);
+  if (!surface) return collectionPageMetadata(null);
+  const { collection } = surface;
+  const heroId = collection.heroListingId;
+  const hero = heroId ? engine.state.listings.get(heroId) : null;
+  const cover =
+    [...engine.state.listings.values()].find((l) => l.collectionId === collection.id)
+      ?.mediaUrl ?? null;
+  return collectionPageMetadata({
+    id: collection.id,
+    title: collection.title,
+    slug: collection.slug,
+    description: collection.description,
+    imageUrl: collection.imageUrl,
+    bannerUrl: collection.bannerUrl,
+    coverUrl: hero?.mediaUrl ?? cover,
+  });
+}
 
 export default async function CollectionDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { id: idOrSlug } = await params;
   const engine = await getDiscoveryEngine();
-  const surface = engine.getCollectionSurface(id);
+  const surface = engine.getCollectionSurface(idOrSlug);
   if (!surface) notFound();
 
-  const { collection, listings, hasTraction } = surface;
+  const { collection, hasTraction } = surface;
   const creator = engine.state.creators.get(collection.creatorId);
   const soldIds = await listClosedPrimarySaleIds();
+  const volumes = await aggregateCollectionVolumesUsd();
   const user = await getSessionUser();
   const network = resolveNetwork(collection.network, collection.chain);
   const isOwner = user?.id === collection.creatorId;
@@ -34,112 +77,296 @@ export default async function CollectionDetailPage({
     collection.deployStatus === "confirmed" &&
     Boolean(collection.contractAddress) &&
     !String(collection.contractAddress).startsWith("pending:");
-  const pieces = [...engine.state.listings.values()]
-    .filter((l) => l.collectionId === id && !l.delisted)
+  // Full collection inventory (not traction-capped surface samples).
+  const allInCollection = [...engine.state.listings.values()]
+    .filter((l) => l.collectionId === collection.id)
     .sort((a, b) => b.createdAt - a.createdAt);
+  // Gallery: on-chain minted works only (owners and buyers).
+  const pieces = allInCollection.filter((l) =>
+    listingVisibleOnCollectionPage(l, isOwner),
+  );
+  // Owner publish rail still needs unminted / unlaunched drafts.
+  const ownerDrafts = isOwner
+    ? allInCollection.filter((l) => l.stage === "draft" && !l.delisted)
+    : [];
+
+  const hero =
+    pieces.find((l) => l.id === collection.heroListingId) ??
+    pieces[0] ??
+    null;
+  const coverUrl = hero?.mediaUrl ?? null;
+  const floorUsd = deriveCollectionFloorUsd(pieces);
+  const volumeUsd = volumes.get(collection.id) ?? 0;
+  const creatorName = creator?.displayName ?? collection.creatorId;
+  const aboutBlurb =
+    collection.description?.trim() ||
+    hero?.description?.trim() ||
+    `Creator-owned set on ${network}. Collectors pay crypto and receive the NFT at purchase.`;
+  const headerItemCount = pieces.length || 0;
+  const collectionActivity = await listCollectionActivity(collection.id, 30);
+  const liveCount = allInCollection.filter(
+    (l) => l.stage !== "draft" && !l.delisted,
+  ).length;
+  const rarity = computeCollectionRarity(pieces);
+  const rarityById = Object.fromEntries(rarity.byListingId);
 
   return (
-    <div className="page-wrap">
-      <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+    <div className="page-wrap collection-detail">
+      <p className="collection-detail__crumb">
         <Link href="/collections">Collections</Link>
-        {" · "}
-        <Link href={`/creators/${collection.creatorId}`}>
-          {creator?.displayName ?? "Creator"}
-        </Link>
-      </p>
-      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-        <span className="badge">{collection.chain}</span>
-        <span className="badge">{collection.totalItems} items</span>
-        {collection.dropKind && collection.dropKind !== "none" ? (
-          <span className="badge emerging">
-            {collection.dropKind === "open" ? "Open edition drop" : "Limited drop"}
-          </span>
-        ) : null}
-        {hasTraction ? <span className="badge emerging">Traction</span> : null}
-      </div>
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        {collection.title}
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.75rem" }}>
-        by{" "}
-        <Link href={`/creators/${collection.creatorId}`}>
-          {creator?.displayName ?? collection.creatorId}
-        </Link>
-        . Collectors pay crypto and receive the NFT at purchase.
-        {collection.dropStartsAt && collection.dropEndsAt ? (
-          <>
-            {" "}
-            Drop {new Date(collection.dropStartsAt).toLocaleString()} –{" "}
-            {new Date(collection.dropEndsAt).toLocaleString()}
-            {collection.dropPriceUsd != null
-              ? ` · $${collection.dropPriceUsd}`
-              : ""}
-            .
-          </>
-        ) : null}
-        {collection.mediaBytes ? (
-          <>
-            {" "}
-            Art {formatBytes(collection.mediaBytes)} of{" "}
-            {formatBytes(COLLECTION_MEDIA_CAP_BYTES)}.
-          </>
-        ) : null}
+        {" / "}
+        <span>{collection.title}</span>
       </p>
 
-
-      <CollectionPackagePanel
-        collectionId={collection.id}
-        isOwner={isOwner}
+      <CollectionProfileHeader
+        id={collection.id}
+        title={collection.title}
+        creatorId={collection.creatorId}
+        creatorName={creatorName}
+        creatorAvatarUrl={creator?.avatarUrl}
+        imageUrl={collection.imageUrl}
+        bannerUrl={collection.bannerUrl}
+        coverUrl={coverUrl}
+        chain={network}
+        itemCount={headerItemCount}
+        floorUsd={floorUsd}
+        volumeUsd={volumeUsd}
+        description={aboutBlurb}
+        websiteUrl={collection.websiteUrl}
+        twitterUrl={collection.twitterUrl}
+        discordUrl={collection.discordUrl}
+        instagramUrl={collection.instagramUrl}
+        badges={
+          <>
+            {collection.dropKind && collection.dropKind !== "none" ? (
+              <span className="badge emerging">
+                {collection.dropKind === "open"
+                  ? "Open edition"
+                  : "Limited drop"}
+              </span>
+            ) : null}
+            {hasTraction ? <span className="badge emerging">Traction</span> : null}
+            {collection.deployStatus === "confirmed" ? (
+              <span className="badge">Deployed</span>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
+            {!isOwner ? (
+              <FollowButton
+                artistId={collection.creatorId}
+                initiallyFollowing={
+                  user != null &&
+                  (engine.state.follows
+                    .get(user.id)
+                    ?.followedArtistIds.includes(collection.creatorId) ??
+                    false)
+                }
+              />
+            ) : null}
+            {isOwner ? (
+              <>
+                <CollectionEditModal
+                  collectionId={collection.id}
+                  description={collection.description ?? ""}
+                  imageUrl={collection.imageUrl}
+                  bannerUrl={collection.bannerUrl}
+                  websiteUrl={collection.websiteUrl}
+                  twitterUrl={collection.twitterUrl}
+                  discordUrl={collection.discordUrl}
+                  instagramUrl={collection.instagramUrl}
+                />
+                <LinkedTokensModal
+                  collectionId={collection.id}
+                  initialTokens={collection.linkedTokens ?? []}
+                  chain={collection.chain}
+                  contractAddress={collection.contractAddress}
+                />
+                <Link
+                  href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
+                  className="badge featured"
+                >
+                  Add works
+                </Link>
+              </>
+            ) : null}
+          </>
+        }
       />
 
-      {canUpdateFeeRecipients && collection.contractAddress ? (
-        <UpdateFeeRecipientsButton
-          collectionId={collection.id}
-          network={network}
-          contractAddress={collection.contractAddress}
+      {(collection.linkedTokens?.length ?? 0) > 0 ? (
+        <LinkedTokensList
+          tokens={collection.linkedTokens ?? []}
+          collectionChain={collection.chain}
+          collectionNetwork={collection.network}
         />
       ) : null}
 
-      {listings.length ? (
-        <>
-          <h2 className="display" style={{ fontSize: "1.35rem", margin: "0 0 0.75rem" }}>
-            Surface
-          </h2>
-          <PuzzleRail style={{ marginBottom: "2rem" }}>
-            {listings.map((listing) => (
-              <WorkCard
-                key={listing.id}
-                listing={listing}
-                showActions
-                sold={soldIds.has(listing.id)}
-                creatorName={creator?.displayName}
-              />
-            ))}
-          </PuzzleRail>
-        </>
+      {isOwner ? (
+        <div className="collection-detail__owner">
+          <CollectionPublishPanel
+            collectionId={collection.id}
+            network={network}
+            deployStatus={collection.deployStatus ?? "none"}
+            contractAddress={collection.contractAddress}
+            liveCount={liveCount}
+            drafts={ownerDrafts.map((l) => ({
+              id: l.id,
+              title: l.title,
+              minted: Boolean(
+                l.tokenId && l.contractAddress && l.mintTxHash,
+              ),
+            }))}
+          />
+          {canUpdateFeeRecipients && collection.contractAddress ? (
+            <UpdateFeeRecipientsButton
+              collectionId={collection.id}
+              network={network}
+              contractAddress={collection.contractAddress}
+            />
+          ) : null}
+        </div>
       ) : null}
 
-      <h2 className="display" style={{ fontSize: "1.35rem", margin: "0 0 0.75rem" }}>
-        All pieces
-      </h2>
-      {pieces.length ? (
-        <PuzzleRail>
-          {pieces.map((listing) => (
-            <WorkCard
-              key={listing.id}
-              listing={listing}
-              showActions
-              sold={soldIds.has(listing.id)}
-              creatorName={creator?.displayName}
+      {/* Owners configure package sell; buyers see buy UI when enabled. */}
+      <CollectionPackagePanel
+        collectionId={collection.id}
+        collectionSlug={collection.slug}
+        isOwner={isOwner}
+      />
+
+      <CollectionDetailTabs
+        itemCount={pieces.length}
+        activityCount={collectionActivity.length}
+        items={
+          pieces.length ? (
+            <CollectionItemsWithRarity
+              pieces={pieces}
+              rarityById={rarityById}
+              hasTraits={rarity.hasTraits}
+              soldIds={[...soldIds]}
+              isOwner={isOwner}
+              creatorName={creatorName}
+              creatorAvatarUrl={creator?.avatarUrl}
+              collection={{
+                id: collection.id,
+                title: collection.title,
+                slug: collection.slug,
+              }}
             />
-          ))}
-        </PuzzleRail>
-      ) : (
-        <p style={{ color: "var(--ink-muted)" }}>
-          No pieces yet.{" "}
-          <Link href="/create">Add a drop to this collection</Link>.
-        </p>
-      )}
+          ) : (
+            <p className="collection-detail__empty">
+              {isOwner ? (
+                ownerDrafts.length > 0 ? (
+                  <>
+                    No on-chain pieces yet. Use <strong>Mint &amp; publish
+                    remaining</strong> above to mint drafts, or{" "}
+                    <Link
+                      href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
+                    >
+                      add more works
+                    </Link>
+                    . Track status in <Link href="/studio">Studio</Link>.
+                  </>
+                ) : (
+                  <>
+                    No pieces yet.{" "}
+                    <Link
+                      href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
+                    >
+                      Add a drop to this collection
+                    </Link>
+                    {" · "}
+                    <Link href="/studio">Studio</Link>.
+                  </>
+                )
+              ) : (
+                "No on-chain pieces in this collection yet."
+              )}
+            </p>
+          )
+        }
+        activity={
+          <ListingActivityTimeline
+            events={collectionActivity}
+            showListingLinks
+            emptyLabel="No mint, list, offer, or sale activity in this collection yet."
+          />
+        }
+        about={
+          <dl className="collection-about">
+            <div>
+              <dt>Network</dt>
+              <dd>{network}</dd>
+            </div>
+            <div>
+              <dt>Items</dt>
+              <dd>{collection.totalItems || pieces.length}</dd>
+            </div>
+            {rarity.hasTraits ? (
+              <div>
+                <dt>Rarity</dt>
+                <dd>
+                  Statistical trait rarity on {rarity.scoredSize} of{" "}
+                  {rarity.collectionSize} pieces (rank 1 = rarest). Pieces
+                  without traits are not ranked.
+                </dd>
+              </div>
+            ) : null}
+            {collection.dropStartsAt && collection.dropEndsAt ? (
+              <div>
+                <dt>Drop window</dt>
+                <dd>
+                  {new Date(collection.dropStartsAt).toLocaleString()} –{" "}
+                  {new Date(collection.dropEndsAt).toLocaleString()}
+                  {collection.dropPriceUsd != null
+                    ? ` · $${collection.dropPriceUsd}`
+                    : ""}
+                </dd>
+              </div>
+            ) : null}
+            {collection.contractAddress ? (
+              <div>
+                <dt>Contract</dt>
+                <dd className="collection-about__mono">
+                  {collection.contractAddress}
+                </dd>
+              </div>
+            ) : null}
+            {(collection.linkedTokens?.length ?? 0) > 0 ? (
+              <div>
+                <dt>Linked tokens</dt>
+                <dd>
+                  <LinkedTokensList
+                    tokens={collection.linkedTokens ?? []}
+                    collectionChain={collection.chain}
+                    collectionNetwork={collection.network}
+                    heading="Linked tokens"
+                  />
+                </dd>
+              </div>
+            ) : null}
+            {collection.mediaBytes ? (
+              <div>
+                <dt>Media</dt>
+                <dd>
+                  {formatBytes(collection.mediaBytes)} of{" "}
+                  {formatBytes(COLLECTION_MEDIA_CAP_BYTES)}
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>Creator</dt>
+              <dd>
+                <Link href={`/creators/${collection.creatorId}`}>
+                  {creatorName}
+                </Link>
+              </dd>
+            </div>
+          </dl>
+        }
+      />
     </div>
   );
 }

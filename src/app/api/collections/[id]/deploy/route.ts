@@ -1,14 +1,59 @@
 import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
-import { confirmCollectionDeploy } from "@/lib/marketplace/service";
+import {
+  confirmCollectionDeploy,
+  getDiscoveryEngine,
+  prepareCollectionDeployForUser,
+  releaseCollectionNameHold,
+  syncCollectionDeployFromChain,
+} from "@/lib/marketplace/service";
+import { resolveNetwork, vmFromNetwork } from "@/lib/chains/registry";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-const schema = z.object({
+const confirmSchema = z.object({
   txHash: z.string().min(8),
   contractAddress: z.string().min(1).optional(),
   escrowAddress: z.string().min(1).optional(),
+  creatorAddress: z.string().min(1).optional(),
+  nftTemplateVersion: z.enum(["1", "2", "3"]).optional(),
 });
+
+const syncSchema = z.object({
+  action: z.literal("sync"),
+  creatorAddress: z.string().min(1).optional(),
+  contractAddress: z.string().min(1).optional(),
+  txHash: z.string().min(8).optional(),
+});
+
+const prepareSchema = z.object({
+  action: z.literal("prepare"),
+  creatorAddress: z.string().min(1).optional(),
+  forceRedeploy: z.boolean().optional(),
+});
+
+const abandonSchema = z.object({
+  action: z.literal("abandon"),
+});
+
+async function creatorAddressForCollection(
+  user: Awaited<ReturnType<typeof getSessionUser>>,
+  collectionId: string,
+  explicit?: string | null,
+): Promise<string | null> {
+  if (!user) return null;
+  if (explicit?.trim()) return explicit.trim();
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(collectionId);
+  const chain = collection
+    ? vmFromNetwork(resolveNetwork(collection.network, collection.chain))
+    : null;
+  return (
+    (chain && user.wallets.find((w) => w.chain === chain)?.address) ||
+    user.wallets[0]?.address ||
+    null
+  );
+}
 
 export async function POST(
   req: NextRequest,
@@ -20,10 +65,69 @@ export async function POST(
   }
 
   const { id } = await ctx.params;
-  const body = schema.safeParse(await readJsonBody(req));
+  const json = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
+
+  const syncBody = syncSchema.safeParse(json);
+  if (syncBody.success) {
+    const creatorAddress = await creatorAddressForCollection(
+      user,
+      id,
+      syncBody.data.creatorAddress,
+    );
+    const result = await syncCollectionDeployFromChain({
+      collectionId: id,
+      creatorId: user.id,
+      creatorAddress,
+      contractAddress: syncBody.data.contractAddress,
+      txHash: syncBody.data.txHash,
+    });
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    return NextResponse.json(result);
+  }
+
+  const prepareBody = prepareSchema.safeParse(json);
+  if (prepareBody.success) {
+    const creatorAddress = await creatorAddressForCollection(
+      user,
+      id,
+      prepareBody.data.creatorAddress,
+    );
+    const result = await prepareCollectionDeployForUser({
+      collectionId: id,
+      creatorId: user.id,
+      creatorAddress,
+      forceRedeploy: prepareBody.data.forceRedeploy,
+    });
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    return NextResponse.json(result);
+  }
+
+  const abandonBody = abandonSchema.safeParse(json);
+  if (abandonBody.success) {
+    const result = await releaseCollectionNameHold({
+      collectionId: id,
+      creatorId: user.id,
+    });
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    return NextResponse.json(result);
+  }
+
+  const body = confirmSchema.safeParse(json);
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
+
+  const creatorAddress = await creatorAddressForCollection(
+    user,
+    id,
+    body.data.creatorAddress,
+  );
 
   const result = await confirmCollectionDeploy({
     collectionId: id,
@@ -31,6 +135,8 @@ export async function POST(
     txHash: body.data.txHash,
     contractAddress: body.data.contractAddress,
     escrowAddress: body.data.escrowAddress,
+    creatorAddress,
+    nftTemplateVersion: body.data.nftTemplateVersion,
   });
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });

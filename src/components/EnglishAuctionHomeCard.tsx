@@ -1,7 +1,7 @@
 "use client";
 
+import { ListingPreviewOpener } from "@/components/ListingPreviewModal";
 import type { Listing } from "@/lib/discovery/types";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 function hueFromId(id: string): number {
@@ -50,7 +50,7 @@ export function EnglishAuctionHomeCard({
   const hue = hueFromId(listing.id);
   const mediaStyle = listing.mediaUrl
     ? {
-        backgroundImage: `linear-gradient(180deg, transparent 40%, rgba(9,9,11,0.75)), url(${listing.mediaUrl})`,
+        backgroundImage: `linear-gradient(180deg, transparent 40%, var(--media-scrim-strong)), url(${listing.mediaUrl})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }
@@ -59,10 +59,12 @@ export function EnglishAuctionHomeCard({
       };
 
   return (
-    <Link
-      href={`/listings/${listing.id}`}
+    <ListingPreviewOpener
+      listing={listing}
+      creatorName={creatorName}
       className="fm-home-auction-card"
       style={mediaStyle}
+      ariaLabel={`Preview ${listing.title}`}
     >
       <div className="fm-home-auction-card__body">
         <span className="badge" style={{ marginBottom: "0.35rem" }}>
@@ -77,6 +79,6 @@ export function EnglishAuctionHomeCard({
           Ends in {formatCountdown(endsAt - now)}
         </div>
       </div>
-    </Link>
+    </ListingPreviewOpener>
   );
 }

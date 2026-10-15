@@ -1,4 +1,5 @@
 import "@/lib/env";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { DiscoveryEngine } from "@/lib/discovery";
 import { loadMarketplaceState, persistCreatorStats, persistListingSignals } from "@/lib/data/repository";
@@ -45,6 +46,8 @@ import {
 } from "@/lib/onchain/solana";
 import {
   buildBoingMintIntent,
+  isProvisionalBoingCollectionAddress,
+  resolveBoingNftDeployTemplateVersion,
   verifyBoingTx,
 } from "@/lib/onchain/boing";
 import { hashTextMedia } from "@/lib/media/upload";
@@ -110,6 +113,194 @@ export function hashMedia(content: string): string {
   return hashTextMedia(content);
 }
 
+type CreateListingReuseInput = {
+  creatorId: string;
+  title: string;
+  description: string;
+  type: ListingType;
+  chain: Chain;
+  network: NetworkId;
+  priceUsd?: number | null;
+  medium: string;
+  styleTags: string[];
+  mediaHash: string;
+  mediaUrl: string | null;
+  metadataComplete?: boolean;
+  originalMedia?: boolean;
+  oeStartsAt?: string | null;
+  oeEndsAt?: string | null;
+  auctionStartsAt?: string | null;
+  auctionEndsAt?: string | null;
+  saleMode?: "fixed" | "timed_window" | "english" | string | null;
+  startingBidUsd?: number | null;
+  reserveUsd?: number | null;
+  collectionId?: string | null;
+  isCollectionHero?: boolean;
+  traits?: { trait_type: string; value: string }[];
+  maxSupply?: number | null;
+  publishSoftLaunch?: boolean;
+};
+
+/**
+ * Reuse an existing same-creator listing on create/mint retry so partial
+ * batches do not fail with duplicate_media after drafts were already kept.
+ */
+async function reuseDraftListingForCreate(opts: {
+  engine: DiscoveryEngine;
+  existing: Listing;
+  input: CreateListingReuseInput;
+}): Promise<
+  | { ok: true; listing: Listing; errors: string[]; reused: true }
+  | {
+      ok: true;
+      listing: Listing;
+      errors: string[];
+      softLaunchBlocked: true;
+      reused: true;
+    }
+> {
+  const { engine, existing, input } = opts;
+  const traits = parseTraits(input.traits ?? []);
+  const maxSupply =
+    input.maxSupply != null && input.maxSupply > 0 ? input.maxSupply : null;
+  const saleMode =
+    (input.saleMode as string | undefined) ??
+    (input.type === "auction" ? "timed_window" : "fixed");
+
+  // Only refresh editable fields while still a draft — don't rewrite live works.
+  if (existing.stage === "draft") {
+    const next: Listing = {
+      ...existing,
+      title: input.title,
+      description: input.description,
+      type: input.type,
+      chain: input.chain,
+      network: input.network,
+      priceUsd: input.priceUsd ?? null,
+      medium: input.medium,
+      styleTags: input.styleTags,
+      mediaUrl: input.mediaUrl ?? existing.mediaUrl,
+      metadataComplete: input.metadataComplete ?? existing.metadataComplete,
+      originalMedia: input.originalMedia ?? existing.originalMedia,
+      oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt).getTime() : null,
+      oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt).getTime() : null,
+      auctionStartsAt: input.auctionStartsAt
+        ? new Date(input.auctionStartsAt).getTime()
+        : null,
+      auctionEndsAt: input.auctionEndsAt
+        ? new Date(input.auctionEndsAt).getTime()
+        : null,
+      saleMode,
+      startingBidUsd: input.startingBidUsd ?? null,
+      reserveUsd: input.reserveUsd ?? null,
+      collectionId: input.collectionId ?? existing.collectionId,
+      isCollectionHero: Boolean(
+        input.isCollectionHero ?? existing.isCollectionHero,
+      ),
+      traits,
+      maxSupply,
+    };
+
+    if (await inMemoryMode()) {
+      engine.state.listings.set(existing.id, next);
+      if (
+        input.collectionId &&
+        existing.collectionId !== input.collectionId
+      ) {
+        const attached = attachListingToCollectionState(
+          engine.state.collections,
+          input.collectionId,
+          existing.id,
+          Boolean(input.isCollectionHero),
+          input.creatorId,
+        );
+        if (!attached.ok) {
+          engine.state.listings.set(existing.id, existing);
+          return {
+            ok: true as const,
+            listing: existing,
+            errors: attached.errors,
+            reused: true as const,
+          };
+        }
+      }
+    } else {
+      await prisma.listing.update({
+        where: { id: existing.id },
+        data: {
+          title: next.title,
+          description: next.description,
+          type: next.type,
+          chain: next.chain,
+          network: next.network,
+          priceUsd: next.priceUsd,
+          medium: next.medium,
+          styleTagsJson: JSON.stringify(next.styleTags),
+          mediaUrl: next.mediaUrl,
+          metadataComplete: next.metadataComplete,
+          originalMedia: next.originalMedia,
+          oeStartsAt: input.oeStartsAt ? new Date(input.oeStartsAt) : null,
+          oeEndsAt: input.oeEndsAt ? new Date(input.oeEndsAt) : null,
+          auctionStartsAt: input.auctionStartsAt
+            ? new Date(input.auctionStartsAt)
+            : null,
+          auctionEndsAt: input.auctionEndsAt
+            ? new Date(input.auctionEndsAt)
+            : null,
+          saleMode,
+          startingBidUsd: next.startingBidUsd,
+          reserveUsd: next.reserveUsd,
+          collectionId: next.collectionId,
+          isCollectionHero: next.isCollectionHero,
+          traitsJson: JSON.stringify(traits),
+          maxSupply: next.maxSupply,
+        },
+      });
+      if (
+        input.collectionId &&
+        existing.collectionId !== input.collectionId
+      ) {
+        await syncCollectionMembership({
+          collectionId: input.collectionId,
+          listingId: existing.id,
+          creatorId: input.creatorId,
+          isHero: Boolean(input.isCollectionHero),
+        });
+      }
+      engine.state.listings.set(existing.id, next);
+    }
+
+    if (input.publishSoftLaunch) {
+      const staged = await transitionListingStage(existing.id, "soft_launch");
+      if (staged.ok) {
+        return { ...staged, reused: true as const };
+      }
+      const draftListing = engine.state.listings.get(existing.id) ?? next;
+      return {
+        ok: true as const,
+        listing: draftListing,
+        errors: staged.errors,
+        softLaunchBlocked: true as const,
+        reused: true as const,
+      };
+    }
+
+    return {
+      ok: true as const,
+      listing: engine.state.listings.get(existing.id) ?? next,
+      errors: [] as string[],
+      reused: true as const,
+    };
+  }
+
+  return {
+    ok: true as const,
+    listing: existing,
+    errors: [] as string[],
+    reused: true as const,
+  };
+}
+
 export async function createListingForUser(input: {
   creatorId: string;
   title: string;
@@ -138,6 +329,8 @@ export async function createListingForUser(input: {
   traits?: { trait_type: string; value: string }[];
   maxSupply?: number | null;
   publishSoftLaunch?: boolean;
+  /** Secondary resale must copy origin media; skip anti-dupe for that path. */
+  allowDuplicateMedia?: boolean;
 }) {
   const engine = await getDiscoveryEngine();
   const network = resolveNetwork(input.network, input.chain);
@@ -185,9 +378,63 @@ export async function createListingForUser(input: {
         : input.auctionEndsAt
           ? new Date(input.auctionEndsAt).getTime()
           : null;
-    const cal = await validateDropWindow({ type: input.type, startsAt, endsAt });
+    const cal = await validateDropWindow({
+      type: input.type,
+      startsAt,
+      endsAt,
+      excludeCollectionId: input.collectionId,
+    });
     if (!cal.ok) {
       return { ok: false as const, errors: cal.errors };
+    }
+  }
+
+  // Idempotent create/mint retry: same creator + exact media already in this
+  // collection (draft or minted) — return that row instead of failing with
+  // duplicate_media after a partial batch kept successful drafts.
+  let skipDuplicateCheck = Boolean(input.allowDuplicateMedia);
+  if (!input.allowDuplicateMedia) {
+    const sameMedia = [...engine.state.listings.values()].filter(
+      (l) => !l.delisted && l.mediaHash === mediaHash,
+    );
+    const foreign = sameMedia.find((l) => l.creatorId !== input.creatorId);
+    if (foreign) {
+      return {
+        ok: false as const,
+        errors: [`duplicate_media:${foreign.id}`],
+      };
+    }
+    const ownCompatible = sameMedia.filter(
+      (l) =>
+        l.creatorId === input.creatorId &&
+        (!input.collectionId ||
+          !l.collectionId ||
+          l.collectionId === input.collectionId),
+    );
+    const reusable =
+      (input.collectionId
+        ? ownCompatible.find((l) => l.collectionId === input.collectionId)
+        : null) ??
+      ownCompatible.find((l) => l.stage === "draft" && !l.collectionId) ??
+      ownCompatible.find((l) => l.stage === "draft") ??
+      ownCompatible[0];
+    if (reusable) {
+      return reuseDraftListingForCreate({
+        engine,
+        existing: reusable,
+        input: {
+          ...input,
+          mediaHash,
+          mediaUrl,
+          chain,
+          network,
+        },
+      });
+    }
+    // Same creator already used this media in another collection — allow a
+    // new draft here; still block cross-creator copies via foreign check above.
+    if (sameMedia.some((l) => l.creatorId === input.creatorId)) {
+      skipDuplicateCheck = true;
     }
   }
 
@@ -249,9 +496,41 @@ export async function createListingForUser(input: {
     tokenId: null,
   };
 
-  // Validate against current inventory duplicates / quality.
-  const validation = engine.createListing(draft);
+  // Validate quality / rate limits. Duplicate media: block other creators;
+  // own published copies are allowed only via allowDuplicateMedia (resale)
+  // or when reusing / placing the same media in another collection.
+  const validation = engine.createListing(draft, {
+    skipDuplicateCheck,
+  });
   if (!validation.ok) {
+    const dupError = validation.errors.find((e) =>
+      e.startsWith("duplicate_media:"),
+    );
+    if (dupError && !input.allowDuplicateMedia) {
+      const matchedId = dupError.slice("duplicate_media:".length);
+      const matched = engine.state.listings.get(matchedId);
+      if (
+        matched &&
+        matched.creatorId === input.creatorId &&
+        (!input.collectionId ||
+          !matched.collectionId ||
+          matched.collectionId === input.collectionId)
+      ) {
+        engine.state.listings.delete(draft.id);
+        return reuseDraftListingForCreate({
+          engine,
+          existing: matched,
+          input: {
+            ...input,
+            mediaHash,
+            mediaUrl,
+            chain,
+            network,
+          },
+        });
+      }
+    }
+    engine.state.listings.delete(draft.id);
     return { ok: false as const, errors: validation.errors };
   }
 
@@ -381,17 +660,130 @@ export async function createListingForUser(input: {
   return { ok: true as const, listing: toListing(created), errors: [] as string[] };
 }
 
+export async function isCollectionSlugAvailable(
+  slug: string,
+  opts?: { excludeCollectionId?: string },
+): Promise<boolean> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const taken = [...getMemoryEngine().state.collections.values()].some(
+      (c) =>
+        c.slug === slug &&
+        (!opts?.excludeCollectionId || c.id !== opts.excludeCollectionId),
+    );
+    return !taken;
+  }
+
+  const existing = await prisma.collection.findUnique({ where: { slug } });
+  if (!existing) return true;
+  if (opts?.excludeCollectionId && existing.id === opts.excludeCollectionId) {
+    return true;
+  }
+  return false;
+}
+
+export async function isCollectionTitleAvailable(
+  title: string,
+  opts?: { excludeCollectionId?: string },
+): Promise<boolean> {
+  const { normalizeCollectionTitle } = await import(
+    "@/lib/marketplace/collection-title"
+  );
+  const normalized = normalizeCollectionTitle(title);
+  if (!normalized) return false;
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    const taken = [...getMemoryEngine().state.collections.values()].some(
+      (c) =>
+        normalizeCollectionTitle(c.title) === normalized &&
+        (!opts?.excludeCollectionId || c.id !== opts.excludeCollectionId),
+    );
+    return !taken;
+  }
+
+  const existing = await prisma.collection.findUnique({
+    where: { titleNormalized: normalized },
+  });
+  if (!existing) return true;
+  if (opts?.excludeCollectionId && existing.id === opts.excludeCollectionId) {
+    return true;
+  }
+  return false;
+}
+
+function uniqueConstraintTargets(err: unknown): string[] {
+  if (!err || typeof err !== "object" || !("meta" in err)) return [];
+  const meta = (err as { meta?: { target?: unknown } }).meta;
+  if (!meta || !Array.isArray(meta.target)) return [];
+  return meta.target.map(String);
+}
+
 export async function createCollectionForUser(input: {
   creatorId: string;
   title: string;
+  slug: string;
   chain?: Chain;
   network?: NetworkId | string;
   creatorAddress?: string | null;
+  description?: string;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
 }) {
-  const title = input.title.trim();
-  if (title.length < 1 || title.length > 120) {
-    return { ok: false as const, errors: ["invalid_title"] };
+  const { validateCollectionTitleFormat } = await import(
+    "@/lib/marketplace/collection-title"
+  );
+  const titleCheck = validateCollectionTitleFormat(input.title);
+  if (!titleCheck.ok) {
+    return { ok: false as const, errors: [`invalid_title_${titleCheck.issue}`] };
   }
+  const title = titleCheck.title;
+  const titleNormalized = titleCheck.normalized;
+
+  const { validateCollectionSlugFormat } = await import(
+    "@/lib/marketplace/collection-slug"
+  );
+  const slugCheck = validateCollectionSlugFormat(input.slug);
+  if (!slugCheck.ok) {
+    return { ok: false as const, errors: [`invalid_slug_${slugCheck.issue}`] };
+  }
+  const slug = slugCheck.slug;
+
+  const { validateCollectionProfileFields } = await import(
+    "@/lib/marketplace/collection-profile"
+  );
+  const profileCheck = validateCollectionProfileFields({
+    description: input.description ?? "",
+    imageUrl: input.imageUrl,
+    bannerUrl: input.bannerUrl,
+    websiteUrl: input.websiteUrl,
+    twitterUrl: input.twitterUrl,
+    discordUrl: input.discordUrl,
+    instagramUrl: input.instagramUrl,
+  });
+  if (!profileCheck.ok) {
+    return { ok: false as const, errors: profileCheck.issues };
+  }
+  const profile = {
+    description: profileCheck.data.description ?? "",
+    imageUrl: profileCheck.data.imageUrl ?? null,
+    bannerUrl: profileCheck.data.bannerUrl ?? null,
+    websiteUrl: profileCheck.data.websiteUrl ?? null,
+    twitterUrl: profileCheck.data.twitterUrl ?? null,
+    discordUrl: profileCheck.data.discordUrl ?? null,
+    instagramUrl: profileCheck.data.instagramUrl ?? null,
+  };
+
   const network = resolveNetwork(input.network, input.chain);
   const chain = vmFromNetwork(network);
   const creatorAddress = input.creatorAddress?.trim() || "";
@@ -400,12 +792,38 @@ export async function createCollectionForUser(input: {
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
 
+  // Soft-holds from failed/cancelled wallet deploys must not permanently
+  // consume a creator's own title/slug. Reclaim safe unconfirmed drafts first.
+  await reclaimOwnUnconfirmedCollectionHold({
+    creatorId: input.creatorId,
+    title,
+    slug,
+  });
+
+  const titleAvailable = await isCollectionTitleAvailable(title);
+  if (!titleAvailable) {
+    return { ok: false as const, errors: ["title_taken"] };
+  }
+
+  const available = await isCollectionSlugAvailable(slug);
+  if (!available) {
+    return { ok: false as const, errors: ["slug_taken"] };
+  }
+
+  // Opportunistic: free this creator's abandoned unconfirmed drafts (age gate).
+  await cleanupAbandonedUnconfirmedCollections({
+    creatorId: input.creatorId,
+    maxAgeMs: ABANDONED_COLLECTION_HOLD_MAX_AGE_MS,
+  });
+
   let collection: Collection;
 
   if (mode === "memory" || isMemoryMode()) {
     collection = {
-      id: `col-mem-${Date.now()}`,
+      // Include entropy — two creates in the same millisecond must not collide.
+      id: `col-mem-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
       title,
+      slug,
       creatorId: input.creatorId,
       chain,
       network,
@@ -417,25 +835,53 @@ export async function createCollectionForUser(input: {
       dropEndsAt: null,
       dropPriceUsd: null,
       mediaBytes: 0,
+      ...profile,
       contractAddress: null,
+      linkedTokens: [],
       deployTxHash: null,
       deployStatus: "pending_wallet",
+      nftTemplateVersion:
+        chain === "boing" ? resolveBoingNftDeployTemplateVersion() : "1",
       escrowAddress: null,
       createdAt: Date.now(),
     };
     const mem = getMemoryEngine();
     mem.state.collections.set(collection.id, collection);
   } else {
-    const created = await prisma.collection.create({
-      data: {
-        title,
-        creatorId: input.creatorId,
-        chain,
-        network,
-        deployStatus: "pending_wallet",
-      },
-    });
-    collection = toCollection(created);
+    try {
+      const created = await prisma.collection.create({
+        data: {
+          title,
+          titleNormalized,
+          slug,
+          creatorId: input.creatorId,
+          chain,
+          network,
+          deployStatus: "pending_wallet",
+          nftTemplateVersion:
+            chain === "boing" ? resolveBoingNftDeployTemplateVersion() : "1",
+          ...profile,
+        },
+      });
+      collection = toCollection(created);
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code?: string }).code)
+          : "";
+      if (code === "P2002") {
+        const targets = uniqueConstraintTargets(err);
+        if (targets.some((t) => t.toLowerCase().includes("titlenormalized"))) {
+          return { ok: false as const, errors: ["title_taken"] };
+        }
+        if (targets.some((t) => t.toLowerCase().includes("slug"))) {
+          return { ok: false as const, errors: ["slug_taken"] };
+        }
+        // Ambiguous unique violation — prefer title when both were checked.
+        return { ok: false as const, errors: ["title_taken"] };
+      }
+      throw err;
+    }
   }
 
   const { buildCollectionDeployIntent } = await import("@/lib/onchain/collection");
@@ -462,6 +908,7 @@ export async function createCollectionForUser(input: {
       txHash: deployIntent.txHash,
       contractAddress: deployIntent.contractAddress,
       escrowAddress: deployIntent.escrowAddress,
+      nftTemplateVersion: deployIntent.nftTemplateVersion,
     });
     if (confirmed.ok) {
       return {
@@ -485,12 +932,436 @@ export async function createCollectionForUser(input: {
   };
 }
 
+export function isCollectionDeployReady(
+  collection: Pick<
+    Collection,
+    "deployStatus" | "contractAddress" | "id" | "chain" | "network"
+  >,
+): boolean {
+  if (collection.deployStatus !== "confirmed") return false;
+  const addr = collection.contractAddress?.trim();
+  if (!addr || addr.startsWith("pending:")) return false;
+  const network = resolveNetwork(collection.network, collection.chain);
+  if (network === "boing") {
+    // Reject FreshMint sha256 placeholders that were never replaced with the
+    // real nonce-derived Boing AccountId after wallet deploy.
+    if (isProvisionalBoingCollectionAddress(collection.id, addr)) return false;
+  }
+  return true;
+}
+
+/** Soft-hold drafts older than this are safe to purge when never deployed. */
+export const ABANDONED_COLLECTION_HOLD_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+function listingBlocksCollectionRelease(listing: Listing): boolean {
+  if (listing.delisted) return false;
+  if (listing.mintTxHash?.trim()) return true;
+  if (listing.tokenId?.trim()) return true;
+  if (listing.stage !== "draft") return true;
+  if (listing.softLaunchedAt) return true;
+  return false;
+}
+
+/**
+ * True when a collection row is only a soft name/slug hold (no confirmed
+ * on-chain contract, no minted/live listings). Safe to delete to free uniqueness.
+ */
+export function isReleasableCollectionNameHold(
+  collection: Pick<
+    Collection,
+    "deployStatus" | "contractAddress" | "id" | "chain" | "network"
+  >,
+  listings: Listing[],
+): boolean {
+  if (isCollectionDeployReady(collection)) return false;
+  if (listings.some(listingBlocksCollectionRelease)) return false;
+  return true;
+}
+
+/** Prefer in-memory engine when tests (or fallback) enabled memory mode. */
+async function engineForCollectionHold(): Promise<DiscoveryEngine> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    return getMemoryEngine();
+  }
+  return getDiscoveryEngine();
+}
+
+async function collectionHoldStorageMode(): Promise<{
+  useMemory: boolean;
+  engine: DiscoveryEngine;
+}> {
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import(
+    "@/lib/data/memory-store"
+  );
+  const mode = await ensureDatabaseReady();
+  const useMemory = mode === "memory" || isMemoryMode();
+  return {
+    useMemory,
+    engine: useMemory ? getMemoryEngine() : await getDiscoveryEngine(),
+  };
+}
+
+/** Stamp that frees unique titleNormalized + slug without colliding. */
+function releasedUniquenessStamp(collectionId: string) {
+  const stamp = `released-${collectionId}`;
+  return {
+    title: stamp.slice(0, 120),
+    titleNormalized: stamp.toLowerCase(),
+    slug: stamp.slice(0, 64),
+  };
+}
+
+/**
+ * Free unique titleNormalized + slug on an unconfirmed draft when a full
+ * delete is not possible (FK edge cases). Row is marked failed.
+ */
+async function freeCollectionUniquenessKeys(input: {
+  collectionId: string;
+  useMemory: boolean;
+  engine: DiscoveryEngine;
+}) {
+  const stamp = releasedUniquenessStamp(input.collectionId);
+  const existing = input.engine.state.collections.get(input.collectionId);
+  if (input.useMemory) {
+    if (!existing) return;
+    input.engine.state.collections.set(input.collectionId, {
+      ...existing,
+      title: stamp.title,
+      slug: stamp.slug,
+      deployStatus: "failed",
+      contractAddress: null,
+      deployTxHash: null,
+    });
+    return;
+  }
+  await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: {
+      title: stamp.title,
+      titleNormalized: stamp.titleNormalized,
+      slug: stamp.slug,
+      deployStatus: "failed",
+      contractAddress: null,
+      deployTxHash: null,
+    },
+  });
+  if (existing) {
+    input.engine.state.collections.set(input.collectionId, {
+      ...existing,
+      title: stamp.title,
+      slug: stamp.slug,
+      deployStatus: "failed",
+      contractAddress: null,
+      deployTxHash: null,
+    });
+  } else {
+    input.engine.state.collections.delete(input.collectionId);
+  }
+}
+
+/**
+ * Release a soft-held collection name/slug after failed, cancelled, or
+ * never-confirmed on-chain deploy. Deletes the draft row (+ unminted draft
+ * listings) so `titleNormalized` / `slug` can be reused. Falls back to
+ * renaming uniqueness keys if delete cannot complete.
+ */
+export async function releaseCollectionNameHold(input: {
+  collectionId: string;
+  creatorId: string;
+  /** When set, only release if the collection is at least this old. */
+  minAgeMs?: number;
+}) {
+  const { useMemory, engine } = await collectionHoldStorageMode();
+  let collection = engine.state.collections.get(input.collectionId) ?? null;
+
+  // Prisma is source of truth for unique slug/titleNormalized — engine can lag.
+  if (!collection && !useMemory) {
+    const row = await prisma.collection.findUnique({
+      where: { id: input.collectionId },
+    });
+    if (row) collection = toCollection(row);
+  }
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  if (typeof input.minAgeMs === "number" && input.minAgeMs > 0) {
+    const createdAt = collection.createdAt ?? 0;
+    if (!createdAt || Date.now() - createdAt < input.minAgeMs) {
+      return { ok: false as const, error: "collection_hold_too_recent" };
+    }
+  }
+
+  let listings = [...engine.state.listings.values()].filter(
+    (l) => l.collectionId === input.collectionId,
+  );
+  if (!useMemory) {
+    const dbListings = await prisma.listing.findMany({
+      where: { collectionId: input.collectionId },
+    });
+    if (dbListings.length) {
+      listings = dbListings.map(toListing);
+    }
+  }
+  if (!isReleasableCollectionNameHold(collection, listings)) {
+    return { ok: false as const, error: "collection_hold_not_releasable" };
+  }
+
+  const listingIds = listings.map((l) => l.id);
+
+  if (useMemory) {
+    for (const id of listingIds) {
+      engine.state.listings.delete(id);
+    }
+    engine.state.collections.delete(input.collectionId);
+    return {
+      ok: true as const,
+      releasedCollectionId: input.collectionId,
+      releasedListingIds: listingIds,
+      mode: "deleted" as const,
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (listingIds.length) {
+        // Draft-only children — clear FKs so listings + collection can go.
+        await tx.shelfItem.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.signalEvent.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.nomination.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.report.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.appeal.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.bid.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.offer.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.purchase.deleteMany({
+          where: { listingId: { in: listingIds } },
+        });
+        await tx.listing.deleteMany({
+          where: { id: { in: listingIds }, collectionId: input.collectionId },
+        });
+      }
+      // packagePurchase cascades from Collection.
+      await tx.collection.delete({ where: { id: input.collectionId } });
+    });
+    for (const id of listingIds) {
+      engine.state.listings.delete(id);
+    }
+    engine.state.collections.delete(input.collectionId);
+    return {
+      ok: true as const,
+      releasedCollectionId: input.collectionId,
+      releasedListingIds: listingIds,
+      mode: "deleted" as const,
+    };
+  } catch (err) {
+    // Still free unique URL + name so create/retry is not blocked.
+    console.warn(
+      "[freshmint] collection hold delete failed; freeing uniqueness keys",
+      input.collectionId,
+      err instanceof Error ? err.message : err,
+    );
+    await freeCollectionUniquenessKeys({
+      collectionId: input.collectionId,
+      useMemory: false,
+      engine,
+    });
+    return {
+      ok: true as const,
+      releasedCollectionId: input.collectionId,
+      releasedListingIds: listingIds,
+      mode: "keys_freed" as const,
+    };
+  }
+}
+
+/**
+ * If this creator already soft-holds `title` and/or `slug` with an unconfirmed
+ * draft, release that hold so create/retry can proceed.
+ *
+ * Looks up by Prisma unique columns (slug / titleNormalized) first — the
+ * discovery engine alone can miss a stuck draft that still blocks the URL.
+ */
+export async function reclaimOwnUnconfirmedCollectionHold(input: {
+  creatorId: string;
+  title?: string | null;
+  slug?: string | null;
+}) {
+  const { normalizeCollectionTitle } = await import(
+    "@/lib/marketplace/collection-title"
+  );
+  const { normalizeCollectionSlug } = await import(
+    "@/lib/marketplace/collection-slug"
+  );
+  const { useMemory, engine } = await collectionHoldStorageMode();
+  const wantTitle = input.title?.trim()
+    ? normalizeCollectionTitle(input.title)
+    : null;
+  const wantSlug = input.slug?.trim()
+    ? normalizeCollectionSlug(input.slug)
+    : null;
+  if (!wantTitle && !wantSlug) {
+    return { ok: true as const, released: [] as string[] };
+  }
+
+  const candidateIds = new Set<string>();
+
+  for (const c of engine.state.collections.values()) {
+    if (c.creatorId !== input.creatorId) continue;
+    const titleMatch =
+      wantTitle && normalizeCollectionTitle(c.title) === wantTitle;
+    const slugMatch =
+      wantSlug && (c.slug || "").toLowerCase() === wantSlug.toLowerCase();
+    if (titleMatch || slugMatch) candidateIds.add(c.id);
+  }
+
+  // Source of truth for unique constraints — find holders even if engine lagged.
+  if (!useMemory) {
+    if (wantTitle) {
+      const byTitle = await prisma.collection.findUnique({
+        where: { titleNormalized: wantTitle },
+      });
+      if (byTitle && byTitle.creatorId === input.creatorId) {
+        candidateIds.add(byTitle.id);
+      }
+    }
+    if (wantSlug) {
+      const bySlug = await prisma.collection.findUnique({
+        where: { slug: wantSlug },
+      });
+      if (bySlug && bySlug.creatorId === input.creatorId) {
+        candidateIds.add(bySlug.id);
+      }
+    }
+  }
+
+  const released: string[] = [];
+  for (const id of candidateIds) {
+    const result = await releaseCollectionNameHold({
+      collectionId: id,
+      creatorId: input.creatorId,
+    });
+    if (result.ok) released.push(id);
+  }
+  return { ok: true as const, released };
+}
+
+/**
+ * Delete abandoned unpublished collection drafts that never got a real
+ * on-chain contract (frees unique title/slug). Scoped to one creator when set.
+ */
+export async function cleanupAbandonedUnconfirmedCollections(input?: {
+  creatorId?: string;
+  maxAgeMs?: number;
+  limit?: number;
+}) {
+  const maxAgeMs = input?.maxAgeMs ?? ABANDONED_COLLECTION_HOLD_MAX_AGE_MS;
+  const limit = input?.limit ?? 50;
+  const { useMemory, engine } = await collectionHoldStorageMode();
+  const now = Date.now();
+  const cutoff = now - maxAgeMs;
+  const candidateIds = new Set<string>();
+  const creatorById = new Map<string, string>();
+
+  for (const c of engine.state.collections.values()) {
+    if (input?.creatorId && c.creatorId !== input.creatorId) continue;
+    if (isCollectionDeployReady(c)) continue;
+    const createdAt = c.createdAt ?? 0;
+    if (!createdAt || createdAt > cutoff) continue;
+    candidateIds.add(c.id);
+    creatorById.set(c.id, c.creatorId);
+  }
+
+  // Also scan Prisma so stuck slugs not present in a stale engine are freed.
+  if (!useMemory) {
+    const rows = await prisma.collection.findMany({
+      where: {
+        ...(input?.creatorId ? { creatorId: input.creatorId } : {}),
+        deployStatus: { in: ["pending_wallet", "failed", "none"] },
+        createdAt: { lt: new Date(cutoff) },
+      },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      select: {
+        id: true,
+        creatorId: true,
+        contractAddress: true,
+        deployStatus: true,
+        chain: true,
+        network: true,
+      },
+    });
+    for (const row of rows) {
+      if (
+        isCollectionDeployReady({
+          id: row.id,
+          deployStatus: row.deployStatus,
+          contractAddress: row.contractAddress,
+          chain: row.chain as Collection["chain"],
+          network: row.network,
+        })
+      ) {
+        continue;
+      }
+      candidateIds.add(row.id);
+      creatorById.set(row.id, row.creatorId);
+    }
+  }
+
+  const ordered = [...candidateIds]
+    .map((id) => {
+      const fromEngine = engine.state.collections.get(id);
+      return {
+        id,
+        creatorId: creatorById.get(id) || fromEngine?.creatorId || "",
+        createdAt: fromEngine?.createdAt ?? 0,
+      };
+    })
+    .filter((c) => c.creatorId)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, limit);
+
+  const released: string[] = [];
+  for (const c of ordered) {
+    const result = await releaseCollectionNameHold({
+      collectionId: c.id,
+      creatorId: c.creatorId,
+      minAgeMs: maxAgeMs,
+    });
+    if (result.ok) released.push(c.id);
+  }
+  return { ok: true as const, released, scanned: ordered.length };
+}
+
 export async function confirmCollectionDeploy(input: {
   collectionId: string;
   creatorId: string;
   txHash: string;
   contractAddress?: string | null;
   escrowAddress?: string | null;
+  creatorAddress?: string | null;
+  /** Boing template version used for this deploy (`"1"` | `"2"` | `"3"`). */
+  nftTemplateVersion?: string | null;
 }) {
   if (!input.txHash || input.txHash.length < 8) {
     return { ok: false as const, error: "invalid_tx" };
@@ -502,7 +1373,7 @@ export async function confirmCollectionDeploy(input: {
     return { ok: false as const, error: "collection_forbidden" };
   }
 
-  const contractAddress =
+  let contractAddress =
     input.contractAddress?.trim() ||
     existing.contractAddress ||
     `pending:${input.collectionId}`;
@@ -511,19 +1382,123 @@ export async function confirmCollectionDeploy(input: {
     existing.escrowAddress ||
     null;
 
+  const network = resolveNetwork(existing.network, existing.chain);
+  let nftTemplateVersion =
+    existing.nftTemplateVersion?.trim() ||
+    input.nftTemplateVersion?.trim() ||
+    "1";
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  const memory = mode === "memory" || isMemoryMode();
+
+  if (network === "boing") {
+    const {
+      isProvisionalBoingCollectionAddress,
+      normalizeBoingNftTemplateVersion,
+      probeBoingNftCollection,
+      resolveBoingDeployContractAddress,
+      waitForBoingDeployedContract,
+    } = await import("@/lib/onchain/boing");
+    const creatorAddress =
+      input.creatorAddress?.trim() ||
+      engine.state.creators
+        .get(input.creatorId)
+        ?.wallets.find((w) => w.chain === "boing")?.address ||
+      "";
+
+    if (
+      isProvisionalBoingCollectionAddress(input.collectionId, contractAddress)
+    ) {
+      const resolved = await resolveBoingDeployContractAddress({
+        creatorAddress,
+        collectionId: input.collectionId,
+        fallbackAddress: contractAddress,
+        assetName: existing.title.trim().slice(0, 32),
+      });
+      if (resolved) contractAddress = resolved;
+    }
+
+    // Live chains: never confirm a placeholder / unverified AccountId.
+    // Memory/unit tests skip the on-chain wait.
+    if (!memory) {
+      if (
+        isProvisionalBoingCollectionAddress(input.collectionId, contractAddress) ||
+        !creatorAddress
+      ) {
+        if (creatorAddress) {
+          const waited = await waitForBoingDeployedContract({
+            creatorAddress,
+            assetName: existing.title.trim().slice(0, 32),
+            preferredAddress: isProvisionalBoingCollectionAddress(
+              input.collectionId,
+              contractAddress,
+            )
+              ? null
+              : contractAddress,
+            timeoutMs: 45_000,
+            intervalMs: 1_500,
+          });
+          if (waited.ok) {
+            contractAddress = waited.contractAddress;
+          } else {
+            return { ok: false as const, error: waited.error };
+          }
+        } else {
+          return { ok: false as const, error: "boing_account_id_required" };
+        }
+      } else {
+        let probe = await probeBoingNftCollection(contractAddress);
+        if (probe === "unknown") {
+          probe = await probeBoingNftCollection(contractAddress);
+        }
+        if (probe !== "exists") {
+          const waited = await waitForBoingDeployedContract({
+            creatorAddress,
+            assetName: existing.title.trim().slice(0, 32),
+            preferredAddress: contractAddress,
+            timeoutMs: 45_000,
+            intervalMs: 1_500,
+          });
+          if (!waited.ok) {
+            return {
+              ok: false as const,
+              error:
+                probe === "missing"
+                  ? "boing_collection_account_missing"
+                  : waited.error,
+            };
+          }
+          contractAddress = waited.contractAddress;
+        }
+      }
+    }
+
+    if (
+      isProvisionalBoingCollectionAddress(input.collectionId, contractAddress)
+    ) {
+      return { ok: false as const, error: "boing_contract_unresolved" };
+    }
+    // Stamp deploy-time template: explicit input, else what new deploys use now,
+    // else keep existing (defaults to v1 for legacy rows).
+    nftTemplateVersion = normalizeBoingNftTemplateVersion(
+      input.nftTemplateVersion ??
+        existing.nftTemplateVersion ??
+        "1",
+    );
+  }
+
   const next: Collection = {
     ...existing,
     contractAddress,
     deployTxHash: input.txHash,
     deployStatus: "confirmed",
+    nftTemplateVersion,
     escrowAddress,
   };
 
-  const { ensureDatabaseReady } = await import("@/lib/db-ready");
-  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
-  const mode = await ensureDatabaseReady();
-
-  if (mode === "memory" || isMemoryMode()) {
+  if (memory) {
     getMemoryEngine().state.collections.set(input.collectionId, next);
     return { ok: true as const, collection: next };
   }
@@ -534,12 +1509,342 @@ export async function confirmCollectionDeploy(input: {
       contractAddress,
       deployTxHash: input.txHash,
       deployStatus: "confirmed",
+      nftTemplateVersion,
       escrowAddress,
     },
   });
   const mapped = toCollection(updated);
   engine.state.collections.set(input.collectionId, mapped);
   return { ok: true as const, collection: mapped };
+}
+
+/** Re-issue a deploy wallet intent for a collection that never reached confirmed. */
+export async function prepareCollectionDeployForUser(input: {
+  collectionId: string;
+  creatorId: string;
+  creatorAddress?: string | null;
+  /**
+   * When true on Boing: if the stored contract AccountId is missing on-chain,
+   * clear the fake "confirmed" deploy and return a fresh wallet deploy intent.
+   */
+  forceRedeploy?: boolean;
+}) {
+  const engine = await getDiscoveryEngine();
+  let collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const network = resolveNetwork(collection.network, collection.chain);
+  const chain = vmFromNetwork(network);
+  const creatorAddress =
+    input.creatorAddress?.trim() ||
+    engine.state.creators
+      .get(input.creatorId)
+      ?.wallets.find((w) => w.chain === chain)?.address ||
+    "";
+
+  if (isCollectionDeployReady(collection)) {
+    if (input.forceRedeploy && network === "boing" && collection.contractAddress) {
+      const { probeBoingNftCollection, normalizeBoingAccountId } = await import(
+        "@/lib/onchain/boing"
+      );
+      let probe = await probeBoingNftCollection(
+        normalizeBoingAccountId(collection.contractAddress),
+      );
+      if (probe === "unknown") {
+        probe = await probeBoingNftCollection(
+          normalizeBoingAccountId(collection.contractAddress),
+        );
+      }
+      if (probe === "exists") {
+        return {
+          ok: true as const,
+          collection,
+          deployIntent: null,
+          alreadyDeployed: true as const,
+        };
+      }
+      // RPC hiccup — do not wipe a possibly-good deploy.
+      if (probe === "unknown") {
+        return { ok: false as const, error: "boing_account_probe_unknown" };
+      }
+      // Dead AccountId marked confirmed — clear so we can re-deploy.
+      const cleared = await clearCollectionDeployState({
+        collectionId: collection.id,
+        creatorId: input.creatorId,
+      });
+      if (!cleared.ok) return cleared;
+      collection = cleared.collection;
+    } else {
+      return {
+        ok: true as const,
+        collection,
+        deployIntent: null,
+        alreadyDeployed: true as const,
+      };
+    }
+  }
+
+  const { buildCollectionDeployIntent } = await import("@/lib/onchain/collection");
+  const deployIntent = buildCollectionDeployIntent({
+    collectionId: collection.id,
+    title: collection.title,
+    creatorAddress,
+    network,
+    chain,
+  });
+
+  const nftTemplateVersion =
+    deployIntent.nftTemplateVersion ?? collection.nftTemplateVersion ?? "1";
+  let stored = collection;
+
+  if (nftTemplateVersion !== collection.nftTemplateVersion) {
+    const { ensureDatabaseReady } = await import("@/lib/db-ready");
+    const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+    const mode = await ensureDatabaseReady();
+    stored = { ...collection, nftTemplateVersion };
+    if (mode === "memory" || isMemoryMode()) {
+      getMemoryEngine().state.collections.set(collection.id, stored);
+    } else {
+      await prisma.collection.update({
+        where: { id: collection.id },
+        data: { nftTemplateVersion },
+      });
+      engine.state.collections.set(collection.id, stored);
+    }
+  }
+
+  return {
+    ok: true as const,
+    collection: {
+      ...stored,
+      deployStatus: "pending_wallet" as const,
+      escrowAddress: deployIntent.escrowAddress,
+      nftTemplateVersion,
+    },
+    deployIntent,
+    alreadyDeployed: false as const,
+  };
+}
+
+/** Clear a falsely confirmed deploy so the owner can wallet-deploy again. */
+async function clearCollectionDeployState(input: {
+  collectionId: string;
+  creatorId: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, error: "collection_not_found" };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const { provisionalBoingCollectionAddress } = await import("@/lib/onchain/boing");
+  const network = resolveNetwork(existing.network, existing.chain);
+  const next: Collection = {
+    ...existing,
+    deployStatus: "pending_wallet",
+    deployTxHash: null,
+    contractAddress:
+      network === "boing"
+        ? provisionalBoingCollectionAddress(existing.id)
+        : null,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(existing.id, next);
+  } else {
+    await prisma.collection.update({
+      where: { id: existing.id },
+      data: {
+        deployStatus: "pending_wallet",
+        deployTxHash: null,
+        contractAddress: next.contractAddress,
+      },
+    });
+    engine.state.collections.set(existing.id, next);
+  }
+  return { ok: true as const, collection: next };
+}
+
+/**
+ * Heal false "not deployed" when the collection already exists on-chain
+ * (wallet succeeded but DB confirm never ran / stored a provisional address).
+ */
+export async function syncCollectionDeployFromChain(input: {
+  collectionId: string;
+  creatorId: string;
+  creatorAddress?: string | null;
+  contractAddress?: string | null;
+  txHash?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const network = resolveNetwork(collection.network, collection.chain);
+  const chain = vmFromNetwork(network);
+  const creatorAddress =
+    input.creatorAddress?.trim() ||
+    engine.state.creators
+      .get(input.creatorId)
+      ?.wallets.find((w) => w.chain === chain)?.address ||
+    "";
+
+  // Confirmed in DB but AccountId gone / never on-chain — try heal, else signal redeploy.
+  if (isCollectionDeployReady(collection) && network === "boing") {
+    const {
+      normalizeBoingAccountId,
+      probeBoingNftCollection,
+      resolveBoingDeployContractAddress,
+    } = await import("@/lib/onchain/boing");
+    const stored = normalizeBoingAccountId(collection.contractAddress!);
+    let probe = await probeBoingNftCollection(stored);
+    if (probe === "unknown") probe = await probeBoingNftCollection(stored);
+    if (probe === "exists") {
+      return { ok: true as const, collection, synced: false as const };
+    }
+    if (probe === "unknown") {
+      return { ok: false as const, error: "boing_account_probe_unknown" };
+    }
+    if (creatorAddress) {
+      const healedRaw = await resolveBoingDeployContractAddress({
+        creatorAddress,
+        collectionId: collection.id,
+        assetName: collection.title.trim().slice(0, 32),
+        fallbackAddress: stored,
+      });
+      if (healedRaw) {
+        const healed = normalizeBoingAccountId(healedRaw);
+        let healedProbe = await probeBoingNftCollection(healed);
+        if (healedProbe === "unknown") {
+          healedProbe = await probeBoingNftCollection(healed);
+        }
+        if (healedProbe === "exists") {
+          const syncTxHash = `0x${createHash("sha256")
+            .update(`boing-sync:${collection.id}:${healed}`)
+            .digest("hex")}`;
+          const confirmed = await confirmCollectionDeploy({
+            collectionId: input.collectionId,
+            creatorId: input.creatorId,
+            txHash: syncTxHash,
+            contractAddress: healed,
+            escrowAddress: collection.escrowAddress,
+            creatorAddress,
+            nftTemplateVersion: collection.nftTemplateVersion,
+          });
+          if (confirmed.ok) {
+            return {
+              ok: true as const,
+              collection: confirmed.collection,
+              synced: true as const,
+            };
+          }
+        }
+      }
+    }
+    return { ok: false as const, error: "boing_collection_account_missing" };
+  }
+
+  if (isCollectionDeployReady(collection)) {
+    return { ok: true as const, collection, synced: false as const };
+  }
+
+  let contractAddress = input.contractAddress?.trim() || null;
+  let txHash = input.txHash?.trim() || collection.deployTxHash || null;
+
+  if (network === "boing") {
+    const {
+      findBoingNftCollectionDeploy,
+      isBoingNativeAccountIdHex,
+      isProvisionalBoingCollectionAddress,
+      normalizeBoingAccountId,
+      resolveBoingDeployContractAddress,
+    } = await import("@/lib/onchain/boing");
+
+    if (
+      contractAddress &&
+      isBoingNativeAccountIdHex(contractAddress) &&
+      !isProvisionalBoingCollectionAddress(collection.id, contractAddress)
+    ) {
+      contractAddress = normalizeBoingAccountId(contractAddress);
+    } else {
+      contractAddress = null;
+    }
+
+    if (!contractAddress && creatorAddress) {
+      const found = await findBoingNftCollectionDeploy({
+        senderAddress: creatorAddress,
+        assetName: collection.title.trim().slice(0, 32),
+        lookbackBlocks: 256,
+      });
+      if (found) {
+        contractAddress = found.contractAddress;
+        // Prefer a stable sync id over wallet mempool placeholders (`ok` / pending:).
+        if (!txHash || txHash.startsWith("pending:")) {
+          txHash = `0x${createHash("sha256")
+            .update(
+              `boing-sync:${collection.id}:${found.contractAddress}:${found.blockHeight}`,
+            )
+            .digest("hex")}`;
+        }
+      } else {
+        const resolved = await resolveBoingDeployContractAddress({
+          creatorAddress,
+          collectionId: collection.id,
+          fallbackAddress: collection.contractAddress,
+          assetName: collection.title.trim().slice(0, 32),
+        });
+        // Only accept nonce-derived guess when caller supplies evidence of a
+        // recent wallet submit (real hash or mempool-accepted pending marker).
+        // Blind guesses risk linking the wrong deploy.
+        if (resolved && input.txHash) {
+          contractAddress = resolved;
+          if (!txHash || txHash.startsWith("pending:")) {
+            txHash = `0x${createHash("sha256")
+              .update(
+                `boing-sync:${collection.id}:${resolved}:nonce-derived`,
+              )
+              .digest("hex")}`;
+          }
+        }
+      }
+    }
+  } else if (!contractAddress) {
+    contractAddress = collection.contractAddress ?? null;
+  }
+
+  if (!contractAddress || !txHash) {
+    return { ok: false as const, error: "onchain_deploy_not_found" };
+  }
+
+  // Replace wallet mempool placeholders with a stable FreshMint sync id.
+  if (txHash.startsWith("pending:")) {
+    txHash = `0x${createHash("sha256")
+      .update(`boing-sync:${collection.id}:${contractAddress}`)
+      .digest("hex")}`;
+  }
+
+  return confirmCollectionDeploy({
+    collectionId: input.collectionId,
+    creatorId: input.creatorId,
+    txHash,
+    contractAddress,
+    escrowAddress: collection.escrowAddress,
+    creatorAddress,
+  }).then((result) =>
+    result.ok
+      ? { ok: true as const, collection: result.collection, synced: true as const }
+      : result,
+  );
 }
 
 export async function prepareCollectionPublishMints(input: {
@@ -549,21 +1854,121 @@ export async function prepareCollectionPublishMints(input: {
   creatorAddress?: string | null;
 }) {
   const engine = await getDiscoveryEngine();
-  const collection = engine.state.collections.get(input.collectionId);
+  let collection = engine.state.collections.get(input.collectionId);
   if (!collection) return { ok: false as const, error: "collection_not_found" };
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
   }
-  if (collection.deployStatus !== "confirmed" || !collection.contractAddress) {
-    return { ok: false as const, error: "collection_not_deployed" };
-  }
 
+  const network = resolveNetwork(collection.network, collection.chain);
   const creator =
     input.creatorAddress?.trim() ||
     engine.state.creators
       .get(input.creatorId)
-      ?.wallets.find((w) => w.chain === collection.chain)?.address ||
+      ?.wallets.find((w) => w.chain === collection!.chain)?.address ||
     "";
+
+  // Heal Boing provisional / pending deploy before building mint batches.
+  if (!isCollectionDeployReady(collection) && network === "boing") {
+    const synced = await syncCollectionDeployFromChain({
+      collectionId: input.collectionId,
+      creatorId: input.creatorId,
+      creatorAddress: creator || null,
+    });
+    if (synced.ok && synced.collection) {
+      collection = synced.collection;
+      engine.state.collections.set(input.collectionId, synced.collection);
+    }
+  }
+
+  if (!isCollectionDeployReady(collection)) {
+    return { ok: false as const, error: "collection_not_deployed" };
+  }
+
+  if (network === "boing") {
+    const {
+      isBoingNativeAccountIdHex,
+      normalizeBoingAccountId,
+      probeBoingAccount,
+      probeBoingNftCollection,
+      resolveBoingDeployContractAddress,
+    } = await import("@/lib/onchain/boing");
+    if (!isBoingNativeAccountIdHex(creator)) {
+      return { ok: false as const, error: "boing_account_id_required" };
+    }
+
+    async function probeContract(
+      accountId: string,
+    ): Promise<"exists" | "missing" | "unknown"> {
+      let probe = await probeBoingNftCollection(accountId);
+      if (probe === "unknown") {
+        probe = await probeBoingNftCollection(accountId);
+      }
+      return probe;
+    }
+
+    async function probeCreator(
+      accountId: string,
+    ): Promise<"exists" | "missing" | "unknown"> {
+      let probe = await probeBoingAccount(accountId);
+      if (probe === "unknown") {
+        probe = await probeBoingAccount(accountId);
+      }
+      return probe;
+    }
+
+    let contract = normalizeBoingAccountId(collection.contractAddress!);
+    let contractProbe = await probeContract(contract);
+
+    // DB may say deploy-ready while the stored AccountId is wrong/dead — heal.
+    if (contractProbe !== "exists" && creator) {
+      const healedRaw = await resolveBoingDeployContractAddress({
+        creatorAddress: creator,
+        collectionId: collection.id,
+        assetName: collection.title.trim().slice(0, 32),
+        fallbackAddress: contract,
+      });
+      if (healedRaw) {
+        const healed = normalizeBoingAccountId(healedRaw);
+        const healedProbe = await probeContract(healed);
+        if (healedProbe === "exists") {
+          const syncTxHash = `0x${createHash("sha256")
+            .update(`boing-sync:${collection.id}:${healed}`)
+            .digest("hex")}`;
+          const confirmed = await confirmCollectionDeploy({
+            collectionId: input.collectionId,
+            creatorId: input.creatorId,
+            txHash: syncTxHash,
+            contractAddress: healed,
+            escrowAddress: collection.escrowAddress,
+            creatorAddress: creator,
+            nftTemplateVersion: collection.nftTemplateVersion,
+          });
+          if (confirmed.ok) {
+            collection = confirmed.collection;
+            engine.state.collections.set(input.collectionId, confirmed.collection);
+            contract = normalizeBoingAccountId(collection.contractAddress!);
+            contractProbe = await probeContract(contract);
+          }
+        }
+      }
+    }
+
+    if (contractProbe === "missing") {
+      return { ok: false as const, error: "boing_collection_account_missing" };
+    }
+    if (contractProbe !== "exists") {
+      return { ok: false as const, error: "boing_account_probe_unknown" };
+    }
+
+    const creatorProbe = await probeCreator(normalizeBoingAccountId(creator));
+    if (creatorProbe === "missing") {
+      return { ok: false as const, error: "boing_creator_account_missing" };
+    }
+    if (creatorProbe !== "exists") {
+      return { ok: false as const, error: "boing_account_probe_unknown" };
+    }
+  }
 
   const items = input.listingIds
     .map((id) => {
@@ -584,15 +1989,17 @@ export async function prepareCollectionPublishMints(input: {
   }
 
   const { buildCollectionMintBatches } = await import("@/lib/onchain/collection");
-  const network = resolveNetwork(collection.network, collection.chain);
   const batches = buildCollectionMintBatches({
     network,
     chain: collection.chain,
-    contractAddress: collection.contractAddress,
+    contractAddress: collection.contractAddress ?? "",
     creatorAddress: creator,
     escrowAddress: collection.escrowAddress || creator,
     items,
     startingTokenId: 1,
+    // Existing Boing collections (incl. Baked Nation) stay v1 → one mint / tx.
+    nftTemplateVersion: collection.nftTemplateVersion ?? "1",
+    collectionTitle: collection.title,
   });
 
   return { ok: true as const, batches, alreadyMinted: false as const };
@@ -615,24 +2022,116 @@ export async function confirmCollectionMintBatch(input: {
   if (collection.creatorId !== input.creatorId) {
     return { ok: false as const, error: "collection_forbidden" };
   }
+  if (!isCollectionDeployReady(collection)) {
+    return { ok: false as const, error: "collection_not_deployed" };
+  }
 
-  const contractAddress =
-    input.contractAddress?.trim() || collection.contractAddress || null;
-  const tokenIds = input.tokenIds ?? [];
-
+  const network = resolveNetwork(collection.network, collection.chain);
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
   const memory = mode === "memory" || isMemoryMode();
+
+  let mintTxHash = input.txHash;
+  const tokenIds = input.tokenIds ?? [];
+  const contractAddress =
+    input.contractAddress?.trim() || collection.contractAddress || null;
+  /** True after mempool-ok path already verified token owners on-chain. */
+  let boingOwnershipVerified = false;
+
+  if (network === "boing") {
+    const {
+      isBoingMempoolPlaceholderTxId,
+      isProvisionalBoingCollectionAddress,
+      waitForBoingNftTokensMinted,
+      waitForBoingTransactionReceipt,
+    } = await import("@/lib/onchain/boing");
+    if (
+      !contractAddress ||
+      isProvisionalBoingCollectionAddress(collection.id, contractAddress)
+    ) {
+      return { ok: false as const, error: "boing_collection_account_missing" };
+    }
+
+    if (mintTxHash.startsWith("simulated-mint:")) {
+      if (!memory) {
+        return { ok: false as const, error: "simulated_mint_not_allowed" };
+      }
+    } else if (isBoingMempoolPlaceholderTxId(mintTxHash)) {
+      // Wallet returned mempool `"ok"` — wait for tokens on-chain, then stamp
+      // a stable sync hash (pending: markers are not gallery-visible).
+      const provisionalTokenIds =
+        tokenIds.length > 0
+          ? tokenIds
+          : input.listingIds.map((id, i) => {
+              const listing = engine.state.listings.get(id);
+              return listing?.tokenId ?? String(i + 1);
+            });
+      const minted = await waitForBoingNftTokensMinted({
+        collection: contractAddress,
+        tokenIds: provisionalTokenIds,
+        timeoutMs: 90_000,
+        intervalMs: 1_500,
+      });
+      if (!minted.ok) {
+        return { ok: false as const, error: minted.error };
+      }
+      boingOwnershipVerified = true;
+      mintTxHash = `0x${createHash("sha256")
+        .update(
+          `boing-mint-sync:${collection.id}:${contractAddress}:${provisionalTokenIds.join(",")}`,
+        )
+        .digest("hex")}`;
+    } else {
+      const receipt = await waitForBoingTransactionReceipt(mintTxHash, {
+        timeoutMs: 45_000,
+        intervalMs: 1_200,
+      });
+      if (!receipt.ok) {
+        return { ok: false as const, error: receipt.error };
+      }
+    }
+  } else if (mintTxHash.startsWith("simulated-mint:") && !memory) {
+    return { ok: false as const, error: "simulated_mint_not_allowed" };
+  }
+
+  const mintedDraftIds: string[] = [];
+  const skippedUnverified: Array<{ listingId: string; error: string }> = [];
 
   for (let i = 0; i < input.listingIds.length; i++) {
     const listingId = input.listingIds[i]!;
     const listing = engine.state.listings.get(listingId);
     if (!listing || listing.collectionId !== input.collectionId) continue;
     const tokenId = tokenIds[i] ?? listing.tokenId ?? String(i + 1);
+
+    // Post-receipt safeguard: Boing token must resolve an owner on-chain
+    // before we stamp mint fields / soft-launch (skip when RPC unknown).
+    // Mempool-ok path already waited for ownership above.
+    if (
+      network === "boing" &&
+      !memory &&
+      !boingOwnershipVerified &&
+      !mintTxHash.startsWith("simulated-mint:")
+    ) {
+      const { getBoingNftOwner } = await import("@/lib/onchain/boing");
+      const ownerProbe = await getBoingNftOwner({
+        collection: contractAddress!,
+        tokenId,
+      });
+      if (ownerProbe.ok && !ownerProbe.owner) {
+        skippedUnverified.push({
+          listingId,
+          error: "boing_token_not_on_chain",
+        });
+        continue;
+      }
+      // If probe failed (RPC), still allow confirm after receipt — receipt is
+      // the primary on-chain proof; owner read is best-effort.
+    }
+
     const next = {
       ...listing,
-      mintTxHash: input.txHash,
+      mintTxHash,
       tokenId,
       contractAddress: contractAddress ?? listing.contractAddress,
     };
@@ -642,16 +2141,253 @@ export async function confirmCollectionMintBatch(input: {
       await prisma.listing.update({
         where: { id: listingId },
         data: {
-          mintTxHash: input.txHash,
+          mintTxHash,
           tokenId,
           ...(contractAddress ? { contractAddress } : {}),
         },
       });
       engine.state.listings.set(listingId, next);
     }
+    if (next.stage === "draft") mintedDraftIds.push(listingId);
   }
 
-  return { ok: true as const, txHash: input.txHash };
+  if (mintedDraftIds.length === 0 && skippedUnverified.length > 0) {
+    return {
+      ok: false as const,
+      error: "boing_token_not_on_chain",
+      skippedUnverified,
+    };
+  }
+
+  // Publish each minted piece immediately so a mid-wizard failure cannot
+  // leave buyable inventory stuck as private drafts (profile-only).
+  const softLaunched: string[] = [];
+  const softLaunchErrors: Array<{ listingId: string; errors: string[] }> = [];
+  for (const listingId of mintedDraftIds) {
+    const staged = engine.transitionListing(listingId, "soft_launch");
+    if (!staged.ok || !staged.listing) {
+      softLaunchErrors.push({
+        listingId,
+        errors: staged.errors,
+      });
+      continue;
+    }
+    softLaunched.push(listingId);
+    if (!memory) {
+      await prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          stage: staged.listing.stage,
+          softLaunchedAt: staged.listing.softLaunchedAt
+            ? new Date(staged.listing.softLaunchedAt)
+            : null,
+          risingEligibleAt: staged.listing.risingEligibleAt
+            ? new Date(staged.listing.risingEligibleAt)
+            : null,
+          featuredAt: staged.listing.featuredAt
+            ? new Date(staged.listing.featuredAt)
+            : null,
+        },
+      });
+      const creator = engine.state.creators.get(staged.listing.creatorId);
+      if (creator) {
+        await persistCreatorStats(staged.listing.creatorId, {
+          risingEntriesThisWeek: creator.risingEntriesThisWeek,
+          openLaneListingsToday: creator.openLaneListingsToday,
+          firstListingAt: creator.firstListingAt
+            ? new Date(creator.firstListingAt)
+            : null,
+        });
+      }
+    }
+  }
+
+  return {
+    ok: true as const,
+    txHash: mintTxHash,
+    softLaunched,
+    softLaunchErrors,
+    skippedUnverified,
+  };
+}
+
+/** Soft-launch every minted draft in a collection (owner recovery path). */
+export async function softLaunchMintedDraftsInCollection(input: {
+  collectionId: string;
+  creatorId: string;
+}) {
+  const engine = await getDiscoveryEngine();
+  const collection = engine.state.collections.get(input.collectionId);
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  const drafts = [...engine.state.listings.values()].filter(
+    (l) =>
+      l.collectionId === input.collectionId &&
+      l.stage === "draft" &&
+      !l.delisted &&
+      Boolean(l.tokenId && l.contractAddress && l.mintTxHash) &&
+      !String(l.mintTxHash).toLowerCase().startsWith("simulated-mint:") &&
+      !String(l.mintTxHash).toLowerCase().startsWith("pending:"),
+  );
+
+  const softLaunched: string[] = [];
+  const errors: Array<{ listingId: string; errors: string[] }> = [];
+  for (const listing of drafts) {
+    const staged = await transitionListingStage(listing.id, "soft_launch", {
+      skipPublishRateLimit: true,
+    });
+    if (staged.ok) softLaunched.push(listing.id);
+    else errors.push({ listingId: listing.id, errors: staged.errors });
+  }
+
+  return {
+    ok: true as const,
+    softLaunched,
+    remainingDrafts: drafts.length - softLaunched.length,
+    errors,
+  };
+}
+
+export async function updateCollectionProfile(input: {
+  collectionId: string;
+  creatorId: string;
+  description?: string;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
+  discordUrl?: string | null;
+  instagramUrl?: string | null;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, errors: ["collection_not_found"] };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+
+  const { validateCollectionProfileFields } = await import(
+    "@/lib/marketplace/collection-profile"
+  );
+  const profileCheck = validateCollectionProfileFields({
+    description: input.description,
+    imageUrl: input.imageUrl,
+    bannerUrl: input.bannerUrl,
+    websiteUrl: input.websiteUrl,
+    twitterUrl: input.twitterUrl,
+    discordUrl: input.discordUrl,
+    instagramUrl: input.instagramUrl,
+  });
+  if (!profileCheck.ok) {
+    return { ok: false as const, errors: profileCheck.issues };
+  }
+  if (Object.keys(profileCheck.data).length === 0) {
+    return { ok: false as const, errors: ["empty_patch"] };
+  }
+
+  const next: Collection = {
+    ...existing,
+    ...profileCheck.data,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(input.collectionId, next);
+    return { ok: true as const, collection: next, errors: [] as string[] };
+  }
+
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: profileCheck.data,
+  });
+  const mapped = toCollection(updated);
+  engine.state.collections.set(input.collectionId, mapped);
+  return {
+    ok: true as const,
+    collection: mapped,
+    errors: [] as string[],
+  };
+}
+
+/**
+ * Cache registry peers onto the collection row (DB is not authoritative).
+ * Soft-gated to the marketplace collection creator.
+ */
+export async function cacheCollectionLinkedTokens(input: {
+  collectionId: string;
+  creatorId: string;
+  tokens: unknown;
+  /** When true, skip chain validation (already read from registry). */
+  fromRegistry?: boolean;
+}) {
+  const engine = await getDiscoveryEngine();
+  const existing = engine.state.collections.get(input.collectionId);
+  if (!existing) return { ok: false as const, errors: ["collection_not_found"] };
+  if (existing.creatorId !== input.creatorId) {
+    return { ok: false as const, errors: ["collection_forbidden"] };
+  }
+
+  const { serializeLinkedTokens, validateLinkedTokensInput } = await import(
+    "@/lib/marketplace/linked-tokens"
+  );
+  type LinkedTokenRef = import("@/lib/marketplace/linked-tokens").LinkedTokenRef;
+
+  let tokens: LinkedTokenRef[];
+  if (input.fromRegistry && Array.isArray(input.tokens)) {
+    tokens = input.tokens as LinkedTokenRef[];
+  } else {
+    const checked = validateLinkedTokensInput(input.tokens, existing.chain);
+    if (!checked.ok) {
+      return { ok: false as const, errors: checked.issues };
+    }
+    tokens = checked.tokens;
+  }
+
+  const linkedTokensJson = serializeLinkedTokens(tokens);
+  const next: Collection = {
+    ...existing,
+    linkedTokens: tokens,
+  };
+
+  const { ensureDatabaseReady } = await import("@/lib/db-ready");
+  const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
+  const mode = await ensureDatabaseReady();
+
+  if (mode === "memory" || isMemoryMode()) {
+    getMemoryEngine().state.collections.set(input.collectionId, next);
+    return { ok: true as const, collection: next, errors: [] as string[] };
+  }
+
+  const updated = await prisma.collection.update({
+    where: { id: input.collectionId },
+    data: { linkedTokensJson },
+  });
+  const mapped = toCollection(updated);
+  engine.state.collections.set(input.collectionId, mapped);
+  return {
+    ok: true as const,
+    collection: mapped,
+    errors: [] as string[],
+  };
+}
+
+/** @deprecated Display-only writes rejected — use registry plan + cache after confirm. */
+export async function updateCollectionLinkedTokens(input: {
+  collectionId: string;
+  creatorId: string;
+  tokens: unknown;
+}) {
+  void input;
+  return {
+    ok: false as const,
+    errors: ["registry_required"],
+  };
 }
 
 export async function updateCollectionDrop(input: {
@@ -675,6 +2411,7 @@ export async function updateCollectionDrop(input: {
     type: "open_edition",
     startsAt,
     endsAt,
+    excludeCollectionId: input.collectionId,
   });
   if (!cal.ok) return { ok: false as const, errors: cal.errors };
 
@@ -763,11 +2500,27 @@ export async function reserveCollectionMedia(input: {
   return { ok: true as const, mediaBytes: updated.mediaBytes };
 }
 
-export async function listCollectionsForUser(creatorId: string) {
+export async function listCollectionsForUser(
+  creatorId: string,
+  opts?: {
+    network?: NetworkId | string | null;
+    /** When true, only collections with a confirmed real on-chain address. */
+    deployedOnly?: boolean;
+  },
+) {
   const engine = await getDiscoveryEngine();
-  return [...engine.state.collections.values()].filter(
-    (c) => c.creatorId === creatorId,
-  );
+  const networkFilter = opts?.network
+    ? resolveNetwork(opts.network)
+    : null;
+  return [...engine.state.collections.values()].filter((c) => {
+    if (c.creatorId !== creatorId) return false;
+    if (networkFilter) {
+      const cNet = resolveNetwork(c.network, c.chain);
+      if (cNet !== networkFilter) return false;
+    }
+    if (opts?.deployedOnly && !isCollectionDeployReady(c)) return false;
+    return true;
+  });
 }
 
 function attachListingToCollectionState(
@@ -835,9 +2588,16 @@ async function syncCollectionMembership(input: {
 export async function transitionListingStage(
   listingId: string,
   target: LaunchStage,
+  options?: {
+    /**
+     * Skip the new-creator daily soft-launch cap.
+     * Used when mint just confirmed — gas was already paid to publish.
+     */
+    skipPublishRateLimit?: boolean;
+  },
 ) {
   const engine = await getDiscoveryEngine();
-  if (target === "soft_launch") {
+  if (target === "soft_launch" && !options?.skipPublishRateLimit) {
     const current = engine.state.listings.get(listingId);
     const creator = current
       ? engine.state.creators.get(current.creatorId)
@@ -1928,6 +3688,22 @@ export async function purchaseListing(input: {
     amountUsd = settled.amountUsd;
   }
 
+  if (saleMode === "dutch") {
+    const { dutchCurrentPriceUsd } = await import("@/lib/marketplace/sale-mode");
+    const dutchPrice = dutchCurrentPriceUsd({
+      startingBidUsd: listing.startingBidUsd,
+      priceUsd: listing.priceUsd,
+      reserveUsd: listing.reserveUsd,
+      auctionStartsAt: listing.auctionStartsAt,
+      auctionEndsAt: listing.auctionEndsAt,
+    });
+    if (dutchPrice == null || !(dutchPrice > 0)) {
+      return { ok: false as const, error: "invalid_dutch_price" };
+    }
+    input = { ...input, amountUsd: dutchPrice };
+    amountUsd = dutchPrice;
+  }
+
   const window = dropWindowFor(listing, collection);
   if (saleMode !== "english") {
     if (window.state === "upcoming") {
@@ -2037,7 +3813,16 @@ export async function purchaseListing(input: {
     isFirst = prior === 0;
   }
 
-  const settlementAddress = settlementAddressFor(listing.network);
+  const creatorBoing =
+    engine.state.creators
+      .get(listing.creatorId)
+      ?.wallets.find((w) => w.chain === "boing")?.address ?? null;
+  const settlementAddress = settlementAddressFor(listing.network, {
+    fallbackBoing: creatorBoing,
+  });
+  if (listing.network === "boing" && !settlementAddress) {
+    return { ok: false as const, error: "boing_settlement_unavailable" };
+  }
   const escrowAddress =
     collection?.escrowAddress ||
     listing.contractAddress ||
@@ -2073,15 +3858,27 @@ export async function purchaseListing(input: {
       };
     }
   } else {
-    const pay = await buildNativePaymentWalletTx({
-      network: listing.network,
-      fromAddress: input.buyerPaymentAddress,
-      toAddress: settlementAddress,
-      amountUsd,
-      listingChain: listing.chain,
-    });
-    paymentWalletTx = pay.walletTx;
-    settleQuote = pay.quote;
+    try {
+      const pay = await buildNativePaymentWalletTx({
+        network: listing.network,
+        fromAddress: input.buyerPaymentAddress,
+        toAddress: settlementAddress,
+        amountUsd,
+        listingChain: listing.chain,
+      });
+      paymentWalletTx = pay.walletTx;
+      settleQuote = pay.quote;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "payment_prepare_failed";
+      return {
+        ok: false as const,
+        error:
+          msg === "boing_settlement_unavailable" ||
+          msg === "boing_account_id_required"
+            ? msg
+            : msg,
+      };
+    }
   }
 
   const transferIntent = buildPurchaseTransferIntent({
@@ -2271,7 +4068,7 @@ export async function quoteCryptoPurchase(input: {
 
   const loaded = await loadPurchaseListingRow(input.listingId);
   if (!loaded.ok) return loaded;
-  const { listing } = loaded;
+  const { listing, engine } = loaded;
   const amountUsd = listing.priceUsd ?? 0;
   if (!(amountUsd > 0)) {
     return { ok: false as const, error: "unavailable" };
@@ -2293,7 +4090,13 @@ export async function quoteCryptoPurchase(input: {
     payNetwork: input.payNetwork,
   });
   const bridged = input.payNetwork !== listing.network;
-  const settlementAddress = settlementAddressFor(listing.network);
+  const creatorBoing =
+    engine.state.creators
+      .get(listing.creatorId)
+      ?.wallets.find((w) => w.chain === "boing")?.address ?? null;
+  const settlementAddress = settlementAddressFor(listing.network, {
+    fallbackBoing: creatorBoing,
+  });
 
   let bridge: {
     requestId?: string;
@@ -2399,10 +4202,19 @@ export async function confirmCryptoPurchase(input: {
     : null;
 
   if (input.step === "payment") {
-    if (
-      purchase.status === "completed" ||
-      purchase.status === "pending_transfer"
-    ) {
+    if (purchase.status === "completed") {
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "completed" as const,
+        txHash: purchase.txHash ?? input.txHash,
+        withdrawnAt: purchase.withdrawnAt
+          ? Number(purchase.withdrawnAt)
+          : Date.now(),
+        boingPaymentSettled: network === "boing" ? true : undefined,
+      };
+    }
+    if (purchase.status === "pending_transfer" && network !== "boing") {
       const transferIntent = buildPurchaseTransferIntent({
         listingNetwork: network,
         listingChain: listing.chain,
@@ -2413,17 +4225,128 @@ export async function confirmCryptoPurchase(input: {
           listing.contractAddress ||
           purchase.withdrawAddress ||
           "",
-        buyerReceiveAddress:
-          purchase.withdrawAddress ||
-          input.buyerId,
+        buyerReceiveAddress: purchase.withdrawAddress || input.buyerId,
       });
       return {
         ok: true as const,
         purchaseId: purchase.id,
-        status: purchase.status === "completed" ? "completed" : "pending_transfer",
+        status: "pending_transfer" as const,
         transferWalletTx: transferIntent.walletTx,
       };
     }
+
+    /**
+     * Boing reference NFTs require CALLER = current owner for transfer_nft.
+     * After publish mint the creator owns the token, so the buyer cannot sign
+     * the custody transfer. Settle the sale on successful payment (mempool ok
+     * or real hash) and record FreshMint ownership without a second buyer tx.
+     * Also recovers rows stuck in pending_transfer from the old two-step path.
+     */
+    if (network === "boing") {
+      const withdrawnAt = Date.now();
+      const completePatch = {
+        status: "completed" as const,
+        paymentTxHash: input.txHash,
+        bridgeRequestId: input.bridgeRequestId ?? purchase.bridgeRequestId,
+        txHash: input.txHash,
+        withdrawTxHash: input.txHash,
+        withdrawnAt,
+      };
+      if (memory) {
+        const wasCompleteMem = purchase.status === "completed";
+        updateMemoryPurchase(purchase.id, completePatch);
+        if (!wasCompleteMem) {
+          try {
+            const { notifyCreatorItemSold } = await import(
+              "@/lib/notifications/emit"
+            );
+            await notifyCreatorItemSold({
+              creatorId: listing.creatorId,
+              listingId: listing.id,
+              listingTitle: listing.title,
+              purchaseId: purchase.id,
+              amountUsd: purchase.amountUsd,
+            });
+          } catch (err) {
+            console.warn("[freshmint] sale notify failed", err);
+          }
+          engine.recordPurchase({
+            listingId: purchase.listingId,
+            buyerId: input.buyerId,
+            amountUsd: purchase.amountUsd,
+            isFirstPurchaseForBuyerOnArtifact: true,
+          });
+        }
+      } else {
+        const wasComplete = purchase.status === "completed";
+        await prisma.purchase.update({
+          where: { id: purchase.id },
+          data: {
+            status: "completed",
+            paymentTxHash: input.txHash,
+            bridgeRequestId: input.bridgeRequestId ?? purchase.bridgeRequestId,
+            txHash: input.txHash,
+            withdrawTxHash: input.txHash,
+            withdrawnAt: new Date(withdrawnAt),
+          },
+        });
+        if (!wasComplete) {
+          const isFirst =
+            "isFirst" in purchase ? Boolean(purchase.isFirst) : true;
+          engine.recordPurchase({
+            listingId: purchase.listingId,
+            buyerId: input.buyerId,
+            amountUsd: purchase.amountUsd,
+            isFirstPurchaseForBuyerOnArtifact: isFirst,
+          });
+          await prisma.user.update({
+            where: { id: listing.creatorId },
+            data: {
+              completedSales: { increment: 1 },
+              lifetimePrimaryVolumeUsd: { increment: purchase.amountUsd },
+            },
+          });
+          await prisma.signalEvent.create({
+            data: {
+              type: isFirst ? "first_purchase" : "purchase",
+              listingId: listing.id,
+              creatorId: listing.creatorId,
+              viewerId: input.buyerId,
+              metaJson: JSON.stringify({
+                amountUsd: purchase.amountUsd,
+                txHash: input.txHash,
+                payNetwork:
+                  "payNetwork" in purchase ? purchase.payNetwork : null,
+                boingPaymentSettled: true,
+              }),
+            },
+          });
+          try {
+            const { notifyCreatorItemSold } = await import(
+              "@/lib/notifications/emit"
+            );
+            await notifyCreatorItemSold({
+              creatorId: listing.creatorId,
+              listingId: listing.id,
+              listingTitle: listing.title,
+              purchaseId: purchase.id,
+              amountUsd: purchase.amountUsd,
+            });
+          } catch (err) {
+            console.warn("[freshmint] sale notify failed", err);
+          }
+        }
+      }
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "completed" as const,
+        txHash: input.txHash,
+        withdrawnAt,
+        boingPaymentSettled: true as const,
+      };
+    }
+
     const patch = {
       status: "pending_transfer",
       paymentTxHash: input.txHash,
@@ -2663,6 +4586,30 @@ export async function resumeCryptoPurchase(input: {
     receiveAddress;
 
   if (status === "pending_transfer") {
+    // Boing primary buys settle on payment — recover stuck pending_transfer rows.
+    if (network === "boing") {
+      const payHash =
+        ("paymentTxHash" in purchase && purchase.paymentTxHash) ||
+        purchase.txHash ||
+        `pending:boing-settled:${purchase.id}`;
+      const settled = await confirmCryptoPurchase({
+        purchaseId: purchase.id,
+        buyerId: input.buyerId,
+        step: "payment",
+        txHash: String(payHash),
+      });
+      if (!settled.ok) return settled;
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "completed" as const,
+        listingId: listing.id,
+        chain: listing.chain,
+        network,
+        txHash: "txHash" in settled ? settled.txHash : payHash,
+        boingPaymentSettled: true as const,
+      };
+    }
     if (!receiveAddress) {
       return { ok: false as const, error: "wallet_required" };
     }
@@ -2707,7 +4654,16 @@ export async function resumeCryptoPurchase(input: {
         amountUsd: purchase.amountUsd,
       };
     }
-    const settlementAddress = settlementAddressFor(network);
+    const creatorBoing =
+      engine.state.creators
+        .get(listing.creatorId)
+        ?.wallets.find((w) => w.chain === "boing")?.address ?? null;
+    const settlementAddress = settlementAddressFor(network, {
+      fallbackBoing: creatorBoing,
+    });
+    if (network === "boing" && !settlementAddress) {
+      return { ok: false as const, error: "boing_settlement_unavailable" };
+    }
     const crossChain = payNetwork !== network;
     if (crossChain) {
       try {
@@ -2748,26 +4704,31 @@ export async function resumeCryptoPurchase(input: {
         };
       }
     }
-    const pay = await buildNativePaymentWalletTx({
-      network,
-      fromAddress: input.buyerPaymentAddress,
-      toAddress: settlementAddress,
-      amountUsd: purchase.amountUsd,
-      listingChain: listing.chain,
-    });
-    return {
-      ok: true as const,
-      purchaseId: purchase.id,
-      status: "pending_payment" as const,
-      listingId: listing.id,
-      chain: listing.chain,
-      network,
-      payNetwork,
-      receiveAddress,
-      settlementAddress,
-      amountUsd: purchase.amountUsd,
-      paymentWalletTx: pay.walletTx,
-    };
+    try {
+      const pay = await buildNativePaymentWalletTx({
+        network,
+        fromAddress: input.buyerPaymentAddress,
+        toAddress: settlementAddress,
+        amountUsd: purchase.amountUsd,
+        listingChain: listing.chain,
+      });
+      return {
+        ok: true as const,
+        purchaseId: purchase.id,
+        status: "pending_payment" as const,
+        listingId: listing.id,
+        chain: listing.chain,
+        network,
+        payNetwork,
+        receiveAddress,
+        settlementAddress,
+        amountUsd: purchase.amountUsd,
+        paymentWalletTx: pay.walletTx,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "payment_prepare_failed";
+      return { ok: false as const, error: msg };
+    }
   }
 
   return { ok: false as const, error: "unavailable" };
@@ -2912,7 +4873,9 @@ export async function getPersistedMetrics() {
 
 export async function updateListingSaleMode(input: {
   listingId: string;
-  creatorId: string;
+  /** @deprecated use actorId — kept for call-site compatibility */
+  creatorId?: string;
+  actorId?: string;
   saleMode: "fixed" | "timed_window" | "english" | string;
   startingBidUsd?: number | null;
   reserveUsd?: number | null;
@@ -2923,11 +4886,13 @@ export async function updateListingSaleMode(input: {
   const { parseSaleMode, listingTypeForSaleMode } = await import(
     "@/lib/marketplace/sale-mode"
   );
+  const { canManageListing } = await import("@/lib/marketplace/listing-manage");
   const saleMode = parseSaleMode(input.saleMode);
   const engine = await getDiscoveryEngine();
   const listing = engine.state.listings.get(input.listingId);
   if (!listing) return { ok: false as const, error: "not_found" };
-  if (listing.creatorId !== input.creatorId) {
+  const actorId = input.actorId ?? input.creatorId;
+  if (!canManageListing(actorId, listing)) {
     return { ok: false as const, error: "forbidden" };
   }
   if ((listing as { currentHighBidUsd?: number | null }).currentHighBidUsd) {
@@ -2949,10 +4914,13 @@ export async function updateListingSaleMode(input: {
     saleMode,
     type: nextType,
     startingBidUsd:
-      saleMode === "english"
+      saleMode === "english" || saleMode === "dutch"
         ? (input.startingBidUsd ?? listing.priceUsd ?? null)
         : null,
-    reserveUsd: saleMode === "english" ? (input.reserveUsd ?? null) : null,
+    reserveUsd:
+      saleMode === "english" || saleMode === "dutch"
+        ? (input.reserveUsd ?? null)
+        : null,
     auctionStartsAt:
       saleMode === "fixed"
         ? null
@@ -2966,7 +4934,11 @@ export async function updateListingSaleMode(input: {
           ? new Date(input.auctionEndsAt).getTime()
           : listing.auctionEndsAt,
     priceUsd:
-      input.priceUsd !== undefined ? input.priceUsd : listing.priceUsd,
+      input.priceUsd !== undefined
+        ? input.priceUsd
+        : saleMode === "dutch"
+          ? (input.startingBidUsd ?? listing.priceUsd)
+          : listing.priceUsd,
   };
 
   if (mode === "memory" || isMemoryMode()) {

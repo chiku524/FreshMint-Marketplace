@@ -16,10 +16,116 @@ export interface CalendarValidation {
   errors: string[];
 }
 
+/** One collection drop occupies one hourly slot, not one slot per piece. */
+export function countHourlyDropSlots(
+  rows: { id: string; collectionId?: string | null }[],
+  excludeCollectionId?: string | null,
+): number {
+  const collections = new Set<string>();
+  let standalone = 0;
+  for (const row of rows) {
+    if (excludeCollectionId && row.collectionId === excludeCollectionId) {
+      continue;
+    }
+    if (row.collectionId) collections.add(row.collectionId);
+    else standalone += 1;
+  }
+  return collections.size + standalone;
+}
+
+async function hourlyDropRefs(input: {
+  type: "open_edition" | "auction";
+  start: Date;
+  end: Date;
+}): Promise<{ id: string; collectionId?: string | null }[]> {
+  const startMs = input.start.getTime();
+  const endMs = input.end.getTime();
+  try {
+    const { ensureDatabaseReady } = await import("@/lib/db-ready");
+    const { isMemoryMode, getMemoryState } = await import("@/lib/data/memory-store");
+    const mode = await ensureDatabaseReady();
+    if (mode === "memory" || isMemoryMode()) {
+      const state = getMemoryState();
+      const fromListings = [...state.listings.values()]
+        .filter((listing) => {
+          if (listing.delisted) return false;
+          if (input.type === "open_edition") {
+            return (
+              listing.type === "open_edition" &&
+              listing.oeStartsAt != null &&
+              listing.oeStartsAt >= startMs &&
+              listing.oeStartsAt < endMs
+            );
+          }
+          return (
+            listing.type === "auction" &&
+            listing.auctionStartsAt != null &&
+            listing.auctionStartsAt >= startMs &&
+            listing.auctionStartsAt < endMs
+          );
+        })
+        .map((listing) => ({
+          id: listing.id,
+          collectionId: listing.collectionId ?? null,
+        }));
+      if (input.type !== "open_edition") return fromListings;
+      const fromCollections = [...state.collections.values()]
+        .filter(
+          (collection) =>
+            collection.dropKind &&
+            collection.dropKind !== "none" &&
+            collection.dropStartsAt != null &&
+            collection.dropStartsAt >= startMs &&
+            collection.dropStartsAt < endMs,
+        )
+        .map((collection) => ({
+          id: `collection:${collection.id}`,
+          collectionId: collection.id,
+        }));
+      return [...fromListings, ...fromCollections];
+    }
+
+    const listings = await prisma.listing.findMany({
+      where:
+        input.type === "open_edition"
+          ? {
+              type: "open_edition",
+              delisted: false,
+              oeStartsAt: { gte: input.start, lt: input.end },
+            }
+          : {
+              type: "auction",
+              delisted: false,
+              auctionStartsAt: { gte: input.start, lt: input.end },
+            },
+      select: { id: true, collectionId: true },
+    });
+    if (input.type !== "open_edition") return listings;
+    const collections = await prisma.collection.findMany({
+      where: {
+        dropKind: { not: "none" },
+        dropStartsAt: { gte: input.start, lt: input.end },
+      },
+      select: { id: true },
+    });
+    return [
+      ...listings,
+      ...collections.map((collection) => ({
+        id: `collection:${collection.id}`,
+        collectionId: collection.id,
+      })),
+    ];
+  } catch {
+    return [];
+  }
+}
+
 export async function validateDropWindow(input: {
   type: "open_edition" | "auction";
   startsAt: number | null;
   endsAt: number | null;
+  /** Pieces in this collection already occupy the hour — don't count them again. */
+  excludeCollectionId?: string | null;
 }): Promise<CalendarValidation> {
   const errors: string[] = [];
   if (input.startsAt == null || input.endsAt == null) {
@@ -37,20 +143,15 @@ export async function validateDropWindow(input: {
     if (duration > DISCOVERY_CONFIG.calendar.maxOeWindowMs) {
       errors.push("oe_window_too_long");
     }
-    const { start, end } = hourBucket(input.startsAt);
-    try {
-      const concurrent = await prisma.listing.count({
-        where: {
-          type: "open_edition",
-          delisted: false,
-          oeStartsAt: { gte: start, lt: end },
-        },
-      });
-      if (concurrent >= DISCOVERY_CONFIG.calendar.maxOeStartsPerHour) {
+    if (errors.length === 0) {
+      const { start, end } = hourBucket(input.startsAt);
+      const slots = countHourlyDropSlots(
+        await hourlyDropRefs({ type: "open_edition", start, end }),
+        input.excludeCollectionId,
+      );
+      if (slots >= DISCOVERY_CONFIG.calendar.maxOeStartsPerHour) {
         errors.push("oe_hour_capacity_full");
       }
-    } catch {
-      // memory / db-unavailable — skip capacity count
     }
   }
 
@@ -61,20 +162,15 @@ export async function validateDropWindow(input: {
     if (duration > DISCOVERY_CONFIG.calendar.maxAuctionWindowMs) {
       errors.push("auction_window_too_long");
     }
-    const { start, end } = hourBucket(input.startsAt);
-    try {
-      const concurrent = await prisma.listing.count({
-        where: {
-          type: "auction",
-          delisted: false,
-          auctionStartsAt: { gte: start, lt: end },
-        },
-      });
-      if (concurrent >= DISCOVERY_CONFIG.calendar.maxAuctionStartsPerHour) {
+    if (errors.length === 0) {
+      const { start, end } = hourBucket(input.startsAt);
+      const slots = countHourlyDropSlots(
+        await hourlyDropRefs({ type: "auction", start, end }),
+        input.excludeCollectionId,
+      );
+      if (slots >= DISCOVERY_CONFIG.calendar.maxAuctionStartsPerHour) {
         errors.push("auction_hour_capacity_full");
       }
-    } catch {
-      // memory / db-unavailable — skip capacity count
     }
   }
 

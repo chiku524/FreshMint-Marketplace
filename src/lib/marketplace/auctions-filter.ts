@@ -1,15 +1,24 @@
 import type { Listing } from "@/lib/discovery/types";
 import { resolveSaleMode, type SaleMode } from "@/lib/marketplace/sale-mode";
 
-/** Query param on /auctions: All | Timed drops | English. */
-export type AuctionsSaleModeFilter = "all" | "timed_window" | "english";
+/** Query param on /auctions: All | Timed listings | English | Dutch. */
+export type AuctionsSaleModeFilter =
+  | "all"
+  | "timed_window"
+  | "english"
+  | "dutch";
 
 export const AUCTIONS_SALE_MODE_QUERY = "saleMode";
 
 export function parseAuctionsSaleMode(
   value: unknown,
 ): AuctionsSaleModeFilter {
-  if (value === "english" || value === "timed_window" || value === "all") {
+  if (
+    value === "english" ||
+    value === "timed_window" ||
+    value === "dutch" ||
+    value === "all"
+  ) {
     return value;
   }
   // Accept common aliases from links / typos
@@ -56,9 +65,11 @@ export function filterListingsByAuctionsSaleMode<T extends Listing>(
 export function auctionsFilterLabel(filter: AuctionsSaleModeFilter): string {
   switch (filter) {
     case "english":
-      return "English auctions";
+      return "English";
+    case "dutch":
+      return "Dutch";
     case "timed_window":
-      return "Timed drops";
+      return "Timed listings";
     default:
       return "All";
   }
@@ -87,7 +98,8 @@ export function isLiveAuctionListing(
 export function saleModeOfAuctionListing(listing: {
   type: string;
   saleMode?: string | null;
-}): Extract<SaleMode, "timed_window" | "english"> {
+}): Extract<SaleMode, "timed_window" | "english" | "dutch"> {
   const mode = resolveSaleMode(listing);
-  return mode === "english" ? "english" : "timed_window";
+  if (mode === "english" || mode === "dutch") return mode;
+  return "timed_window";
 }

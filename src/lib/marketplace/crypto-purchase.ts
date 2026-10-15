@@ -18,19 +18,53 @@ import {
   type BridgeQuoteResult,
 } from "@/lib/bridge/relay";
 import { platformFeeRecipients, splitSaleProceeds } from "@/lib/fees/platform";
+import {
+  isBoingNativeAccountIdHex,
+  normalizeBoingAccountId,
+} from "@/lib/onchain/boing";
 import { isAddress } from "viem";
 
 const FALLBACK_EVM = "0x0000000000000000000000000000000000000001";
 const FALLBACK_SOL = "11111111111111111111111111111111";
 
-export function settlementAddressFor(network: NetworkId): string {
+/**
+ * Whole-unit BOING amount string for native `transfer` txs.
+ * Boing balances are whole-unit u128 decimals — not 18-decimal wei, and not
+ * `formatted` labels like `"32.000000 BOING"`.
+ */
+export function boingPaymentAmountString(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return "0";
+  // Prefer integer whole units; keep up to 6 frac digits only when needed.
+  const rounded = Math.round(amount * 1e6) / 1e6;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(6).replace(/\.?0+$/, "");
+}
+
+/**
+ * Settlement address for native checkout on `network`.
+ * Boing requires a 32-byte AccountId — never reuse the EVM treasury hex.
+ * Optional `fallbackBoing` is typically the listing creator's linked Boing wallet.
+ */
+export function settlementAddressFor(
+  network: NetworkId,
+  opts?: { fallbackBoing?: string | null },
+): string {
   const fees = platformFeeRecipients();
   const vm = vmFromNetwork(network);
   if (vm === "solana") {
     return fees.treasurySolana || fees.operatorSolana || FALLBACK_SOL;
   }
   if (vm === "boing") {
-    return fees.treasury || fees.operator || FALLBACK_EVM;
+    const configured =
+      fees.treasuryBoing ||
+      fees.operatorBoing ||
+      opts?.fallbackBoing ||
+      null;
+    if (configured && isBoingNativeAccountIdHex(configured)) {
+      return normalizeBoingAccountId(configured);
+    }
+    // Invalid / missing — callers must treat this as unavailable.
+    return "";
   }
   return fees.treasury || fees.operator || FALLBACK_EVM;
 }
@@ -138,6 +172,13 @@ export async function buildNativePaymentWalletTx(input: {
       };
     }
   }
+  if (!isBoingNativeAccountIdHex(input.toAddress)) {
+    throw new Error("boing_settlement_unavailable");
+  }
+  if (!isBoingNativeAccountIdHex(input.fromAddress)) {
+    throw new Error("boing_account_id_required");
+  }
+  const amount = boingPaymentAmountString(quote.amount);
   return {
     quote,
     walletTx: {
@@ -147,9 +188,9 @@ export async function buildNativePaymentWalletTx(input: {
       method: "boing_sendTransaction",
       tx: {
         type: "transfer",
-        to: input.toAddress,
-        from: input.fromAddress,
-        amount: quote.formatted,
+        to: normalizeBoingAccountId(input.toAddress),
+        from: normalizeBoingAccountId(input.fromAddress),
+        amount,
         purpose_category: "payment",
       },
     },

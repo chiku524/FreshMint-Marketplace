@@ -1,7 +1,16 @@
 "use client";
 
-import { TraitEditor } from "@/components/TraitEditor";
+import { CreateLivePreview } from "@/components/CreateLivePreview";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
+import { PublishConfetti } from "@/components/PublishConfetti";
+import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
+import { TraitEditor } from "@/components/TraitEditor";
+import { TxExplorerLink } from "@/components/TxExplorerLink";
+import { WizardShell } from "@/components/WizardShell";
+import {
+  mapPoolSettled,
+  retryWithBackoff,
+} from "@/lib/async/pool";
 import type { NftTrait } from "@/lib/discovery/types";
 import {
   COLLECTION_MEDIA_CAP_BYTES,
@@ -12,19 +21,80 @@ import {
   parseTraits,
 } from "@/lib/marketplace/drops";
 import {
+  collectionHref as collectionPath,
+  collectionSlugIssueMessage,
+  normalizeCollectionSlug,
+  sanitizeCollectionSlugInput,
+  suggestCollectionSlug,
+  validateCollectionSlugFormat,
+  type CollectionSlugIssue,
+} from "@/lib/marketplace/collection-slug";
+import {
+  collectionTitleIssueMessage,
+  validateCollectionTitleFormat,
+  type CollectionTitleIssue,
+} from "@/lib/marketplace/collection-title";
+import {
+  buildCollectionPublishLifecycle,
+  wizardBusyPhase,
+} from "@/lib/marketplace/publish-status";
+import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
+import { isExplorableTxHash } from "@/lib/onchain/explorer";
+import {
   maybeSendWalletTx,
   requestBuyerAddress,
+  sendBoingMintWalletTx,
+  sendBoingWalletTxDetailed,
   sendEvmWalletTx,
+  type BoingWalletTx,
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
+
+/** Parallel media uploads — high enough to cut serial wait, low enough for Blob/API. */
+const UPLOAD_CONCURRENCY = 4;
+/** Listing drafts are lightweight JSON posts. */
+const LISTING_CONCURRENCY = 6;
+/** Soft-launch stage calls after mint. */
+const STAGE_CONCURRENCY = 6;
+
+function collectionNetworkOf(c: CollectionOption): string {
+  return (c.network || c.chain || "").toLowerCase();
+}
+
+function isDeployReadyOption(c: CollectionOption): boolean {
+  if (c.deployStatus !== "confirmed") return false;
+  const addr = c.contractAddress?.trim();
+  return Boolean(addr && !addr.startsWith("pending:"));
+}
+
+/** Keep soft-hold when deploy may still be indexing after wallet accept. */
+function shouldReleaseCollectionHoldAfterDeployError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    /could not link|onchain_deploy_not_found|boing_contract_unresolved|wait a few seconds and retry/i.test(
+      msg,
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+async function abandonCollectionNameHold(collectionId: string): Promise<void> {
+  try {
+    await fetch(`/api/collections/${collectionId}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "abandon" }),
+    });
+  } catch {
+    // Best-effort — server reclaim on next create still frees the name.
+  }
+}
 
 type Intent = "drop" | "single" | "auction";
 type DropKind = "limited" | "open";
@@ -32,6 +102,7 @@ type DropKind = "limited" | "open";
 type CollectionOption = {
   id: string;
   title: string;
+  slug?: string | null;
   chain: string;
   network?: string;
   mediaBytes?: number;
@@ -49,15 +120,6 @@ type Piece = {
   size: number;
   traits: NftTrait[];
   maxSupply: string;
-};
-
-const fieldStyle: CSSProperties = {
-  width: "100%",
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  color: "var(--ink)",
-  padding: "0.55rem 0.7rem",
-  marginTop: "0.35rem",
 };
 
 const ACCEPT =
@@ -80,6 +142,63 @@ function fromLocalInput(value: string): string | null {
 
 function titleFromFile(name: string): string {
   return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 120);
+}
+
+function uploadErrorMessage(code: string | undefined, fallback = "upload_failed"): string {
+  if (code === "collection_quota") {
+    return "This collection is at the 10 GB art cap";
+  }
+  if (code === "file_too_large") return "Each file can be up to 100 MB";
+  if (code === "unsupported_type") return "Unsupported file type";
+  if (code === "empty_file") return "Empty file skipped";
+  if (
+    code === "blob_suspended" ||
+    (code && /store has been suspended/i.test(code))
+  ) {
+    return "Media storage is paused (Vercel Blob Hobby quota exceeded). Upgrade the Vercel team to Pro, then retry only the failed files — uploads that already succeeded stay in this batch.";
+  }
+  if (code === "blob_store_missing") {
+    return "Media storage is not configured. Contact support, then retry the failed files.";
+  }
+  if (code === "upload_rate_limited") {
+    return "Upload rate limited — wait a moment and retry the failed files";
+  }
+  if (code === "blob_unavailable") {
+    return "Media storage temporarily unavailable — retry the failed files";
+  }
+  if (code === "sign_in" || code === "unauthorized") {
+    return "sign_in";
+  }
+  return code || fallback;
+}
+
+function listingErrorMessage(raw: string): string {
+  if (raw.startsWith("duplicate_media:")) {
+    return "This artwork file was already used on another listing. Use a different file, or continue minting the draft that was kept.";
+  }
+  if (raw.includes("oe_hour_capacity_full")) {
+    return "Too many other drops start in that hour. Pick a different start time — pieces in this collection share one slot.";
+  }
+  if (raw.includes("auction_hour_capacity_full")) {
+    return "Too many other auctions start in that hour. Pick a different start time.";
+  }
+  return raw;
+}
+
+function makeHttpError(
+  message: string,
+  status: number,
+  retryable?: boolean,
+): Error & { status: number; retryable: boolean } {
+  return Object.assign(new Error(message), {
+    status,
+    retryable: retryable ?? (status === 429 || status >= 500),
+  });
+}
+
+/** Match selected files to already-uploaded pieces (name + size). */
+function uploadDedupeKey(fileName: string, size: number): string {
+  return `${fileName}::${size}`;
 }
 
 function stepDefs(intent: Intent | null) {
@@ -112,19 +231,63 @@ export function CreateWizard() {
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [collectionId, setCollectionId] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [titleStatus, setTitleStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    issue: CollectionTitleIssue | null;
+    message: string | null;
+    normalized: string | null;
+  }>({
+    checking: false,
+    available: null,
+    issue: null,
+    message: null,
+    normalized: null,
+  });
+  const [slugStatus, setSlugStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    issue: CollectionSlugIssue | null;
+    message: string | null;
+    normalized: string | null;
+  }>({
+    checking: false,
+    available: null,
+    issue: null,
+    message: null,
+    normalized: null,
+  });
+  const [collectionDescription, setCollectionDescription] = useState("");
+  const [collectionImageUrl, setCollectionImageUrl] = useState<string | null>(
+    null,
+  );
+  const [collectionBannerUrl, setCollectionBannerUrl] = useState<string | null>(
+    null,
+  );
+  const [collectionWebsiteUrl, setCollectionWebsiteUrl] = useState("");
+  const [collectionTwitterUrl, setCollectionTwitterUrl] = useState("");
+  const [collectionDiscordUrl, setCollectionDiscordUrl] = useState("");
+  const [collectionInstagramUrl, setCollectionInstagramUrl] = useState("");
+  const [profileUploadBusy, setProfileUploadBusy] = useState(false);
   const [network, setNetwork] = useState("ethereum");
 
   const [dropKind, setDropKind] = useState<DropKind>("limited");
   const [startsAt, setStartsAt] = useState(toLocalInput(now + 60 * 60 * 1000));
   const [endsAt, setEndsAt] = useState(toLocalInput(now + 25 * 60 * 60 * 1000));
   const [priceUsd, setPriceUsd] = useState("25");
-  const [saleMode, setSaleMode] = useState<"fixed" | "timed_window" | "english">("fixed");
+  const [saleMode, setSaleMode] = useState<
+    "fixed" | "timed_window" | "english" | "dutch"
+  >("fixed");
   const [startingBidUsd, setStartingBidUsd] = useState("10");
   const [reserveUsd, setReserveUsd] = useState("");
   const [medium, setMedium] = useState("digital");
   const [styleTags, setStyleTags] = useState("");
 
   const [pieces, setPieces] = useState<Piece[]>([]);
+  /** Files that failed in the last upload pass — kept for one-click retry. */
+  const [failedUploadFiles, setFailedUploadFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{
     current: number;
     total: number;
@@ -133,11 +296,28 @@ export function CreateWizard() {
     current: number;
     total: number;
   } | null>(null);
+  const [listProgress, setListProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [deployNote, setDeployNote] = useState<string | null>(null);
   const [published, setPublished] = useState<{
     listingIds: string[];
     collectionId: string;
+    collectionSlug: string | null;
     label: string;
+    collectionTitle: string;
+    network: string;
+    intent: Intent;
+    dropKind: DropKind;
+    priceUsd: string;
+    pieceCount: number;
+    heroTitle: string;
+    heroDescription: string;
+    heroMediaUrl: string;
+    satelliteMediaUrls: string[];
+    styleTags: string;
+    mintTxHashes: string[];
   } | null>(null);
 
   const steps = useMemo(() => stepDefs(intent), [intent]);
@@ -148,6 +328,53 @@ export function CreateWizard() {
     (selected?.mediaBytes ?? 0) + pieces.reduce((sum, item) => sum + item.size, 0);
   const piecesBytes = pieces.reduce((sum, item) => sum + item.size, 0);
 
+  const reviewLifecycle = useMemo(() => {
+    const busy = wizardBusyPhase({
+      listProgress: Boolean(listProgress),
+      deployNote,
+      mintProgress: Boolean(mintProgress),
+      published: Boolean(published),
+    });
+    const deployReady = selected ? isDeployReadyOption(selected) : false;
+    return buildCollectionPublishLifecycle({
+      deployStatus: published
+        ? "confirmed"
+        : deployReady
+          ? "confirmed"
+          : deployNote
+            ? "pending_wallet"
+            : (selected?.deployStatus ?? "none"),
+      contractAddress: selected?.contractAddress ?? null,
+      draftCount: pieces.length || 1,
+      mintedDraftCount: published ? pieces.length || 1 : 0,
+      unmintedDraftCount: published ? 0 : pieces.length || 1,
+      liveCount: published ? pieces.length || 1 : 0,
+      busyPhase: busy,
+      failedPhase:
+        error && /deploy|contract not found|onchain_deploy/i.test(error)
+          ? "deploy"
+          : error && /mint/i.test(error)
+            ? "mint"
+            : null,
+      progressNote:
+        mintProgress
+          ? `Minting batch ${mintProgress.current} of ${mintProgress.total}…`
+          : listProgress
+            ? `Creating listings ${listProgress.current} of ${listProgress.total}…`
+            : deployNote || error || null,
+    });
+  }, [
+    listProgress,
+    deployNote,
+    mintProgress,
+    published,
+    selected,
+    pieces.length,
+    error,
+  ]);
+
+
+  const deepCollectionId = searchParams.get("collectionId")?.trim() || "";
 
   useEffect(() => {
     const raw = searchParams.get("intent");
@@ -157,69 +384,508 @@ export function CreateWizard() {
       setIntent(raw);
       // Skip the intent picker when deep-linked from Timed drops / Calendar.
       setStepIndex((idx) => (idx === 0 ? 1 : idx));
+    } else if (deepCollectionId) {
+      // Studio / collection "Add works" — default to drop if intent omitted.
+      setIntent((prev) => prev ?? "drop");
     }
-  }, [searchParams]);
-
+  }, [searchParams, deepCollectionId]);
 
   function loadMine() {
-    void fetch("/api/collections?mine=1", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { collections: [] }))
-      .then((data: { collections?: CollectionOption[] }) => {
-        setCollections(data.collections ?? []);
-      })
-      .catch(() => setCollections([]));
+    const base = new URLSearchParams({ mine: "1", network });
+    const deployedParams = new URLSearchParams({
+      mine: "1",
+      network,
+      deployed: "1",
+    });
+    const resumeId = deepCollectionId;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/collections?${base}`, {
+          credentials: "include",
+        });
+        const data = (await res.json()) as { collections?: CollectionOption[] };
+        const mine = data.collections ?? [];
+
+        // Heal false negatives: wallet deploy landed on-chain but DB never confirmed.
+        // Uses session-linked wallets on the server — no browser wallet prompt here.
+        const pending = mine.filter((c) => !isDeployReadyOption(c));
+        if (pending.length) {
+          await Promise.all(
+            pending.map((c) =>
+              fetch(`/api/collections/${c.id}/deploy`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "sync" }),
+              }).catch(() => null),
+            ),
+          );
+        }
+
+        const readyRes = await fetch(`/api/collections?${deployedParams}`, {
+          credentials: "include",
+        });
+        const readyData = (await readyRes.json()) as {
+          collections?: CollectionOption[];
+        };
+        let ready = readyData.collections ?? [];
+
+        // Include the Studio deep-link target even if not yet deploy-ready.
+        if (resumeId) {
+          const target =
+            ready.find((c) => c.id === resumeId) ??
+            mine.find((c) => c.id === resumeId);
+          if (target && !ready.some((c) => c.id === target.id)) {
+            ready = [...ready, target];
+          }
+        }
+
+        setCollections(ready);
+      } catch {
+        setCollections([]);
+      }
+    })();
   }
+
+  // Apply ?collectionId= once collections are available (Studio / Add works).
+  useEffect(() => {
+    if (!deepCollectionId || !collections.length) return;
+    const target = collections.find((c) => c.id === deepCollectionId);
+    if (!target) return;
+    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollectionId(target.id);
+    const targetNet = (target.network || target.chain || "").toLowerCase();
+    if (targetNet && targetNet !== network) {
+      setNetwork(targetNet);
+      return; // loadMine will re-run for the matching network
+    }
+    setStepIndex((idx) => {
+      const defs = stepDefs(intent ?? "drop");
+      const artworkIdx = defs.findIndex((s) => s.id === "artwork");
+      if (artworkIdx >= 0) return Math.max(idx, artworkIdx);
+      return idx;
+    });
+  }, [deepCollectionId, collections, network, intent]);
 
   useEffect(() => {
     loadMine();
     window.addEventListener("fm-collections-changed", loadMine);
     return () => window.removeEventListener("fm-collections-changed", loadMine);
-  }, []);
+    // Reload when mint network or Studio deep-link target changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMine closes over network + deepCollectionId
+  }, [network, deepCollectionId]);
+
+  // Keep suggested slug in sync with title until the creator edits the slug field.
+  useEffect(() => {
+    if (collectionId || slugTouched) return;
+    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNewSlug(suggestCollectionSlug(newTitle));
+  }, [newTitle, collectionId, slugTouched]);
+
+  // Debounced uniqueness + format feedback for new-collection names (global).
+  // When editing/resuming an existing collection, exclude its own id so the
+  // owner's current title is not reported as "already taken".
+  useEffect(() => {
+    const format = validateCollectionTitleFormat(newTitle);
+    if (!format.ok) {
+      // Pre-existing effect/render pattern; safe here, refactor tracked separately.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTitleStatus({
+        checking: false,
+        available: false,
+        issue: format.issue,
+        message: newTitle.trim()
+          ? collectionTitleIssueMessage(format.issue)
+          : null,
+        normalized: null,
+      });
+      return;
+    }
+    let cancelled = false;
+    setTitleStatus((prev) => ({
+      ...prev,
+      checking: true,
+      available: null,
+      issue: null,
+      message: "Checking name availability…",
+      normalized: format.normalized,
+    }));
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const params = new URLSearchParams({ title: format.title });
+          if (collectionId) params.set("excludeCollectionId", collectionId);
+          const res = await fetch(
+            `/api/collections/name-check?${params.toString()}`,
+            { credentials: "include" },
+          );
+          const data = (await res.json()) as {
+            available?: boolean;
+            issue?: CollectionTitleIssue | null;
+            message?: string | null;
+            normalized?: string | null;
+          };
+          if (cancelled) return;
+          setTitleStatus({
+            checking: false,
+            available: Boolean(data.available),
+            issue: data.issue ?? null,
+            message: data.message ?? null,
+            normalized: data.normalized ?? format.normalized,
+          });
+        } catch {
+          if (cancelled) return;
+          setTitleStatus({
+            checking: false,
+            available: null,
+            issue: null,
+            message: "Could not verify name — try again",
+            normalized: format.normalized,
+          });
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [newTitle, collectionId]);
+
+  // Debounced uniqueness + format feedback for new-collection URLs.
+  useEffect(() => {
+    const format = validateCollectionSlugFormat(newSlug);
+    if (!format.ok) {
+      // Pre-existing effect/render pattern; safe here, refactor tracked separately.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSlugStatus({
+        checking: false,
+        available: false,
+        issue: format.issue,
+        message: newSlug.trim()
+          ? collectionSlugIssueMessage(format.issue)
+          : null,
+        normalized: null,
+      });
+      return;
+    }
+    let cancelled = false;
+    setSlugStatus((prev) => ({
+      ...prev,
+      checking: true,
+      available: null,
+      issue: null,
+      message: "Checking availability…",
+      normalized: format.slug,
+    }));
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const params = new URLSearchParams({ slug: format.slug });
+          if (collectionId) params.set("excludeCollectionId", collectionId);
+          const res = await fetch(
+            `/api/collections/slug-check?${params.toString()}`,
+            { credentials: "include" },
+          );
+          const data = (await res.json()) as {
+            available?: boolean;
+            issue?: CollectionSlugIssue | null;
+            message?: string | null;
+            slug?: string | null;
+          };
+          if (cancelled) return;
+          setSlugStatus({
+            checking: false,
+            available: Boolean(data.available),
+            issue: data.issue ?? null,
+            message: data.message ?? null,
+            normalized: data.slug ?? format.slug,
+          });
+        } catch {
+          if (cancelled) return;
+          setSlugStatus({
+            checking: false,
+            available: null,
+            issue: null,
+            message: "Could not verify slug — try again",
+            normalized: format.slug,
+          });
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [newSlug, collectionId]);
+
+  const networkCollections = useMemo(
+    () =>
+      collections.filter(
+        (c) =>
+          collectionNetworkOf(c) === network ||
+          (network !== "solana" &&
+            network !== "boing" &&
+            collectionNetworkOf(c) === "evm" &&
+            !c.network),
+      ),
+    [collections, network],
+  );
 
   function goBack() {
     setError(null);
     setStepIndex((i) => Math.max(0, i - 1));
   }
 
+  async function runDeployWalletAndConfirm(input: {
+    id: string;
+    deployIntent: {
+      status: string;
+      contractAddress: string;
+      escrowAddress?: string;
+      nftTemplateVersion?: string;
+      walletTx?: unknown;
+    };
+    creatorAddress?: string | null;
+  }): Promise<void> {
+    const { id, deployIntent, creatorAddress } = input;
+    if (!deployIntent.walletTx) return;
+    setDeployNote("Confirm collection deploy in your wallet (you pay gas)…");
+    const wt = deployIntent.walletTx as EvmWalletTx | BoingWalletTx;
+    let txHash: string | null = null;
+    let contractAddress = deployIntent.contractAddress;
+    if (wt.chain === "evm") {
+      txHash = await sendEvmWalletTx(wt);
+    } else if (wt.chain === "boing") {
+      const sent = await sendBoingWalletTxDetailed(wt);
+      if (sent.contractAddress) contractAddress = sent.contractAddress;
+
+      // Boing node returns `{ tx_hash: "ok" }` on mempool accept — not a real
+      // tx id. Always link the deploy from chain; never confirm a provisional
+      // placeholder AddressId (that caused "contract not found" after approve).
+      const linkTxHash =
+        sent.txHash && /^0x[0-9a-fA-F]{64}$/.test(sent.txHash)
+          ? sent.txHash
+          : `pending:boing-accepted:${Date.now().toString(16)}`;
+      if (!sent.txHash && !sent.mempoolAccepted) {
+        throw new Error("boing_tx_id_required");
+      }
+      setDeployNote("Wallet accepted deploy — confirming from chain…");
+      let lastError = "onchain_deploy_not_found";
+      for (let attempt = 0; attempt < 12; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        const sync = await fetch(`/api/collections/${id}/deploy`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync",
+            creatorAddress: creatorAddress || undefined,
+            contractAddress: sent.contractAddress || undefined,
+            txHash: linkTxHash,
+          }),
+        });
+        const syncData = await sync.json();
+        if (sync.ok && syncData.collection) {
+          const addr = String(syncData.collection.contractAddress || "");
+          setDeployNote(
+            addr
+              ? `Collection deployed · ${addr.slice(0, 10)}…`
+              : "Collection deployed (synced from chain)",
+          );
+          return;
+        }
+        lastError = syncData.error || lastError;
+      }
+      throw new Error(
+        lastError === "onchain_deploy_not_found" ||
+          lastError === "boing_contract_unresolved"
+          ? "Deploy landed in the wallet but FreshMint could not link it yet — wait a few seconds and retry"
+          : lastError,
+      );
+    } else {
+      txHash = await maybeSendWalletTx({
+        walletTx: deployIntent.walletTx,
+        listingId: id,
+        action: "mint",
+      });
+    }
+    if (!txHash) {
+      throw new Error(
+        "Wallet required to deploy the collection contract on your mint network",
+      );
+    }
+    const confirm = await fetch(`/api/collections/${id}/deploy`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        txHash,
+        contractAddress,
+        escrowAddress: deployIntent.escrowAddress,
+        creatorAddress: creatorAddress || undefined,
+        nftTemplateVersion: deployIntent.nftTemplateVersion,
+      }),
+    });
+    const confirmData = await confirm.json();
+    if (!confirm.ok) {
+      throw new Error(confirmData.error || "deploy_confirm_failed");
+    }
+    setDeployNote(`Collection deployed · ${txHash.slice(0, 10)}…`);
+  }
+
   async function ensureCollection(): Promise<string> {
+    const walletChain =
+      network === "solana" ? "solana" : network === "boing" ? "boing" : "evm";
+
     if (collectionId) {
       const existing = collections.find((c) => c.id === collectionId);
-      if (
-        existing?.deployStatus === "confirmed" &&
-        existing.contractAddress
-      ) {
+      if (existing && isDeployReadyOption(existing)) {
         return collectionId;
       }
-      // Existing collection still needs deploy confirmation.
-      if (existing && existing.deployStatus !== "confirmed") {
+
+      const creatorAddress = await requestBuyerAddress(walletChain);
+
+      // Heal: on-chain deploy succeeded but DB still says pending / provisional.
+      const syncRes = await fetch(`/api/collections/${collectionId}/deploy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sync",
+          creatorAddress: creatorAddress || undefined,
+        }),
+      });
+      const syncData = await syncRes.json();
+      if (syncRes.ok && syncData.collection) {
+        setDeployNote("Linked existing on-chain collection deploy.");
+        window.dispatchEvent(new Event("fm-collections-changed"));
+        loadMine();
+        return collectionId;
+      }
+
+      // Resume wallet deploy when nothing on-chain was found to sync.
+      const prepRes = await fetch(`/api/collections/${collectionId}/deploy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "prepare",
+          creatorAddress: creatorAddress || undefined,
+        }),
+      });
+      const prepData = await prepRes.json();
+      if (prepRes.status === 401) throw new Error("sign_in");
+      if (!prepRes.ok) {
         throw new Error(
-          "This collection is not deployed on-chain yet — create a new one or finish deploy",
+          prepData.error === "onchain_deploy_not_found"
+            ? "Could not find this collection on-chain — try creating a new one on the selected network"
+            : prepData.error || "deploy_prepare_failed",
         );
       }
-      return collectionId;
+      if (prepData.alreadyDeployed) {
+        loadMine();
+        return collectionId;
+      }
+      if (prepData.deployIntent?.walletTx) {
+        try {
+          await runDeployWalletAndConfirm({
+            id: collectionId,
+            deployIntent: prepData.deployIntent,
+            creatorAddress,
+          });
+        } catch (deployErr) {
+          if (shouldReleaseCollectionHoldAfterDeployError(deployErr)) {
+            await abandonCollectionNameHold(collectionId);
+            setCollectionId("");
+            setCollections((prev) =>
+              prev.filter((c) => c.id !== collectionId),
+            );
+            window.dispatchEvent(new Event("fm-collections-changed"));
+          }
+          throw deployErr;
+        }
+        window.dispatchEvent(new Event("fm-collections-changed"));
+        loadMine();
+        return collectionId;
+      }
+      throw new Error(
+        "This collection is not deployed on-chain yet — create a new one or finish deploy",
+      );
     }
-    const title = newTitle.trim();
-    if (!title) throw new Error("Choose an existing collection or name a new one");
+    const titleFormat = validateCollectionTitleFormat(newTitle);
+    if (!titleFormat.ok) {
+      throw new Error(collectionTitleIssueMessage(titleFormat.issue));
+    }
+    if (titleStatus.available === false) {
+      throw new Error(
+        titleStatus.message ||
+          collectionTitleIssueMessage(titleStatus.issue || "taken"),
+      );
+    }
 
-    const creatorAddress = await requestBuyerAddress(
-      network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
-    );
+    const slugFormat = validateCollectionSlugFormat(newSlug);
+    if (!slugFormat.ok) {
+      throw new Error(collectionSlugIssueMessage(slugFormat.issue));
+    }
+    if (slugStatus.available === false) {
+      throw new Error(
+        slugStatus.message || collectionSlugIssueMessage(slugStatus.issue || "taken"),
+      );
+    }
+
+    const creatorAddress = await requestBuyerAddress(walletChain);
 
     const res = await fetch("/api/collections", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title,
+        title: titleFormat.title,
+        slug: slugFormat.slug,
         network,
         creatorAddress: creatorAddress || undefined,
+        description: collectionDescription || undefined,
+        imageUrl: collectionImageUrl,
+        bannerUrl: collectionBannerUrl,
+        websiteUrl: collectionWebsiteUrl || null,
+        twitterUrl: collectionTwitterUrl || null,
+        discordUrl: collectionDiscordUrl || null,
+        instagramUrl: collectionInstagramUrl || null,
       }),
     });
     const data = await res.json();
     if (res.status === 401) throw new Error("sign_in");
     if (!res.ok) {
+      const errs = Array.isArray(data.errors) ? data.errors : [];
+      if (errs.includes("title_taken")) {
+        throw new Error(collectionTitleIssueMessage("taken"));
+      }
+      const titleErr = errs.find(
+        (e: string) => typeof e === "string" && e.startsWith("invalid_title_"),
+      );
+      if (titleErr) {
+        const issue = String(titleErr).replace(
+          "invalid_title_",
+          "",
+        ) as CollectionTitleIssue;
+        throw new Error(collectionTitleIssueMessage(issue));
+      }
+      if (errs.includes("slug_taken")) {
+        throw new Error(collectionSlugIssueMessage("taken"));
+      }
+      const slugErr = errs.find(
+        (e: string) => typeof e === "string" && e.startsWith("invalid_slug_"),
+      );
+      if (slugErr) {
+        const issue = String(slugErr).replace("invalid_slug_", "") as CollectionSlugIssue;
+        throw new Error(collectionSlugIssueMessage(issue));
+      }
       throw new Error(
-        (data.errors && data.errors.join(", ")) || data.error || "collection_failed",
+        (errs.length && errs.join(", ")) || data.error || "collection_failed",
       );
     }
     const id = String(data.collection.id);
@@ -233,44 +899,51 @@ export function CreateWizard() {
       | null
       | undefined;
 
-    if (deployIntent?.walletTx) {
-      setDeployNote("Confirm collection deploy in your wallet (you pay gas)…");
-      const wt = deployIntent.walletTx as EvmWalletTx & { chain: string };
-      let txHash: string | null = null;
-      if (wt.chain === "evm") {
-        txHash = await sendEvmWalletTx(wt);
-      } else {
-        txHash = await maybeSendWalletTx({
-          walletTx: deployIntent.walletTx,
-          listingId: id,
-          action: "mint",
+    try {
+      if (deployIntent?.walletTx) {
+        await runDeployWalletAndConfirm({
+          id,
+          deployIntent,
+          creatorAddress,
         });
-      }
-      if (!txHash) {
-        throw new Error(
-          "Wallet required to deploy the collection contract on your mint network",
+      } else if (data.collection?.deployStatus === "confirmed") {
+        setDeployNote(
+          "Collection contract ready (simulated or already deployed).",
         );
       }
-      const confirm = await fetch(`/api/collections/${id}/deploy`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          txHash,
-          contractAddress: deployIntent.contractAddress,
-          escrowAddress: deployIntent.escrowAddress,
-        }),
-      });
-      const confirmData = await confirm.json();
-      if (!confirm.ok) {
-        throw new Error(confirmData.error || "deploy_confirm_failed");
+    } catch (deployErr) {
+      // Soft-hold was created before wallet confirm — free the unique name/slug
+      // when the chain deploy clearly did not land (reject / cancel / no send).
+      // Keep the row when mempool accepted but sync is still catching up.
+      if (shouldReleaseCollectionHoldAfterDeployError(deployErr)) {
+        await abandonCollectionNameHold(id);
+        setCollectionId("");
+        setCollections((prev) => prev.filter((c) => c.id !== id));
+        window.dispatchEvent(new Event("fm-collections-changed"));
       }
-      setDeployNote(`Collection deployed · ${txHash.slice(0, 10)}…`);
-    } else if (data.collection?.deployStatus === "confirmed") {
-      setDeployNote("Collection contract ready (simulated or already deployed).");
+      throw deployErr;
     }
 
+    const created = data.collection as CollectionOption | undefined;
     setCollectionId(id);
+    // Pin the just-created row locally so later steps keep the same collectionId
+    // even if the deployed mine list briefly omits it during refresh.
+    setCollections((prev) => {
+      if (prev.some((c) => c.id === id)) return prev;
+      return [
+        ...prev,
+        {
+          id,
+          title: created?.title || titleFormat.title,
+          slug: created?.slug || slugFormat.slug,
+          chain: created?.chain || walletChain,
+          network: created?.network || network,
+          mediaBytes: created?.mediaBytes ?? 0,
+          contractAddress: created?.contractAddress ?? null,
+          deployStatus: created?.deployStatus ?? "confirmed",
+        },
+      ];
+    });
     window.dispatchEvent(new Event("fm-collections-changed"));
     loadMine();
     return id;
@@ -279,9 +952,20 @@ export function CreateWizard() {
   async function uploadFiles(files: File[]) {
     setBusy(true);
     setError(null);
+    setOk(null);
     setUploadProgress(null);
+    setFailedUploadFiles([]);
+    const keepAlive = { id: 0 as ReturnType<typeof setInterval> | 0 };
     try {
       if (!files.length) throw new Error("No files selected");
+
+      // Confirm session before a long batch so we fail fast with a clear CTA.
+      const meRes = await fetch("/api/auth/me", { credentials: "include" });
+      const meData = (await meRes.json().catch(() => ({}))) as {
+        user?: { id?: string } | null;
+      };
+      if (!meData.user?.id) throw new Error("sign_in");
+
       // Snapshot File[] before any await — clearing the input empties a live FileList.
       const id = await ensureCollection();
       const capped = batchUpload
@@ -295,56 +979,174 @@ export function CreateWizard() {
         );
       }
 
-      setUploadProgress({ current: 0, total: capped.length });
-      let runningBytes = usedBytes;
+      // Skip files already uploaded in this wizard session (resume-friendly).
+      const already = new Set(
+        pieces.map((p) => uploadDedupeKey(p.fileName, p.size)),
+      );
+      let skippedAlready = 0;
+      const fresh = capped.filter((file) => {
+        const key = uploadDedupeKey(file.name, file.size);
+        if (already.has(key)) {
+          skippedAlready += 1;
+          return false;
+        }
+        return true;
+      });
 
-      for (let i = 0; i < capped.length; i++) {
-        const file = capped[i]!;
-        if (runningBytes + file.size > COLLECTION_MEDIA_CAP_BYTES) {
-          throw new Error(
-            `Stopped at ${i} of ${capped.length} — this collection is at the 10 GB art cap`,
-          );
+      // Greedy client-side cap so we don't hammer the API past quota.
+      let budget = COLLECTION_MEDIA_CAP_BYTES - usedBytes;
+      const queued: File[] = [];
+      let skippedQuota = 0;
+      for (const file of fresh) {
+        if (file.size > budget) {
+          skippedQuota += 1;
+          continue;
         }
-        const fd = new FormData();
-        fd.set("file", file);
-        fd.set("collectionId", id);
-        const res = await fetch("/api/media/upload", {
-          method: "POST",
-          credentials: "include",
-          body: fd,
-        });
-        const data = await res.json();
-        if (res.status === 401) throw new Error("sign_in");
-        if (!res.ok) {
-          throw new Error(
-            data.error === "collection_quota"
-              ? "This collection is at the 10 GB art cap"
-              : data.error === "file_too_large"
-                ? "Each file can be up to 100 MB"
-                : (data.error ?? "upload_failed"),
-          );
-        }
-        const piece: Piece = {
-          key: `${data.mediaHash}-${file.name}-${i}`,
-          title: titleFromFile(file.name),
-          description: "",
-          fileName: file.name,
-          mediaUrl: data.mediaUrl,
-          mediaHash: data.mediaHash,
-          size: Number(data.size ?? file.size),
-          traits: [],
-          maxSupply: dropKind === "limited" ? "1" : "",
-        };
-        runningBytes += piece.size;
-        setPieces((current) =>
-          batchUpload ? [...current, piece] : [piece],
-        );
-        setUploadProgress({ current: i + 1, total: capped.length });
+        budget -= file.size;
+        queued.push(file);
       }
+      if (!queued.length) {
+        if (skippedAlready && !skippedQuota) {
+          setOk(
+            `All ${skippedAlready} selected file${skippedAlready === 1 ? "" : "s"} already uploaded in this batch.`,
+          );
+          return;
+        }
+        throw new Error(
+          skippedQuota
+            ? "This collection is at the 10 GB art cap"
+            : "No files selected",
+        );
+      }
+
+      setUploadProgress({ current: 0, total: queued.length });
+      let completed = 0;
+      let sessionLost = false;
+      keepAlive.id = setInterval(() => {
+        void fetch("/api/auth/me", { credentials: "include" })
+          .then((r) => r.json())
+          .then((d: { user?: { id?: string } | null }) => {
+            if (!d?.user?.id) sessionLost = true;
+          })
+          .catch(() => {
+            /* network blip — uploads still retry on their own */
+          });
+      }, 45_000);
+
+      const settled = await mapPoolSettled(
+        queued,
+        UPLOAD_CONCURRENCY,
+        async (file, index) => {
+          const piece = await retryWithBackoff(
+            async () => {
+              if (sessionLost) throw makeHttpError("sign_in", 401, false);
+              const fd = new FormData();
+              fd.set("file", file);
+              fd.set("collectionId", id);
+              const res = await fetch("/api/media/upload", {
+                method: "POST",
+                credentials: "include",
+                body: fd,
+              });
+              let data: {
+                error?: string;
+                retryable?: boolean;
+                mediaUrl?: string;
+                mediaHash?: string;
+                size?: number;
+              } = {};
+              try {
+                data = await res.json();
+              } catch {
+                data = {};
+              }
+              if (res.status === 401) {
+                sessionLost = true;
+                throw makeHttpError("sign_in", 401, false);
+              }
+              if (!res.ok) {
+                const message = uploadErrorMessage(data.error);
+                const retryable =
+                  typeof data.retryable === "boolean"
+                    ? data.retryable
+                    : res.status === 429 || res.status >= 500;
+                throw makeHttpError(message, res.status, retryable);
+              }
+              if (!data.mediaUrl || !data.mediaHash) {
+                throw makeHttpError("upload_failed", 502);
+              }
+              return {
+                key: `${data.mediaHash}-${file.name}-${index}`,
+                title: titleFromFile(file.name),
+                description: "",
+                fileName: file.name,
+                mediaUrl: data.mediaUrl,
+                mediaHash: data.mediaHash,
+                size: Number(data.size ?? file.size),
+                traits: [] as NftTrait[],
+                maxSupply: dropKind === "limited" ? "1" : "",
+              } satisfies Piece;
+            },
+            { retries: 3, baseDelayMs: 320, maxDelayMs: 3_500 },
+          );
+          completed += 1;
+          setUploadProgress({ current: completed, total: queued.length });
+          return piece;
+        },
+      );
+
+      const okPieces = settled
+        .filter((s): s is { ok: true; value: Piece; index: number } => s.ok)
+        .sort((a, b) => a.index - b.index)
+        .map((s) => s.value);
+      const failed = settled.filter(
+        (s): s is { ok: false; error: Error; index: number } => !s.ok,
+      );
+
+      if (okPieces.length) {
+        setPieces((current) =>
+          batchUpload ? [...current, ...okPieces] : [okPieces[0]!],
+        );
+      }
+
+      if (failed.length) {
+        setFailedUploadFiles(failed.map((f) => queued[f.index]!));
+        const sample = failed
+          .slice(0, 3)
+          .map((f) => f.error.message || "upload_failed")
+          .join("; ");
+        const priorKept = batchUpload ? pieces.length : 0;
+        const totalKept = priorKept + okPieces.length;
+        const authLost = failed.some((f) => f.error.message === "sign_in");
+        const msg = authLost
+          ? `Uploaded ${okPieces.length} of ${queued.length} — session expired (${failed.length} left). Sign in again, then Retry failed. ${totalKept ? `${totalKept} successful file(s) kept in this batch.` : ""}`
+          : `Uploaded ${okPieces.length} of ${queued.length} — ${failed.length} failed${sample ? ` (${sample})` : ""}. ${totalKept ? `${totalKept} successful file(s) kept. ` : ""}Use Retry failed to continue.`;
+        if (!okPieces.length && !pieces.length) throw new Error(msg);
+        setError(msg);
+      } else {
+        setFailedUploadFiles([]);
+        const parts: string[] = [];
+        if (skippedAlready) {
+          parts.push(
+            `${skippedAlready} already in this batch (skipped)`,
+          );
+        }
+        if (skippedQuota) {
+          parts.push(
+            `${skippedQuota} skipped — collection is at the 10 GB art cap`,
+          );
+        }
+        if (parts.length) {
+          setOk(`Uploaded ${okPieces.length}. ${parts.join("; ")}.`);
+        }
+      }
+
       loadMine();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "upload_failed");
+      const raw = e instanceof Error ? e.message : "upload_failed";
+      setError(uploadErrorMessage(raw, raw));
     } finally {
+      if (keepAlive.id) clearInterval(keepAlive.id);
       setBusy(false);
       setUploadProgress(null);
     }
@@ -407,6 +1209,40 @@ export function CreateWizard() {
       if (!collectionId && !newTitle.trim()) {
         setError("Choose or name a collection");
         return;
+      }
+      if (!collectionId) {
+        const titleFormat = validateCollectionTitleFormat(newTitle);
+        if (!titleFormat.ok) {
+          setError(collectionTitleIssueMessage(titleFormat.issue));
+          return;
+        }
+        if (titleStatus.checking) {
+          setError("Still checking name availability…");
+          return;
+        }
+        if (titleStatus.available === false) {
+          setError(
+            titleStatus.message ||
+              collectionTitleIssueMessage(titleStatus.issue || "taken"),
+          );
+          return;
+        }
+        const slugFormat = validateCollectionSlugFormat(newSlug);
+        if (!slugFormat.ok) {
+          setError(collectionSlugIssueMessage(slugFormat.issue));
+          return;
+        }
+        if (slugStatus.checking) {
+          setError("Still checking URL availability…");
+          return;
+        }
+        if (slugStatus.available === false) {
+          setError(
+            slugStatus.message ||
+              collectionSlugIssueMessage(slugStatus.issue || "taken"),
+          );
+          return;
+        }
       }
       setBusy(true);
       try {
@@ -505,118 +1341,207 @@ export function CreateWizard() {
                 ? "Drops can last up to seven days"
                 : raw.includes("window_end_before_start")
                   ? "Drop end must be after the start"
+                : raw.includes("oe_hour_capacity_full")
+                  ? "Too many other drops start in that hour. Pick a different start time — this collection counts as one drop."
                   : raw,
           );
         }
       }
 
-      const listingIds: string[] = [];
-      for (const [index, item] of pieces.entries()) {
-        const supply =
-          intent === "drop" && dropKind === "limited" && item.maxSupply
-            ? Number(item.maxSupply)
-            : intent === "drop" && dropKind === "open" && item.maxSupply
+      setListProgress({ current: 0, total: pieces.length });
+      let listingsDone = 0;
+      const listingSettled = await mapPoolSettled(
+        pieces,
+        LISTING_CONCURRENCY,
+        async (item, index) => {
+          const supply =
+            intent === "drop" && dropKind === "limited" && item.maxSupply
               ? Number(item.maxSupply)
-              : null;
-        let type: "single" | "collection" | "open_edition" | "auction" = "single";
-        if (intent === "auction") type = "auction";
-        else if (intent === "drop") {
-          type =
-            dropKind === "open" || (supply != null && supply > 1)
-              ? "open_edition"
-              : "collection";
-        }
+              : intent === "drop" && dropKind === "open" && item.maxSupply
+                ? Number(item.maxSupply)
+                : null;
+          let type: "single" | "collection" | "open_edition" | "auction" =
+            "single";
+          if (intent === "auction") type = "auction";
+          else if (intent === "drop") {
+            type =
+              dropKind === "open" || (supply != null && supply > 1)
+                ? "open_edition"
+                : "collection";
+          }
 
-        const res = await fetch("/api/listings", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: item.title || `Piece ${index + 1}`,
-            description:
-              item.description ||
-              (intent === "drop"
-                ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
-                : intent === "auction"
-                  ? "Timed drop"
-                  : ""),
-            type,
-            network,
-            priceUsd: price,
-            medium: medium.trim() || "digital",
-            styleTags: tags,
-            mediaHash: item.mediaHash,
-            mediaUrl: item.mediaUrl,
-            collectionId: id,
-            isCollectionHero: index === 0,
-            traits: parseTraits(item.traits),
-            maxSupply: supply && supply > 0 ? supply : null,
-            oeStartsAt: intent === "drop" ? start : null,
-            oeEndsAt: intent === "drop" ? end : null,
-            auctionStartsAt: intent === "auction" ? start : null,
-            auctionEndsAt: intent === "auction" ? end : null,
-            saleMode:
-              intent === "auction"
-                ? saleMode
-                : intent === "single"
-                  ? "fixed"
-                  : "fixed",
-            startingBidUsd:
-              intent === "auction" && saleMode === "english"
-                ? Number(startingBidUsd) || Number(price) || null
-                : null,
-            reserveUsd:
-              intent === "auction" && saleMode === "english" && reserveUsd
-                ? Number(reserveUsd)
-                : null,
-            publishSoftLaunch: false,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(
-            (data.errors && data.errors.join(", ")) || data.error || "listing_failed",
+          const listingId = await retryWithBackoff(
+            async () => {
+              const res = await fetch("/api/listings", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  title: item.title || `Piece ${index + 1}`,
+                  description:
+                    item.description ||
+                    (intent === "drop"
+                      ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
+                      : intent === "auction"
+                        ? "Auction listing"
+                        : ""),
+                  type,
+                  network,
+                  priceUsd: price,
+                  medium: medium.trim() || "digital",
+                  styleTags: tags,
+                  mediaHash: item.mediaHash,
+                  mediaUrl: item.mediaUrl,
+                  collectionId: id,
+                  isCollectionHero: index === 0,
+                  traits: parseTraits(item.traits),
+                  maxSupply: supply && supply > 0 ? supply : null,
+                  oeStartsAt: intent === "drop" ? start : null,
+                  oeEndsAt: intent === "drop" ? end : null,
+                  auctionStartsAt: intent === "auction" ? start : null,
+                  auctionEndsAt: intent === "auction" ? end : null,
+                  saleMode:
+                    intent === "auction"
+                      ? saleMode
+                      : intent === "single"
+                        ? "fixed"
+                        : "fixed",
+                  startingBidUsd:
+                    intent === "auction" &&
+                    (saleMode === "english" || saleMode === "dutch")
+                      ? Number(startingBidUsd) || Number(price) || null
+                      : null,
+                  reserveUsd:
+                    intent === "auction" &&
+                    (saleMode === "english" || saleMode === "dutch") &&
+                    reserveUsd
+                      ? Number(reserveUsd)
+                      : null,
+                  publishSoftLaunch: false,
+                }),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                const raw =
+                  (data.errors && data.errors.join(", ")) ||
+                  data.error ||
+                  "listing_failed";
+                throw makeHttpError(listingErrorMessage(String(raw)), res.status);
+              }
+              const lid = String(data.listing?.id ?? data.id ?? "");
+              if (!lid) throw makeHttpError("listing_failed", 502);
+              return lid;
+            },
+            { retries: 3, baseDelayMs: 280, maxDelayMs: 3_000 },
           );
-        }
-        const listingId = String(data.listing?.id ?? data.id ?? "");
-        if (listingId) listingIds.push(listingId);
+          listingsDone += 1;
+          setListProgress({ current: listingsDone, total: pieces.length });
+          return { index, listingId };
+        },
+      );
+
+      const listingOk = listingSettled.filter(
+        (s): s is { ok: true; value: { index: number; listingId: string }; index: number } =>
+          s.ok,
+      );
+      const listingFail = listingSettled.filter((s) => !s.ok);
+      if (listingFail.length) {
+        const sample = listingFail
+          .slice(0, 2)
+          .map((f) =>
+            listingErrorMessage(
+              "error" in f ? f.error.message : "listing_failed",
+            ),
+          )
+          .join("; ");
+        throw new Error(
+          listingOk.length === 0
+            ? `Could not create listings (${sample || "unknown error"}). Fix the files or media conflicts and try again — nothing new was saved.`
+            : `Created ${listingOk.length} of ${pieces.length} listings — ${listingFail.length} failed${sample ? ` (${sample})` : ""}. Successful drafts were kept; retry mint to continue with those plus any fixed files.`,
+        );
       }
+      const listingIds = listingOk
+        .sort((a, b) => a.value.index - b.value.index)
+        .map((s) => s.value.listingId);
+      setListProgress(null);
 
       // Mint into the collection contract (creator pays gas).
+      // Wallet-signed batches stay serial; confirms retry on transient errors.
       const creatorAddress = await requestBuyerAddress(
         network === "solana" ? "solana" : network === "boing" ? "boing" : "evm",
       );
-      const mintPrep = await fetch(`/api/collections/${id}/mint`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "prepare",
-          listingIds,
-          creatorAddress: creatorAddress || undefined,
-        }),
-      });
-      const mintPrepData = await mintPrep.json();
-      if (!mintPrep.ok) {
-        throw new Error(mintPrepData.error || "mint_prepare_failed");
+
+      // Heal Boing deploy rows that never stored the real contract AccountId.
+      if (network === "boing") {
+        try {
+          await fetch(`/api/collections/${id}/deploy`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "sync",
+              creatorAddress: creatorAddress || undefined,
+            }),
+          });
+        } catch {
+          // Prepare still validates; sync is best-effort.
+        }
       }
-      const batches = (mintPrepData.batches ?? []) as Array<{
-        listingIds: string[];
-        provisionalTokenIds: string[];
-        walletTx?: unknown;
-        contractAddress?: string;
-        txHash?: string;
-        status?: string;
-      }>;
+
+      const mintPrep = await retryWithBackoff(
+        async () => {
+          const res = await fetch(`/api/collections/${id}/mint`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "prepare",
+              listingIds,
+              creatorAddress: creatorAddress || undefined,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw makeHttpError(
+              formatBoingMintUserMessage(
+                String(data.error || "mint_prepare_failed"),
+              ),
+              res.status,
+            );
+          }
+          return data as {
+            batches?: Array<{
+              listingIds: string[];
+              provisionalTokenIds: string[];
+              walletTx?: unknown;
+              contractAddress?: string;
+              txHash?: string;
+              status?: string;
+            }>;
+          };
+        },
+        { retries: 2, baseDelayMs: 400, maxDelayMs: 3_000 },
+      );
+      const batches = mintPrep.batches ?? [];
+      const mintTxHashes: string[] = [];
       if (batches.length) {
         setMintProgress({ current: 0, total: batches.length });
         for (let b = 0; b < batches.length; b++) {
           const batch = batches[b]!;
           let txHash = batch.txHash || "";
           if (batch.walletTx) {
-            const wt = batch.walletTx as EvmWalletTx & { chain: string };
+            const wt = batch.walletTx as EvmWalletTx | BoingWalletTx;
             if (wt.chain === "evm") {
               txHash = await sendEvmWalletTx(wt);
+            } else if (wt.chain === "boing") {
+              try {
+                txHash = await sendBoingMintWalletTx(wt);
+              } catch (err) {
+                const code = err instanceof Error ? err.message : "";
+                throw new Error(
+                  formatBoingMintUserMessage(code || "mint_failed"),
+                );
+              }
             } else {
               txHash =
                 (await maybeSendWalletTx({
@@ -627,53 +1552,96 @@ export function CreateWizard() {
             }
             if (!txHash) {
               throw new Error(
-                "Wallet required to mint pieces into your collection (you pay gas)",
+                `Wallet required to mint batch ${b + 1} of ${batches.length} (you pay gas). Earlier batches were confirmed — retry to finish the rest.`,
               );
             }
           } else if (!txHash) {
-            txHash = `simulated-mint:${id}:${b}:${Date.now()}`;
+            throw new Error(
+              network === "boing"
+                ? formatBoingMintUserMessage("boing_tx_id_required")
+                : `Wallet mint required for batch ${b + 1} of ${batches.length}. Connect your wallet and retry.`,
+            );
           }
-          const confirm = await fetch(`/api/collections/${id}/mint`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "confirm",
-              txHash,
-              listingIds: batch.listingIds,
-              tokenIds: batch.provisionalTokenIds,
-              contractAddress: batch.contractAddress,
-            }),
-          });
-          const confirmData = await confirm.json();
-          if (!confirm.ok) {
-            throw new Error(confirmData.error || "mint_confirm_failed");
-          }
+          await retryWithBackoff(
+            async () => {
+              const confirm = await fetch(`/api/collections/${id}/mint`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "confirm",
+                  txHash,
+                  listingIds: batch.listingIds,
+                  tokenIds: batch.provisionalTokenIds,
+                  contractAddress: batch.contractAddress,
+                }),
+              });
+              const confirmData = await confirm.json();
+              if (!confirm.ok) {
+                throw makeHttpError(
+                  formatBoingMintUserMessage(
+                    String(confirmData.error || "mint_confirm_failed"),
+                  ),
+                  confirm.status,
+                );
+              }
+              // Prefer sync hash from mempool-ok confirm over pending: marker.
+              if (
+                typeof confirmData.txHash === "string" &&
+                confirmData.txHash.length >= 8
+              ) {
+                txHash = confirmData.txHash;
+              }
+            },
+            { retries: 3, baseDelayMs: 400, maxDelayMs: 4_000 },
+          );
+          mintTxHashes.push(txHash);
           setMintProgress({ current: b + 1, total: batches.length });
         }
       }
 
-      // Soft-launch only after mint confirms — keeps Open Lane buyable.
-      for (const listingId of listingIds) {
-        const stageRes = await fetch(`/api/listings/${listingId}/stage`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target: "soft_launch" }),
-        });
-        const stageData = await stageRes.json();
-        if (!stageRes.ok) {
-          const errs = Array.isArray(stageData.errors)
-            ? stageData.errors.join(", ")
-            : stageData.error;
-          throw new Error(
-            errs === "listing_not_minted" ||
-              (Array.isArray(stageData.errors) &&
-                stageData.errors.includes("listing_not_minted"))
-              ? "Mint must finish before soft-launch. Retry publish mint, then try again."
-              : errs || "soft_launch_failed",
+      // Mint confirm soft-launches server-side. Re-stage any leftover drafts
+      // (idempotent when already Rising / soft-launched).
+      const stageSettled = await mapPoolSettled(
+        listingIds,
+        STAGE_CONCURRENCY,
+        async (listingId) => {
+          await retryWithBackoff(
+            async () => {
+              const stageRes = await fetch(`/api/listings/${listingId}/stage`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ target: "soft_launch" }),
+              });
+              const stageData = await stageRes.json();
+              if (!stageRes.ok) {
+                const errs = Array.isArray(stageData.errors)
+                  ? stageData.errors.join(", ")
+                  : stageData.error;
+                const message =
+                  errs === "listing_not_minted" ||
+                  (Array.isArray(stageData.errors) &&
+                    stageData.errors.includes("listing_not_minted"))
+                    ? "Mint must finish before soft-launch. Open the collection and use Publish remaining."
+                    : errs || "soft_launch_failed";
+                throw makeHttpError(message, stageRes.status);
+              }
+            },
+            { retries: 2, baseDelayMs: 300, maxDelayMs: 2_500 },
           );
-        }
+          return listingId;
+        },
+      );
+      const stageFail = stageSettled.filter((s) => !s.ok);
+      if (stageFail.length) {
+        const sample = stageFail
+          .slice(0, 2)
+          .map((f) => ("error" in f ? f.error.message : "soft_launch_failed"))
+          .join("; ");
+        throw new Error(
+          `Some pieces minted and went live, but ${stageFail.length} of ${listingIds.length} still need publish${sample ? ` (${sample})` : ""}. Open the collection and use Publish remaining.`,
+        );
       }
 
       const label =
@@ -682,76 +1650,189 @@ export function CreateWizard() {
           : intent === "auction"
             ? "timed drop"
             : "1/1 listing";
+      const publishedHero = pieces[0];
       setOk(null);
+      const publishedCollection = collections.find((c) => c.id === id);
       setPublished({
         listingIds,
         collectionId: id,
+        collectionSlug:
+          publishedCollection?.slug ||
+          slugStatus.normalized ||
+          normalizeCollectionSlug(newSlug) ||
+          null,
         label,
+        collectionTitle:
+          publishedCollection?.title ||
+          newTitle.trim() ||
+          "Untitled collection",
+        network,
+        intent,
+        dropKind,
+        priceUsd,
+        pieceCount: pieces.length,
+        heroTitle: publishedHero?.title ?? "",
+        heroDescription: publishedHero?.description ?? "",
+        heroMediaUrl: publishedHero?.mediaUrl ?? "",
+        satelliteMediaUrls: pieces
+          .slice(1, 4)
+          .map((p) => p.mediaUrl)
+          .filter(Boolean),
+        styleTags,
+        mintTxHashes,
       });
       setPieces([]);
       setMintProgress(null);
+      setListProgress(null);
       router.refresh();
       window.dispatchEvent(new Event("fm-collections-changed"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "failed");
+      const raw = err instanceof Error ? err.message : "failed";
+      setError(
+        /account not found|boing_|collection_not_deployed|onchain_deploy/i.test(
+          raw,
+        )
+          ? formatBoingMintUserMessage(raw)
+          : raw,
+      );
     } finally {
       setBusy(false);
       setMintProgress(null);
+      setListProgress(null);
     }
   }
 
+  const livePreview = published ? (
+    <CreateLivePreview
+      collectionTitle={published.collectionTitle}
+      network={published.network}
+      intent={published.intent}
+      dropKind={published.dropKind}
+      priceUsd={published.priceUsd}
+      pieceCount={published.pieceCount}
+      heroTitle={published.heroTitle}
+      heroDescription={published.heroDescription}
+      heroMediaUrl={published.heroMediaUrl}
+      satelliteMediaUrls={published.satelliteMediaUrls}
+      styleTags={published.styleTags}
+      stepLabel="Published · live on FreshMint"
+    />
+  ) : (
+    <CreateLivePreview
+      collectionTitle={
+        selected?.title || newTitle.trim() || "Untitled collection"
+      }
+      network={network}
+      intent={intent}
+      dropKind={dropKind}
+      priceUsd={priceUsd}
+      pieceCount={pieces.length}
+      heroTitle={pieces[0]?.title ?? ""}
+      heroDescription={pieces[0]?.description ?? ""}
+      heroMediaUrl={pieces[0]?.mediaUrl ?? ""}
+      satelliteMediaUrls={pieces
+        .slice(1, 4)
+        .map((p) => p.mediaUrl)
+        .filter(Boolean)}
+      styleTags={styleTags}
+      stepLabel={`Create · ${stepIndex + 1} of ${steps.length} · ${step.label}`}
+    />
+  );
+
   if (published) {
     const firstId = published.listingIds[0];
+    const explorerHashes = published.mintTxHashes.filter(isExplorableTxHash);
+    const collectionHref = collectionPath({
+      id: published.collectionId,
+      slug: published.collectionSlug,
+    });
     return (
-      <div className="create-wizard">
-        <div className="create-wizard__panel">
-          <h2 className="display create-wizard__title">Published on-chain</h2>
-          <p className="create-wizard__lead">
-            {published.label} is minted and live. Your first work auto-enters
-            Rising so collectors can find it without a Featured pin. Later works
-            wait out the new-wallet cooldown and weekly cap.
-          </p>
-          <p style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "1rem 0 0" }}>
-            {firstId ? (
-              <Link href={`/listings/${firstId}`} className="badge featured">
-                Open listing
+      <WizardShell preview={livePreview}>
+        <PublishConfetti active />
+        <div className="create-wizard">
+          <div className="create-wizard__panel create-wizard__panel--bare create-wizard__panel--success">
+            <h2 className="display create-wizard__title">Published on-chain</h2>
+            <p className="create-wizard__lead">
+              {published.label} is minted and live. Your first work auto-enters
+              Rising so collectors can find it without a Featured pin. Later works
+              wait out the new-wallet cooldown and weekly cap.
+            </p>
+            <div className="create-wizard__success-links" aria-label="Published links">
+              <Link href={collectionHref} className="badge featured">
+                View collection
               </Link>
+              {firstId ? (
+                <Link href={`/listings/${firstId}`} className="badge">
+                  Open listing
+                </Link>
+              ) : null}
+              <Link href="/rising" className="badge emerging">
+                Rising
+              </Link>
+              <Link href="/me" className="badge">
+                Your works
+              </Link>
+            </div>
+            {explorerHashes.length ? (
+              <div className="create-wizard__tx-links">
+                <p className="create-wizard__hint">
+                  On-chain mint
+                  {explorerHashes.length === 1 ? "" : " batches"} ·{" "}
+                  {published.network}
+                </p>
+                <ul>
+                  {explorerHashes.map((hash, i) => (
+                    <li key={`${hash}-${i}`}>
+                      <TxExplorerLink
+                        hash={hash}
+                        network={published.network}
+                        label={
+                          explorerHashes.length > 1
+                            ? `Batch ${i + 1} · ${hash.slice(0, 10)}…`
+                            : undefined
+                        }
+                        className="create-wizard__tx-link"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
-            <Link href="/rising" className="badge emerging">
-              Rising
-            </Link>
-            <Link href="/open" className="badge">
-              Open Lane
-            </Link>
-            <Link href={`/collections/${published.collectionId}`} className="badge">
-              Collection
-            </Link>
-            <Link href="/me" className="badge">
-              Your works
-            </Link>
-          </p>
-          <div className="create-wizard__nav">
-            <button
-              type="button"
-              className="badge featured"
-              style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => {
-                setPublished(null);
-                setStepIndex(0);
-                setIntent(null);
-                setOk(null);
-              }}
-            >
-              Create another
-            </button>
+            <div className="create-wizard__nav">
+              <button
+                type="button"
+                className="fm-btn fm-btn--primary"
+                onClick={() => {
+                  setPublished(null);
+                  setStepIndex(0);
+                  setIntent(null);
+                  setOk(null);
+                }}
+              >
+                Create another
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </WizardShell>
     );
   }
 
   return (
+    <WizardShell preview={livePreview}>
     <div className="create-wizard">
+      <div className="create-wizard__progress" aria-hidden="true">
+        {steps.map((s, index) => (
+          <span
+            key={s.id}
+            className={
+              index <= stepIndex
+                ? "create-wizard__progress-seg is-on"
+                : "create-wizard__progress-seg"
+            }
+          />
+        ))}
+      </div>
       <ol className="create-wizard__steps" aria-label="Creation steps">
         {steps.map((s, index) => (
           <li
@@ -770,13 +1851,13 @@ export function CreateWizard() {
         ))}
       </ol>
 
-      <div className="create-wizard__panel">
+      <div className="create-wizard__panel create-wizard__panel--bare create-wizard__panel--rise" key={step.id}>
         {step.id === "intent" ? (
           <>
             <h2 className="display create-wizard__title">What are you creating?</h2>
             <p className="create-wizard__lead">
-              One path at a time — a collection drop, a single 1/1, or a timed
-              drop (timed window).
+              List for sale at a fixed price by default. Auctions are an advanced
+              option on the schedule step.
             </p>
             <div className="create-wizard__choices" role="group" aria-label="Creation type">
               {(
@@ -784,17 +1865,17 @@ export function CreateWizard() {
                   {
                     id: "drop" as const,
                     title: "Collection drop",
-                    body: "Limited or open edition. Upload many works, traits CSV, schedule the window.",
+                    body: "Limited or open edition. Upload many works, set prices, schedule the drop.",
                   },
                   {
                     id: "single" as const,
-                    title: "1/1 listing",
-                    body: "One unique piece in a collection. Soft-launch to Open Lane.",
+                    title: "1/1 for sale",
+                    body: "One unique piece — Buy now on Open Lane after mint & publish.",
                   },
                   {
                     id: "auction" as const,
-                    title: "Timed drop",
-                    body: "Choose timed window (buy at list price) or English auction (open bidding) on the schedule step.",
+                    title: "Auction / timed",
+                    body: "Advanced: timed listing, English auction (highest bid), or Dutch auction (price drops).",
                   },
                 ] as const
               ).map((choice) => (
@@ -838,13 +1919,28 @@ export function CreateWizard() {
                 <select
                   value={collectionId}
                   onChange={(e) => {
-                    setCollectionId(e.target.value);
-                    if (e.target.value) setNewTitle("");
+                    const id = e.target.value;
+                    setCollectionId(id);
+                    if (id) {
+                      setNewTitle("");
+                      const chosen = networkCollections.find((c) => c.id === id);
+                      const net = chosen ? collectionNetworkOf(chosen) : "";
+                      if (
+                        net === "ethereum" ||
+                        net === "base" ||
+                        net === "arbitrum" ||
+                        net === "optimism" ||
+                        net === "solana" ||
+                        net === "boing"
+                      ) {
+                        setNetwork(net);
+                      }
+                    }
                   }}
-                  style={fieldStyle}
+                  className="fm-field"
                 >
                   <option value="">Create one below…</option>
-                  {collections.map((c) => (
+                  {networkCollections.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>
@@ -861,16 +1957,272 @@ export function CreateWizard() {
                   }}
                   placeholder="Dawn Set"
                   maxLength={120}
-                  style={fieldStyle}
+                  className="fm-field"
+                  disabled={Boolean(collectionId)}
+                  aria-describedby="create-collection-title-status"
                 />
+                {!collectionId ? (
+                  <p
+                    id="create-collection-title-status"
+                    className="create-wizard__hint"
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      marginTop: "0.4rem",
+                      color:
+                        titleStatus.available === true
+                          ? "var(--emergent)"
+                          : titleStatus.available === false
+                            ? "var(--danger)"
+                            : "var(--ink-muted)",
+                    }}
+                  >
+                    {titleStatus.message ||
+                      "Must be unique across all networks (case-insensitive)."}
+                  </p>
+                ) : null}
               </label>
             </div>
+            {!collectionId ? (
+              <label>
+                Collection URL
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    marginTop: "0.35rem",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "var(--ink-muted)",
+                      fontSize: "0.88rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    /collections/
+                  </span>
+                  <input aria-label="Collection URL slug"
+                    value={newSlug}
+                    onChange={(e) => {
+                      setSlugTouched(true);
+                      setCollectionId("");
+                      setNewSlug(sanitizeCollectionSlugInput(e.target.value));
+                    }}
+                    placeholder="dawn-set"
+                    maxLength={48}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="fm-field fm-field--flush"
+                    aria-describedby="create-collection-slug-status"
+                  />
+                </div>
+                <p
+                  id="create-collection-slug-status"
+                  className="create-wizard__hint"
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    marginTop: "0.4rem",
+                    color:
+                      slugStatus.available === true
+                        ? "var(--emergent)"
+                        : slugStatus.available === false
+                          ? "var(--danger)"
+                          : "var(--ink-muted)",
+                  }}
+                >
+                  {slugStatus.message ||
+                    "Lowercase letters, numbers, and hyphens. Must be unique."}
+                </p>
+              </label>
+            ) : null}
+            {!collectionId ? (
+              <fieldset
+                className="create-wizard__profile-fields"
+                style={{
+                  margin: 0,
+                  padding: 0,
+                  border: "none",
+                  display: "grid",
+                  gap: "0.75rem",
+                }}
+              >
+                <legend
+                  style={{
+                    padding: 0,
+                    color: "var(--ink-muted)",
+                    fontSize: "0.88rem",
+                  }}
+                >
+                  Collection profile (optional)
+                </legend>
+                <label>
+                  Description
+                  <textarea
+                    value={collectionDescription}
+                    onChange={(e) => setCollectionDescription(e.target.value)}
+                    maxLength={2000}
+                    rows={2}
+                    placeholder="About this collection"
+                    className="fm-field"
+                  />
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                  }}
+                >
+                  <label className="badge" style={{ cursor: "pointer" }}>
+                    {profileUploadBusy ? "Uploading…" : "Upload logo"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      hidden
+                      disabled={profileUploadBusy}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        setProfileUploadBusy(true);
+                        setError(null);
+                        try {
+                          const fd = new FormData();
+                          fd.set("file", file);
+                          const upload = await fetch("/api/media/upload", {
+                            method: "POST",
+                            credentials: "include",
+                            body: fd,
+                          });
+                          const data = (await upload.json()) as {
+                            mediaUrl?: string;
+                            error?: string;
+                          };
+                          if (!upload.ok || !data.mediaUrl) {
+                            throw new Error(data.error || "upload_failed");
+                          }
+                          setCollectionImageUrl(data.mediaUrl);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : "upload_failed",
+                          );
+                        } finally {
+                          setProfileUploadBusy(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="badge" style={{ cursor: "pointer" }}>
+                    Upload banner
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      hidden
+                      disabled={profileUploadBusy}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        setProfileUploadBusy(true);
+                        setError(null);
+                        try {
+                          const fd = new FormData();
+                          fd.set("file", file);
+                          const upload = await fetch("/api/media/upload", {
+                            method: "POST",
+                            credentials: "include",
+                            body: fd,
+                          });
+                          const data = (await upload.json()) as {
+                            mediaUrl?: string;
+                            error?: string;
+                          };
+                          if (!upload.ok || !data.mediaUrl) {
+                            throw new Error(data.error || "upload_failed");
+                          }
+                          setCollectionBannerUrl(data.mediaUrl);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : "upload_failed",
+                          );
+                        } finally {
+                          setProfileUploadBusy(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  {collectionImageUrl ? (
+                    <span className="badge emerging">Logo set</span>
+                  ) : null}
+                  {collectionBannerUrl ? (
+                    <span className="badge emerging">Banner set</span>
+                  ) : null}
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "0.65rem",
+                  }}
+                >
+                  <label>
+                    Website
+                    <input
+                      value={collectionWebsiteUrl}
+                      onChange={(e) => setCollectionWebsiteUrl(e.target.value)}
+                      placeholder="https://"
+                      className="fm-field"
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    X / Twitter
+                    <input
+                      value={collectionTwitterUrl}
+                      onChange={(e) => setCollectionTwitterUrl(e.target.value)}
+                      placeholder="https://x.com/…"
+                      className="fm-field"
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    Discord
+                    <input
+                      value={collectionDiscordUrl}
+                      onChange={(e) => setCollectionDiscordUrl(e.target.value)}
+                      placeholder="https://discord.gg/…"
+                      className="fm-field"
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    Instagram
+                    <input
+                      value={collectionInstagramUrl}
+                      onChange={(e) =>
+                        setCollectionInstagramUrl(e.target.value)
+                      }
+                      placeholder="https://instagram.com/…"
+                      className="fm-field"
+                      inputMode="url"
+                    />
+                  </label>
+                </div>
+              </fieldset>
+            ) : null}
             <label>
               Mint network
               <select
                 value={network}
-                onChange={(e) => setNetwork(e.target.value)}
-                style={fieldStyle}
+                onChange={(e) => {
+                  setNetwork(e.target.value);
+                  setCollectionId("");
+                }}
+                className="fm-field"
               >
                 <option value="ethereum">Ethereum (Sepolia)</option>
                 <option value="base">Base (Sepolia)</option>
@@ -880,6 +2232,11 @@ export function CreateWizard() {
                 <option value="boing">Boing Testnet</option>
               </select>
             </label>
+            <p className="create-wizard__lead" style={{ marginTop: "0.75rem" }}>
+              Existing collections list only sets you own on{" "}
+              <strong>{network}</strong> that are already deployed on-chain.
+              Create a new title below to deploy a fresh contract.
+            </p>
           </>
         ) : null}
 
@@ -889,23 +2246,27 @@ export function CreateWizard() {
               {intent === "auction"
                 ? saleMode === "english"
                   ? "English auction window"
-                  : "Timed drop window"
+                  : saleMode === "dutch"
+                    ? "Dutch auction window"
+                    : "Timed listing window"
                 : "Drop schedule"}
             </h2>
             <p className="create-wizard__lead">
               {saleMode === "english"
-                ? "Collectors place open USD bids while the window is live. Winner claims at the high bid."
-                : "Collectors pay crypto at this USD-quoted price while the window is live."}
+                ? "Collectors place open USD bids while the window is live. Winner pays the high bid."
+                : saleMode === "dutch"
+                  ? "Price starts high and declines to the floor. First Buy now at the live price wins."
+                  : "Collectors Buy now at the list price while the window is live."}
             </p>
             {intent === "auction" ? (
-              <div className="drop-studio__kinds" role="group" aria-label="Sale mode">
+              <div className="drop-studio__kinds" role="group" aria-label="Advanced sale type">
                 <button
                   type="button"
                   className={saleMode === "timed_window" ? "is-active" : undefined}
                   aria-pressed={saleMode === "timed_window"}
                   onClick={() => setSaleMode("timed_window")}
                 >
-                  Timed window (buy at list price)
+                  Timed listing
                 </button>
                 <button
                   type="button"
@@ -913,26 +2274,37 @@ export function CreateWizard() {
                   aria-pressed={saleMode === "english"}
                   onClick={() => setSaleMode("english")}
                 >
-                  English auction (open bidding)
+                  English auction
+                </button>
+                <button
+                  type="button"
+                  className={saleMode === "dutch" ? "is-active" : undefined}
+                  aria-pressed={saleMode === "dutch"}
+                  onClick={() => setSaleMode("dutch")}
+                >
+                  Dutch auction
                 </button>
               </div>
             ) : null}
-            {intent === "auction" && saleMode === "english" ? (
+            {intent === "auction" &&
+            (saleMode === "english" || saleMode === "dutch") ? (
               <div className="create-wizard__grid-2" style={{ marginTop: "0.75rem" }}>
                 <label>
-                  Starting bid (USD)
+                  {saleMode === "dutch" ? "Starting price (USD)" : "Starting bid (USD)"}
                   <input
                     value={startingBidUsd}
                     onChange={(e) => setStartingBidUsd(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                 </label>
                 <label>
-                  Reserve (USD, optional)
+                  {saleMode === "dutch"
+                    ? "Floor price (USD)"
+                    : "Reserve (USD, optional)"}
                   <input
                     value={reserveUsd}
                     onChange={(e) => setReserveUsd(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                 </label>
               </div>
@@ -971,7 +2343,7 @@ export function CreateWizard() {
                   type="datetime-local"
                   value={startsAt}
                   onChange={(e) => setStartsAt(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
               </label>
               <label>
@@ -980,7 +2352,7 @@ export function CreateWizard() {
                   type="datetime-local"
                   value={endsAt}
                   onChange={(e) => setEndsAt(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
               </label>
               <label>
@@ -991,7 +2363,7 @@ export function CreateWizard() {
                   step="1"
                   value={priceUsd}
                   onChange={(e) => setPriceUsd(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
                 <span style={{ display: "block", marginTop: "0.35rem" }}>
                   <PlatformFeeBreakdown
@@ -1009,8 +2381,8 @@ export function CreateWizard() {
             <h2 className="display create-wizard__title">Upload artwork</h2>
             <p className="create-wizard__lead">
               {batchUpload
-                ? "Select many files at once (Shift or Ctrl/Cmd click). Up to 100 MB each, 10 GB per collection — no previews, just a running count."
-                : "Upload one file for this listing."}
+                ? "Select many files at once (Shift or Ctrl/Cmd click). Up to 100 MB each, 10 GB per collection. The live preview updates as files land."
+                : "Upload one file for this listing — the live preview updates as soon as it is ready."}
             </p>
             <label>
               {batchUpload ? "Artwork files" : "Artwork file"}
@@ -1019,7 +2391,7 @@ export function CreateWizard() {
                 multiple={batchUpload}
                 accept={ACCEPT}
                 disabled={busy}
-                style={fieldStyle}
+                className="fm-field"
                 onChange={(e) => {
                   const selectedFiles = e.target.files
                     ? Array.from(e.target.files)
@@ -1040,24 +2412,51 @@ export function CreateWizard() {
                   ? `${pieces.length} file${pieces.length === 1 ? "" : "s"} ready · ${formatBytes(piecesBytes)} this batch · ${formatBytes(usedBytes)} of ${formatBytes(COLLECTION_MEDIA_CAP_BYTES)} collection total`
                   : `0 files ready · ${formatBytes(usedBytes)} of ${formatBytes(COLLECTION_MEDIA_CAP_BYTES)} used`}
               </p>
-              {pieces.length ? (
-                <button
-                  type="button"
-                  className="badge"
-                  disabled={busy}
-                  style={{
-                    cursor: busy ? "default" : "pointer",
-                    background: "transparent",
-                    justifySelf: "start",
-                  }}
-                  onClick={() => {
-                    setPieces([]);
-                    setError(null);
-                  }}
-                >
-                  Clear files
-                </button>
+              {failedUploadFiles.length ? (
+                <p className="create-wizard__upload-count">
+                  {failedUploadFiles.length} file
+                  {failedUploadFiles.length === 1 ? "" : "s"} still need upload.
+                </p>
               ) : null}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  marginTop: "0.35rem",
+                }}
+              >
+                {failedUploadFiles.length ? (
+                  <button
+                    type="button"
+                    className="fm-btn fm-btn--primary"
+                    disabled={busy}
+                    onClick={() => {
+                      void uploadFiles(failedUploadFiles);
+                    }}
+                  >
+                    Retry failed ({failedUploadFiles.length})
+                  </button>
+                ) : null}
+                {pieces.length ? (
+                  <button
+                    type="button"
+                    className="badge"
+                    disabled={busy}
+                    style={{
+                      cursor: busy ? "default" : "pointer",
+                      background: "transparent",
+                    }}
+                    onClick={() => {
+                      setPieces([]);
+                      setFailedUploadFiles([]);
+                      setError(null);
+                    }}
+                  >
+                    Clear files
+                  </button>
+                ) : null}
+              </div>
             </div>
           </>
         ) : null}
@@ -1080,7 +2479,7 @@ export function CreateWizard() {
                     step="1"
                     value={priceUsd}
                     onChange={(e) => setPriceUsd(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                   <span style={{ display: "block", marginTop: "0.35rem" }}>
                     <PlatformFeeBreakdown
@@ -1094,7 +2493,7 @@ export function CreateWizard() {
                   <input
                     value={medium}
                     onChange={(e) => setMedium(e.target.value)}
-                    style={fieldStyle}
+                    className="fm-field"
                   />
                 </label>
               </div>
@@ -1104,7 +2503,7 @@ export function CreateWizard() {
                 <input
                   value={medium}
                   onChange={(e) => setMedium(e.target.value)}
-                  style={fieldStyle}
+                  className="fm-field"
                 />
               </label>
             )}
@@ -1114,7 +2513,7 @@ export function CreateWizard() {
                 value={styleTags}
                 onChange={(e) => setStyleTags(e.target.value)}
                 placeholder="ink, minimal"
-                style={fieldStyle}
+                className="fm-field"
               />
             </label>
             {batchUpload ? (
@@ -1124,7 +2523,7 @@ export function CreateWizard() {
                   <input
                     type="file"
                     accept=".csv,text/csv"
-                    style={fieldStyle}
+                    className="fm-field"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = "";
@@ -1190,7 +2589,7 @@ export function CreateWizard() {
                               ),
                             )
                           }
-                          style={fieldStyle}
+                          className="fm-field"
                         />
                       </label>
                       <label>
@@ -1207,7 +2606,7 @@ export function CreateWizard() {
                               ),
                             )
                           }
-                          style={fieldStyle}
+                          className="fm-field"
                         />
                       </label>
                       {batchUpload && dropKind === "limited" ? (
@@ -1226,7 +2625,7 @@ export function CreateWizard() {
                                 ),
                               )
                             }
-                            style={fieldStyle}
+                            className="fm-field"
                           />
                         </label>
                       ) : null}
@@ -1261,6 +2660,11 @@ export function CreateWizard() {
               Minting at publish is required to sell. Unminted drafts stay off
               the market and show as “Not minted yet” to collectors.
             </p>
+            <PublishLifecycleStatus
+              snapshot={reviewLifecycle}
+              title="Draft → deploy → mint → live"
+              testId="create-publish-lifecycle"
+            />
             <ol className="create-wizard__mint-checklist" aria-label="Mint checklist">
               <li>
                 <strong>Deploy collection</strong> — confirmed on your mint network
@@ -1293,8 +2697,12 @@ export function CreateWizard() {
                   {intent === "drop"
                     ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
                     : intent === "auction"
-                      ? "Timed drop"
-                      : "1/1 listing"}
+                      ? saleMode === "english"
+                        ? "English auction"
+                        : saleMode === "dutch"
+                          ? "Dutch auction"
+                          : "Timed listing"
+                      : "1/1 for sale"}
                 </dd>
               </div>
               <div>
@@ -1348,15 +2756,25 @@ export function CreateWizard() {
             {deployNote}
           </p>
         ) : null}
+        {listProgress ? (
+          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }} aria-live="polite">
+            Creating listings {listProgress.current} of {listProgress.total}…
+          </p>
+        ) : null}
         {mintProgress ? (
-          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }}>
+          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }} aria-live="polite">
             Minting on-chain batch {mintProgress.current} of {mintProgress.total}
             … (you pay gas)
           </p>
         ) : null}
-        {error === "sign_in" ? (
+        {error === "sign_in" ||
+        (error && /session expired|sign in again/i.test(error)) ? (
           <p style={{ color: "var(--ink-muted)", margin: "0.75rem 0 0" }}>
-            <Link href="/sign-in?next=/create">Sign in</Link> to continue.
+            <Link href="/sign-in?next=/create">Sign in</Link> to continue
+            {failedUploadFiles.length
+              ? `, then use Retry failed (${failedUploadFiles.length})`
+              : ""}
+            . Successful uploads in this batch are kept.
           </p>
         ) : error ? (
           <p style={{ color: "var(--danger)", margin: "0.75rem 0 0" }}>{error}</p>
@@ -1368,13 +2786,9 @@ export function CreateWizard() {
         <div className="create-wizard__nav">
           <button
             type="button"
-            className="badge"
+            className="fm-btn fm-btn--ghost"
             disabled={busy || stepIndex === 0}
-            style={{
-              cursor: stepIndex === 0 ? "default" : "pointer",
-              background: "transparent",
-              opacity: stepIndex === 0 ? 0.4 : 1,
-            }}
+            style={{ opacity: stepIndex === 0 ? 0.4 : 1 }}
             onClick={goBack}
           >
             Back
@@ -1382,9 +2796,8 @@ export function CreateWizard() {
           {step.id !== "review" ? (
             <button
               type="button"
-              className="badge featured"
+              className="fm-btn fm-btn--primary"
               disabled={busy}
-              style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void advance()}
             >
               {busy ? "Working…" : "Continue"}
@@ -1392,20 +2805,22 @@ export function CreateWizard() {
           ) : (
             <button
               type="button"
-              className="badge featured"
+              className="fm-btn fm-btn--primary"
               disabled={busy}
-              style={{ cursor: "pointer", background: "transparent" }}
               onClick={() => void publish()}
             >
               {busy
                 ? mintProgress
                   ? `Minting ${mintProgress.current}/${mintProgress.total}…`
-                  : "Minting & publishing…"
+                  : listProgress
+                    ? `Listings ${listProgress.current}/${listProgress.total}…`
+                    : "Minting & publishing…"
                 : "Mint & publish (required to sell)"}
             </button>
           )}
         </div>
       </div>
     </div>
+    </WizardShell>
   );
 }

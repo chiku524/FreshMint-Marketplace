@@ -1,5 +1,7 @@
 "use client";
 
+import { StudioCollectionsHub } from "@/components/StudioCollectionsHub";
+import type { StudioCollectionRow } from "@/lib/marketplace/studio-hub";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -7,9 +9,11 @@ import { useEffect, useState } from "react";
 type ListingOpt = { id: string; title: string; stage: string };
 
 export function StudioPanel({
+  collections,
   canEditFeatured = false,
   signedIn = false,
 }: {
+  collections: StudioCollectionRow[];
   canEditFeatured?: boolean;
   signedIn?: boolean;
 }) {
@@ -74,32 +78,24 @@ export function StudioPanel({
   }
 
   return (
-    <div style={{ display: "grid", gap: "2rem" }}>
+    <div className="studio-panel">
+      <StudioCollectionsHub rows={collections} signedIn={signedIn} />
+
       {canEditFeatured ? (
-        <section>
-          <h2 className="display" style={{ fontSize: "1.4rem" }}>
+        <section className="studio-panel__section">
+          <h2 className="display studio-panel__section-title">
             Editorial Featured
           </h2>
-          <p style={{ color: "var(--ink-muted)" }}>
+          <p className="studio-panel__section-lead">
             Editors and moderators promote Rising works into the fixed Featured
             inventory. Paid boosts are separate and labeled Promoted.
           </p>
-          <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.75rem" }}>
+          <div className="studio-panel__feature-list">
             {listings
               .filter((l) => l.stage !== "draft")
               .slice(0, 20)
               .map((l) => (
-                <div
-                  key={l.id}
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    borderBottom: "1px solid var(--line)",
-                    padding: "0.45rem 0",
-                  }}
-                >
+                <div key={l.id} className="studio-panel__feature-row">
                   <span style={{ flex: 1 }}>
                     {l.title}{" "}
                     <span style={{ color: "var(--ink-muted)" }}>({l.stage})</span>
@@ -126,36 +122,35 @@ export function StudioPanel({
         </section>
       ) : null}
 
-      <section id="shelves">
-        <h2 className="display" style={{ fontSize: "1.4rem" }}>
-          Create collector shelf
+      <section id="shelves" className="studio-panel__section">
+        <h2 className="display studio-panel__section-title">
+          Collector shelves
         </h2>
-        <p style={{ color: "var(--ink-muted)", marginTop: 0 }}>
+        <p className="studio-panel__section-lead">
           Name a shelf and add works you care about — others can follow it from{" "}
           <Link href="/shelves">Shelves</Link>. Saving from a card can start you
           here when you have none yet.
         </p>
         {!signedIn ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            <Link href="/sign-in?next=/studio">Sign in</Link> to publish a shelf.
+            <Link href="/sign-in?next=/studio#shelves">Sign in</Link> to publish a
+            shelf.
           </p>
         ) : (
           <form
             onSubmit={createShelf}
-            style={{ display: "grid", gap: "0.75rem", maxWidth: "32rem" }}
+            className="fm-form-stack fm-form-stack--wide"
           >
-            <input aria-label="Shelf name"
-              value={shelfName}
-              onChange={(e) => setShelfName(e.target.value)}
-              placeholder="Shelf name"
-              required
-              style={{
-                background: "var(--panel)",
-                border: "1px solid var(--line)",
-                color: "var(--ink)",
-                padding: "0.55rem 0.7rem",
-              }}
-            />
+            <label>
+              Shelf name
+              <input
+                value={shelfName}
+                onChange={(e) => setShelfName(e.target.value)}
+                placeholder="Shelf name"
+                required
+                className="fm-field"
+              />
+            </label>
             <div
               style={{
                 display: "grid",
@@ -184,18 +179,11 @@ export function StudioPanel({
                 </label>
               ))}
             </div>
-            <button
-              type="submit"
-              className="badge emerging"
-              style={{
-                cursor: "pointer",
-                background: "transparent",
-                justifySelf: "start",
-                padding: "0.5rem 0.8rem",
-              }}
-            >
-              Publish shelf
-            </button>
+            <div className="fm-form-actions">
+              <button type="submit" className="fm-btn fm-btn--primary">
+                Publish shelf
+              </button>
+            </div>
           </form>
         )}
       </section>

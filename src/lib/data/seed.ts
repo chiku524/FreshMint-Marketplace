@@ -548,14 +548,33 @@ export function buildSeedState(): MarketplaceState {
   collections.set("col-static-garden", {
     id: "col-static-garden",
     title: "Static Garden",
+    slug: "static-garden",
     creatorId: "artist-glitch",
     chain: "solana",
     network: "solana",
     heroListingId: "listing-glitch-col-hero",
     sampleListingIds: ["listing-glitch-col-2", "listing-glitch-col-3"],
     totalItems: 3,
+    description: "Glitch botanicals and quiet static frames.",
+    imageUrl: null,
+    bannerUrl: null,
+    websiteUrl: null,
+    twitterUrl: null,
+    discordUrl: null,
+    instagramUrl: null,
     deployStatus: "confirmed",
     contractAddress: "sol-col-static-garden",
+    // Seed cache demo only — Solana rows cannot write the Boing registry.
+    linkedTokens: [
+      {
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        label: "USDC",
+      },
+      {
+        address: "So11111111111111111111111111111111111111112",
+        label: "wSOL",
+      },
+    ],
     escrowAddress: null,
     createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
   });

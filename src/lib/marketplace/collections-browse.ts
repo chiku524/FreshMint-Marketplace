@@ -136,6 +136,7 @@ export async function aggregateCollectionVolumesUsdSince(
 export type CollectionBrowseRow = {
   id: string;
   title: string;
+  slug?: string | null;
   creatorId: string;
   creatorName: string;
   chain: string;
@@ -163,6 +164,7 @@ export async function listTopCollectionsForIndex(input?: {
     rows.push({
       id: collection.id,
       title: collection.title,
+      slug: collection.slug ?? null,
       creatorId: collection.creatorId,
       creatorName: creator?.displayName ?? collection.creatorId,
       chain: collection.chain,
@@ -200,6 +202,7 @@ export async function listNewCollectionsThisWeek(input?: {
     rows.push({
       id: collection.id,
       title: collection.title,
+      slug: collection.slug ?? null,
       creatorId: collection.creatorId,
       creatorName: creator?.displayName ?? collection.creatorId,
       chain: collection.chain,

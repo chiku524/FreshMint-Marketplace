@@ -15,42 +15,74 @@ FreshMint settles art on the same networks it can fund via the bridge.
 
 Set `NEXT_PUBLIC_CHAIN_MODE=testnet` (default) or `mainnet`.
 
-**Boing is a native L1**, not an EVM chain. Do not add it via MetaMask `wallet_addEthereumChain`. Use [Boing Express](https://boing.express) (`window.boing`) and 32-byte account ids (`0x` + 64 hex). Public RPC: `https://testnet-rpc.boing.network/`. Explorer: `https://boing.observer`. Boing is **not** on Relay — `/bridge` excludes it.
+**Boing is a native L1**, not an EVM chain. Do not add it via MetaMask `wallet_addEthereumChain`. Use [Boing Express](https://boing.express) (`window.boing`) and 32-byte account ids (`0x` + 64 hex). Public RPC: `https://testnet-rpc.boing.network/` (Cloudflare Worker). Explorer: `https://boing.observer`. Boing is **not** on Relay — `/bridge` excludes it.
+
+Server-side reads (`boing_getBalance`, NFT owner checks) send `User-Agent: FreshMintMarketplace/boing-rpc` and automatically fall back to Fly origins (`boing-testnet-1.fly.dev`, `boing-testnet-2.fly.dev`) when the public edge returns Cloudflare HTTP 403. On Vercel, set `BOING_RPC_URL` to a reachable node (often a Fly URL) if the public gateway still blocks your region.
 
 ## Collection deploy + mint at publish
 
 Creates stay on FreshMint; **primary buys are crypto-only** with ownership at purchase. On-chain work happens in two **creator-paid** phases, then a collector-paid settlement:
 
-1. **Create collection** — creator wallet deploys a per-collection contract (`FreshMintERC721` on EVM; Boing `contract_deploy_meta`; Solana collection attestation). Store `contractAddress` / `deployTxHash` on the collection.
-2. **Soft-launch / publish** — creator wallet mints tokens **into that collection** (EVM `safeMintBatch` in chunks of 25). Each listing gets `tokenId` + `mintTxHash`. Soft-launch is **blocked** until mint confirms (`listing_not_minted`). Unminted listings cannot be bought.
+1. **Create collection** — creator wallet deploys a per-collection contract (`FreshMintERC721` on EVM; Boing `contract_deploy_meta`; Solana collection attestation). Store `contractAddress` / `deployTxHash` on the collection. Studio and Create surface this as the **deploy** step; Boing mint retries only force a re-deploy when the contract AccountId is actually missing on-chain.
+2. **Soft-launch / publish** — creator wallet mints tokens **into that collection** (EVM `safeMintBatch` in chunks of 25). Each listing gets `tokenId` + `mintTxHash`. Soft-launch is **blocked** until mint confirms (`listing_not_minted`). Unminted listings cannot be bought. Track incomplete work in `/studio`.
 3. **Buy** — collector pays native on the listing network (or bridges via Relay when paying from another Relay network), then escrow `transferFrom` → buyer wallet. Purchase status: `pending_payment` → `pending_transfer` → `completed` (with `withdrawnAt` set when ownership is delivered). Interrupted buys can be resumed from `/me` via `POST /api/purchase/resume`.
 
-| Step | On-chain | Who pays gas |
-|------|----------|--------------|
-| Create collection | Deploy contract | Creator |
-| Publish / soft-launch | Batch mint into collection | Creator |
-| Buy (same-chain) | Pay native + NFT transfer | Collector |
-| Buy (cross-chain) | Relay bridge + NFT transfer on listing chain | Collector |
-| Withdraw | Legacy USD holds only | Collector |
+### Linked fungible tokens (on-chain registry)
 
-**Withdraw is not mint.** Mint happens at publish (step 2). Crypto buys transfer that NFT at purchase (step 3). Withdraw remains only for older USD holds that never settled on-chain. The `withdrawnAt` purchase field means ownership was delivered — not that a mint ran.
+Creators link **many** companion fungible tokens to a **Boing** collection via the **on-chain linked NFT↔token registry** (boing.network PR #42 / SDK `linkedNftTokenRegistry`, selectors `0xE0`–`0xE6`). Wired in FreshMint [PR #16](https://github.com/chiku524/FreshMint-Marketplace/pull/16) (`900cd45`). **Dual asset-claimer auth:** the signer must `claim_asset` (or already be claimer of) **both** the collection and the token before `register_link` / `unlink_at`. Many-to-many and mutable (unlink tombstones a slot; registry max 4096). `Collection.linkedTokensJson` is a **cache** of registry peers — not authoritative. Display-only metadata (`boing.linked_nft_token.v1`) is non-authoritative / superseded.
 
-**Cross-chain:** Relay covers EVM natives ↔ Solana (e.g. pay ETH for a Solana NFT). **Boing is not on Relay** — Boing listings are same-chain BOING only.
+FreshMint vendors the SDK encode/build helpers under `src/lib/onchain/linked-nft-token-registry.ts` and reads via `boing_simulateContractCall` (`links_count` + `get_link_at`). Adapter: `src/lib/marketplace/linked-token-registry.ts`.
 
-- **EVM:** Deploy bytecode from `src/lib/onchain/evm-artifacts/freshMintErc721Bytecode.ts`. Mint URI should point at media (Blob URL). Settlement prefers escrow `transferFrom` over listing `buy()`.
-- **Solana:** Metaplex Core asset per piece at publish; Phantom signs (or server key on Devnet for legacy paths only).
-- **Boing:** Collection deploy via `contract_deploy_meta` with pinned reference NFT bytecode; mints use `contract_call` when a collection address exists.
-- Confirm deploy: `POST /api/collections/[id]/deploy`. Confirm mint batches: `POST /api/collections/[id]/mint`.
-- Buy: `POST /api/purchase` (crypto fields), confirm steps: `POST /api/purchase/confirm`, quote: `POST /api/purchase/quote`.
+#### Live registry (public testnet)
 
-## Platform fees (primary sales)
+| Field | Value |
+|-------|--------|
+| Network | Boing public testnet (`https://testnet-rpc.boing.network/`) |
+| Registry AccountId | `0xebf9f0190f415852f90d0e60343126201248ab96273fdbf8acc5fe5fa03c3dd8` |
+| CREATE2 salt | `BOING_NFT_TOKEN_LINK_REG_V1` |
+| Env | `NEXT_PUBLIC_BOING_LINKED_NFT_TOKEN_REGISTRY` (set in `.env.example` + Vercel) |
+| Mainnet | Not deployed — leave unset until a mainnet registry ships |
 
-Every purchase takes a **0.5%** treasury fee from the listed price (buyer still pays the listed amount):
+Verify (`links_count` selector `0xE3`):
+
+```bash
+curl -fsS -A boing-sdk/json-rpc -X POST https://testnet-rpc.boing.network/ \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"boing_simulateContractCall","params":["0xebf9f0190f415852f90d0e60343126201248ab96273fdbf8acc5fe5fa03c3dd8","0x00000000000000000000000000000000000000000000000000000000000000e3"]}'
+```
+
+| Step | API | Notes |
+|------|-----|--------|
+| Plan | `PUT /api/collections/[id]/linked-tokens` | Diff desired set → `walletTxs` (`claim×2`+`register_link` and/or `unlink_at`) |
+| Confirm | `POST …/linked-tokens` | Re-reads registry → refreshes DB cache (optional label hints in body) |
+| Read | `GET …/linked-tokens` | Sync cache when owner; public sees cached chips |
+
+UI: collection chips (`LinkedTokensList`) + About + **Linked tokens** modal (`LinkedTokensModal`). EVM/Solana collections cannot register official links until a cross-chain path exists.
+
+## Platform fees (all FreshMint NFT sales)
+
+Every NFT sale that settles on FreshMint takes a **0.5%** treasury fee from the
+sale amount (buyer still pays the listed / bid / offer / package price):
 
 | Share | BPS | Recipient |
 |-------|-----|-----------|
-| 0.5%  | 50  | Marketplace treasury — community, events, and future updates (EVM Safe 2-of-3 + Solana Squads vault) |
+| 0.5%  | 50  | Marketplace treasury — community, events, and future updates (EVM + Solana settlement addresses; BTC recorded for ops) |
 | 99.5% | —   | Seller |
+
+Covered services: **buy now**, **timed listing**, **English auction**, **Dutch auction**, **accepted offers**, **collection packages**, **resale** (resale also deducts creator royalty). Creator mint/deploy gas is network gas, not this fee. Featured boost remains a separate **$15 USD** promotional payment to the same treasury.
+
+### Friday treasury buys + raffle
+
+Every **Friday 16:15 UTC**, Vercel Cron hits `GET /api/cron/friday-treasury-buy` (`CRON_SECRET`). Budget is **last week’s treasury profit** (0.5% sale fees + Featured boosts). If that profit is positive and the listing-chain treasury native balance covers a live Open Lane buy-now work (not the treasury’s own listings, not auctions/open editions), the job records that Friday’s window (`TreasuryFridayBuy.windowId` = UTC date) and:
+
+1. **Signer present** (`TREASURY_EVM_SIGNER_PRIVATE_KEY` / `TREASURY_SOLANA_SIGNER_SECRET_KEY` whose address matches the public treasury or operator): pays native via the existing settlement address, then `purchaseListing` (same path as collectors). When a raffle winner is drawn, the purchase is assigned to that user (receive address = their linked wallet on the listing chain when available). NFT transfer may still be `pending_transfer` until escrow is signed.
+2. **No matching signer** (typical: EVM Safe / Solana Squads): **queued intent only** — does not reserve the listing. Fully automated on-chain spend is blocked until a hot wallet that *is* the treasury/operator, or a Safe/Squads execution path, exists. The raffle still records a winner against the queued buy.
+
+**Raffle:** same profit gate and Friday cadence. Eligible users (auto-entered) are creators/collectors with real activity in the profit window — minted or listed (non-draft), bought, offered, or bid — excluding flagged/wash accounts, users with no linked wallet, treasury/operator wallets, and the seller of that Friday’s bought work. Winner: SHA-256(`windowId` + `userId`) ascending. Persisted on `TreasuryFridayRaffle` (`prizeStatus`: `assigned` | `pending_claim` | `claimed` | `transferred`). Claim path: `POST /api/treasury/friday-raffle/claim` with a linked wallet; public status: `GET /api/treasury/friday-raffle`. Kill switch: `TREASURY_FRIDAY_RAFFLE_DISABLED=1`.
+
+Spend cap: **that UTC week’s treasury profit** — sum of `Purchase.feeTreasuryUsd` (0.5% of settled sales) plus `$15` per Featured boost in the window (previous Friday 00:00 UTC through this Friday). Skip when profit is 0. Optional `TREASURY_FRIDAY_BUDGET_USD` is a ceiling on that profit, not a default. Listing selection: SHA-256(`windowId` + `listingId`) among eligible minted listings. Native check is list-price quote + gas reserve (0.001 ETH on Ethereum, 0.0001 ETH on Base/Arbitrum/Optimism, 0.001 SOL). Idempotent per Friday.
+
+Collectors see the weekly raffle via the sitewide marketing banner (CTA → `/treasury#friday-raffle`). Claim/status UI stays on `/me#friday-raffle`.
 
 Generate keys locally (secrets stay in gitignored `.wallets/`):
 
@@ -61,9 +93,9 @@ npm run wallets:deploy-safe
 npm run wallets:deploy-squads
 ```
 
-Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
+Env: `NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`, `NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`, `NEXT_PUBLIC_PLATFORM_TREASURY_BTC`, `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
-Platform sales record the 0.5% split on each `Purchase` row. Primary checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout; marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
+Platform sales record the 0.5% split on each `Purchase` row. Checkout settles in listing-chain native (fee taken in that currency when possible). The optional EVM `FreshMintERC721.buy` path still exists for direct on-chain checkout (0.5% on-chain to treasury); marketplace settlement uses pay-to-platform + escrow transfer so price can stay USD-labeled while payment is native-quoted.
 
 ## Featured boost
 
@@ -74,14 +106,15 @@ Creators can pay a fixed **$15 USD** promotional fee (native-quoted) to activate
 - Set `FEATURED_BOOST_REQUIRE_CONFIRM=true` in production so soft-accept of unverified hashes is off (live on Vercel)
 - UI: `FeaturedBoostButton` on the listing page (owner only)
 
-### Treasury deploy status (testnets)
+### Platform treasury addresses
 
-| Chain | Multisig | Address | Status |
-|-------|----------|---------|--------|
-| Ethereum Sepolia | Safe 2-of-3 | `0x6E481562F3ecC39405Dc8F8B17F6c754B36D0C14` | Deployed |
-| Solana Devnet | Squads vault | `96rDHepuNiz1eDDMikrkHqtM51Sw8s6miUxKhwtTn7YR` | Deployed |
+| Chain | Address | Used by settlement |
+|-------|---------|--------------------|
+| EVM | `0xDde8Ec0A27467a8Eb6E7a3245e07d2D67B6B56bb` | Yes (`NEXT_PUBLIC_PLATFORM_TREASURY_ADDRESS`) |
+| Solana | `3u2DbBkCqoSQmcreHfwQWDekJ8HPctgns3v6L3LdupwW` | Yes (`NEXT_PUBLIC_PLATFORM_TREASURY_SOLANA`) |
+| Bitcoin | `bc1q27glxg2fr0f3jrl6m3vyy3ynuaclzwd4ya7jxq` | Recorded only (`NEXT_PUBLIC_PLATFORM_TREASURY_BTC`; no BTC pay path yet) |
 
-Operator EOAs (constructor leftovers / ops): EVM `0xc1AE84cEc6839683D562aC9011ADF21c31A3f869`, Solana `QzQR6DPw8VD5uU47uiAJYA95jt61ExFNHXhC3EF6MDY`.
+Optional operator leftovers (constructor / `setFeeRecipients`): EVM `NEXT_PUBLIC_PLATFORM_OPERATOR_ADDRESS`, Solana `NEXT_PUBLIC_PLATFORM_OPERATOR_SOLANA`.
 
 New EVM collections pick treasury + operator from env at deploy time and use the 0.5% on-chain `buy()` split after `npm run contracts:bytecode`. Older live collections keep their prior BPS until redeployed (`setFeeRecipients` changes **addresses only**, not BPS). The collection **owner** can retarget recipients in the app or via CLI:
 
@@ -114,4 +147,5 @@ Mainnet Safe / Squads still need a separate funded deploy when you leave testnet
 - MetaMask / Rabby for EVM (auto chain-switch per listing network)
 - Phantom for Solana auth, mint, and Solana bridge legs
 - Boing Express for Boing Testnet auth and NFT deploy (`boing_requestAccounts`, `boing_signMessage`, `boing_sendTransaction`)
-- Link wallets under one FreshMint session via Connect / Link buttons
+- Link wallets under one FreshMint session via Connect / Link buttons (`POST /api/auth/link-wallet`)
+- Unlink from **Settings** (`/me/settings`) — `POST /api/auth/unlink-wallet` removes the account link only (listings / on-chain history stay). Blocked when the wallet is the last sign-in method (no email/Google/password) or an open checkout is in flight on that chain.

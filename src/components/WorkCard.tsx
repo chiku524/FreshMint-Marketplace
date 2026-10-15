@@ -1,9 +1,8 @@
 "use client";
 
 import { FmImage } from "@/components/FmImage";
-
+import { ListingPreviewModal } from "@/components/ListingPreviewModal";
 import type { RankedListing, Listing, Collection } from "@/lib/discovery/types";
-import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import Link from "next/link";
 import {
   useEffect,
@@ -12,6 +11,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { collectionHref } from "@/lib/marketplace/collection-slug";
+import { dropWindowFor, primarySupplyCap } from "@/lib/marketplace/drops";
 import {
   placementBadgeText,
   placementLabel,
@@ -20,6 +21,7 @@ import { saleModeBadge } from "@/lib/marketplace/sale-mode";
 import { ImpressionTracker } from "./ImpressionTracker";
 import { ListingActions } from "./ListingActions";
 import { CreatorAvatar } from "./CreatorAvatar";
+import { FollowButton } from "./FollowButton";
 import { SaveButton } from "./SaveButton";
 
 const MENU_HOVER_MS = 500;
@@ -143,6 +145,8 @@ export function WorkCard({
   footer,
   sold = false,
   canStageRising = false,
+  rarityRank = null,
+  rarityScoredSize = 0,
 }: {
   listing: Listing;
   emerging?: boolean;
@@ -151,11 +155,14 @@ export function WorkCard({
   showActions?: boolean;
   creatorName?: string;
   creatorAvatarUrl?: string | null;
-  collection?: Pick<Collection, "id" | "title"> | null;
+  collection?: Pick<Collection, "id" | "title" | "slug"> | null;
   trackImpression?: boolean;
   footer?: ReactNode;
   sold?: boolean;
   canStageRising?: boolean;
+  /** Collection trait rarity rank (1 = rarest). Null = unranked / no traits. */
+  rarityRank?: number | null;
+  rarityScoredSize?: number;
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
@@ -166,6 +173,7 @@ export function WorkCard({
   const menu = useDelayedMenu();
   const menuId = useId();
   const [spinning, setSpinning] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const supplyCap = primarySupplyCap(listing);
   const dropState = dropWindowFor(listing).state;
 
@@ -211,7 +219,7 @@ export function WorkCard({
           {collection ? (
             <>
               {creatorName ? " · " : null}
-              <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
+              <Link href={collectionHref(collection)}>{collection.title}</Link>
             </>
           ) : null}
           {emerging ? " · Emerging" : ""}
@@ -263,11 +271,13 @@ export function WorkCard({
       {trackImpression ? (
         <ImpressionTracker listingId={listing.id} bucket={bucket} />
       ) : null}
-      <Link
-        href={`/listings/${listing.id}`}
+      <button
+        type="button"
         className="work-tile__media-link"
         tabIndex={-1}
         aria-hidden
+        data-listing-preview-open=""
+        onClick={() => setPreviewOpen(true)}
       >
         <div
           className="work-media"
@@ -291,34 +301,45 @@ export function WorkCard({
             />
           ) : null}
         </div>
-      </Link>
+      </button>
       <div className="work-tile__caption">
         <h3 className="display work-tile__title">
-          <Link href={`/listings/${listing.id}`}>{listing.title}</Link>
+          <button
+            type="button"
+            className="work-tile__title-open"
+            aria-haspopup="dialog"
+            aria-expanded={previewOpen}
+            data-listing-preview-open=""
+            onClick={() => setPreviewOpen(true)}
+          >
+            {listing.title}
+          </button>
         </h3>
         <p className="work-tile__meta">
-          {priceLabel(listing, bucket)}
-          {listing.type === "auction" ? ` · ${saleModeBadge(listing)}` : ""}
-          {placeText ? (
-            <>
-              {" · "}
-              <span
-                className={`badge${place === "promoted" ? " promoted" : place === "featured" ? " featured" : ""}`}
-                style={{ verticalAlign: "middle" }}
-              >
-                {placeText}
-              </span>
-            </>
+          <span className="work-tile__price">{priceLabel(listing, bucket)}</span>
+          {listing.type === "auction" ? (
+            <span className="work-tile__sep"> · {saleModeBadge(listing)}</span>
           ) : null}
-          {collection ? (
-            <>
-              {" · "}
-              <Link href={`/collections/${collection.id}`}>{collection.title}</Link>
-            </>
+          {rarityRank != null && rarityScoredSize > 0 ? (
+            <span
+              className="work-tile__rarity"
+              title={`Rarity rank ${rarityRank} of ${rarityScoredSize}`}
+            >
+              {" "}
+              · #{rarityRank}
+            </span>
+          ) : null}
+          {placeText && place !== "featured" ? (
+            <span
+              className={`work-tile__place badge${place === "promoted" ? " promoted" : ""}`}
+            >
+              {placeText}
+            </span>
           ) : null}
         </p>
         {showActions ? (
           <div className="work-tile__caption-actions">
+            <FollowButton artistId={listing.creatorId} compact />
             <SaveButton listingId={listing.id} compact />
           </div>
         ) : null}
@@ -348,6 +369,17 @@ export function WorkCard({
           {menuBody}
         </div>
       ) : null}
+      {previewOpen ? (
+        <ListingPreviewModal
+          listing={listing}
+          onClose={() => setPreviewOpen(false)}
+          creatorName={creatorName}
+          collection={collection}
+          sold={sold || bucket === "sold"}
+          canStageRising={canStageRising}
+          showActions={showActions}
+        />
+      ) : null}
     </article>
   );
 }
@@ -363,7 +395,7 @@ export function RankedWorkCard({
   showActions?: boolean;
   creatorName?: string;
   creatorAvatarUrl?: string | null;
-  collection?: Pick<Collection, "id" | "title"> | null;
+  collection?: Pick<Collection, "id" | "title" | "slug"> | null;
 }) {
   return (
     <WorkCard

@@ -31,7 +31,12 @@ import {
   selectLiveAuctionStrip,
 } from "./quotas";
 import { scoreListing } from "./scoring";
-import { advanceStage, collectionFeedSurface, isFirstRisingLook } from "./staging";
+import {
+  advanceStage,
+  collectionFeedSurface,
+  isFirstRisingLook,
+  stageIndex,
+} from "./staging";
 import type { ViewerTaste } from "./taste";
 import type {
   Appeal,
@@ -270,6 +275,15 @@ export class DiscoveryEngine {
       return { ok: true, errors: [] as string[], listing };
     }
 
+    // Soft-launch is idempotent once the work is already public — mint confirm
+    // auto-publishes, and clients may retry soft-launch after Rising promotion.
+    if (
+      target === "soft_launch" &&
+      stageIndex(listing.stage) > stageIndex("soft_launch")
+    ) {
+      return { ok: true, errors: [] as string[], listing };
+    }
+
     const firstRisingLook = isFirstRisingLook(
       creator.id,
       this.state.listings.values(),
@@ -454,11 +468,25 @@ export class DiscoveryEngine {
     });
   }
 
-  getCollectionSurface(collectionId: string) {
-    const collection = this.state.collections.get(collectionId);
+  /** Resolve by primary id or public slug (legacy id URLs stay valid). */
+  getCollectionByIdOrSlug(idOrSlug: string) {
+    const byId = this.state.collections.get(idOrSlug);
+    if (byId) return byId;
+    const needle = idOrSlug.trim().toLowerCase();
+    if (!needle) return null;
+    for (const collection of this.state.collections.values()) {
+      if (collection.slug && collection.slug.toLowerCase() === needle) {
+        return collection;
+      }
+    }
+    return null;
+  }
+
+  getCollectionSurface(collectionIdOrSlug: string) {
+    const collection = this.getCollectionByIdOrSlug(collectionIdOrSlug);
     if (!collection) return null;
     const items = [...this.state.listings.values()].filter(
-      (l) => l.collectionId === collectionId,
+      (l) => l.collectionId === collection.id,
     );
     const creator = this.state.creators.get(collection.creatorId);
     const hasTraction =
