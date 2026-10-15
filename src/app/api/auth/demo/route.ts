@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import {
   completeLoginOrChallenge,
   getSessionUser,
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "disabled" }, { status: 403 });
   }
 
-  const body = schema.safeParse(await req.json());
+  const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }

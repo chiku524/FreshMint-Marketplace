@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { withdrawPurchaseToWallet } from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const body = bodySchema.safeParse(await req.json());
+  const body = bodySchema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }

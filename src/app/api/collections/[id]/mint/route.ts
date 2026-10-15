@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { vmFromNetwork, resolveNetwork } from "@/lib/chains/registry";
 import {
@@ -29,7 +30,7 @@ export async function POST(
   }
 
   const { id } = await ctx.params;
-  const json = await req.json();
+  const json = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
   const action = String(json.action ?? "prepare");
 
   if (action === "confirm") {

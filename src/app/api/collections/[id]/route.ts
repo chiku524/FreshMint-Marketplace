@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { updateCollectionDrop } from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
@@ -20,7 +21,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const body = dropSchema.safeParse(await req.json());
+  const body = dropSchema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json(
       { error: "invalid_body", details: body.error.flatten() },

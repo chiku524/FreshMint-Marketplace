@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import {
   AccountError,
   updateAvatarUrl,
@@ -39,7 +40,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = schema.safeParse(await req.json());
+  const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }

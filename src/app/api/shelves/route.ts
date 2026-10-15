@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { addListingToShelf, createShelf } from "@/lib/marketplace/editorial";
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const json = await req.json();
+  const json = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
   if (json.shelfId && json.listingId) {
     const body = addSchema.safeParse(json);
     if (!body.success) {

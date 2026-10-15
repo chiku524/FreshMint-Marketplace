@@ -1,3 +1,4 @@
+import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { confirmCollectionDeploy } from "@/lib/marketplace/service";
 import { NextRequest, NextResponse } from "next/server";
@@ -19,7 +20,7 @@ export async function POST(
   }
 
   const { id } = await ctx.params;
-  const body = schema.safeParse(await req.json());
+  const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
