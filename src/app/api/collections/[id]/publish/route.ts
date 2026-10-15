@@ -1,3 +1,4 @@
+import { invalidBody, readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   prepareCollectionPublishMints,
@@ -29,13 +30,13 @@ export async function POST(
   }
 
   const { id } = await ctx.params;
-  const json = await req.json().catch(() => null);
+  const json = (await readJsonBody(req)) as Record<string, unknown> | undefined;
   const action = String(json?.action ?? "");
 
   if (action === "soft_launch_minted") {
     const body = softLaunchSchema.safeParse(json);
     if (!body.success) {
-      return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+      return invalidBody(body.error);
     }
     const result = await softLaunchMintedDraftsInCollection({
       collectionId: id,
@@ -50,7 +51,7 @@ export async function POST(
   if (action === "prepare_remaining") {
     const body = prepareSchema.safeParse(json);
     if (!body.success) {
-      return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+      return invalidBody(body.error);
     }
     const creatorAddress =
       body.data.creatorAddress ||

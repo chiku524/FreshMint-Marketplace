@@ -1,3 +1,4 @@
+import { invalidBody, readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   getCollectionPackageEligibility,
@@ -33,9 +34,9 @@ export async function PATCH(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+  const parsed = patchSchema.safeParse(await readJsonBody(req));
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(parsed.error);
   }
   const result = await updateCollectionPackageSell({
     collectionId: id,
@@ -76,9 +77,9 @@ export async function POST(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const parsed = buySchema.safeParse(await req.json().catch(() => null));
+  const parsed = buySchema.safeParse(await readJsonBody(req));
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(parsed.error);
   }
 
   if (parsed.data.quoteOnly) {

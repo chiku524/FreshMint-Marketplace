@@ -1,3 +1,4 @@
+import { invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { claimFridayRafflePrize } from "@/lib/marketplace/friday-treasury-raffle";
 import { readJsonBody } from "@/lib/marketplace/purchase-request";
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
   const result = await claimFridayRafflePrize({
     windowId: body.data.windowId,

@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { extractWalletSteps, quoteNativeBridge } from "@/lib/bridge/relay";
 import { isNetworkId } from "@/lib/chains/registry";
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
   if (
     !isNetworkId(body.data.fromNetwork) ||

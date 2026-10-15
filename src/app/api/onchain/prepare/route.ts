@@ -1,3 +1,4 @@
+import { invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveNetwork } from "@/lib/chains/registry";
 import { isPostgresConfigured } from "@/lib/env";
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
 
   const body = prepareBodySchema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const loaded = await loadListing(body.data.listingId);

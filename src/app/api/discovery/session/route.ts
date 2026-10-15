@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   appendSeenFromFeed,
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
   const current = await readViewerSession(user?.id ?? null);
   const items = body.data.listingIds.map((id, i) => ({

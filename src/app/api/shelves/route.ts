@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 import { addListingToShelf, createShelf } from "@/lib/marketplace/editorial";
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   if (json.shelfId && json.listingId) {
     const body = addSchema.safeParse(json);
     if (!body.success) {
-      return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+      return invalidBody(body.error);
     }
     const result = await addListingToShelf({
       shelfId: body.data.shelfId,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const body = createSchema.safeParse(json);
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
   const result = await createShelf({
     curatorId: user.id,

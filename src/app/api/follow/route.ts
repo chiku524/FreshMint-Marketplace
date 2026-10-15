@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   followArtist,
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const result = body.data.unfollow

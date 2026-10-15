@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { vmFromNetwork, resolveNetwork } from "@/lib/chains/registry";
 import {
@@ -36,7 +36,7 @@ export async function POST(
   if (action === "confirm") {
     const body = confirmSchema.safeParse(json);
     if (!body.success) {
-      return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+      return invalidBody(body.error);
     }
     const result = await confirmCollectionMintBatch({
       collectionId: id,
@@ -54,7 +54,7 @@ export async function POST(
 
   const body = prepareSchema.safeParse(json);
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const creatorAddress =

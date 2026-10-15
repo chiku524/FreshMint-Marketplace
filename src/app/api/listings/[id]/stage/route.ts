@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { canUserStageListing } from "@/lib/marketplace/lifecycle";
 import { getSessionUser } from "@/lib/auth/session";
 import { getDiscoveryEngine, transitionListingStage } from "@/lib/marketplace/service";
@@ -36,7 +36,7 @@ export async function POST(
 
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const result = await transitionListingStage(

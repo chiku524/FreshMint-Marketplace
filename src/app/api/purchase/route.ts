@@ -1,3 +1,4 @@
+import { invalidBody } from "@/lib/http/json";
 import { limitByUserOrIp } from "@/lib/http/rate-limit";
 import { getSessionUser } from "@/lib/auth/session";
 import {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   const body = purchaseBodySchema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const result = await purchaseListing({

@@ -1,3 +1,4 @@
+import { invalidBody, readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   normalizeAddress,
@@ -19,9 +20,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = schema.safeParse(await req.json());
+  const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const chain = body.data.chain as AuthChain;

@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { invalidBody, readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   listNotificationsForUser,
@@ -29,15 +31,19 @@ export async function GET(req: NextRequest) {
   });
 }
 
+const patchSchema = z.object({
+  markAllRead: z.boolean().optional(),
+  id: z.string().min(1).max(128).optional(),
+});
+
 export async function PATCH(req: NextRequest) {
   const user = await getSessionUser(req);
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const body = (await req.json().catch(() => null)) as {
-    markAllRead?: boolean;
-    id?: string;
-  } | null;
+  const parsed = patchSchema.safeParse(await readJsonBody(req));
+  if (!parsed.success) return invalidBody(parsed.error);
+  const body = parsed.data;
   if (body?.markAllRead) {
     const result = await markAllNotificationsRead({ userId: user.id });
     return NextResponse.json(result);

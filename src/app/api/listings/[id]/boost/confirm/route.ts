@@ -1,3 +1,4 @@
+import { invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   boostConfirmSchema,
@@ -20,7 +21,7 @@ export async function POST(
   const { id } = await ctx.params;
   const body = boostConfirmSchema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const result = await confirmFeaturedBoost({

@@ -1,4 +1,4 @@
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { prepareCollectionSetFeeRecipients } from "@/lib/marketplace/set-fee-recipients";
 import { NextRequest, NextResponse } from "next/server";
@@ -23,7 +23,7 @@ export async function POST(
   const { id } = await ctx.params;
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const result = await prepareCollectionSetFeeRecipients({

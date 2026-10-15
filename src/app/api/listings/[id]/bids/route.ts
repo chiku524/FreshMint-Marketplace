@@ -1,3 +1,4 @@
+import { invalidBody, readJsonBody } from "@/lib/http/json";
 import { limitByUserOrIp } from "@/lib/http/rate-limit";
 import { getSessionUser } from "@/lib/auth/session";
 import { lazySettleEnglishAuction, listBidsForListing, placeBid } from "@/lib/marketplace/english-auction";
@@ -44,9 +45,9 @@ export async function POST(
   const limited = await limitByUserOrIp(req, user.id, "bid", 30, 60_000);
   if (limited) return limited;
   const { id } = await params;
-  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await readJsonBody(req));
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(parsed.error);
   }
   const result = await placeBid({
     listingId: id,

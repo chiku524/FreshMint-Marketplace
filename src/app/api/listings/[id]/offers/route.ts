@@ -1,3 +1,4 @@
+import { invalidBody, readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { listOffersForListing, makeOffer } from "@/lib/marketplace/offers";
 import { NextRequest, NextResponse } from "next/server";
@@ -27,9 +28,9 @@ export async function POST(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await readJsonBody(req));
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(parsed.error);
   }
   const result = await makeOffer({
     listingId: id,

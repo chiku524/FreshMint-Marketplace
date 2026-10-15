@@ -1,5 +1,5 @@
 import { limitByIp } from "@/lib/http/rate-limit";
-import { readJsonBody } from "@/lib/http/json";
+import { readJsonBody, invalidBody } from "@/lib/http/json";
 import { createSession, jsonWithSessionCookie } from "@/lib/auth/session";
 import {
   decryptSecret,
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return invalidBody(body.error);
   }
 
   const pending = await readPending2faToken(body.data.pendingToken);
