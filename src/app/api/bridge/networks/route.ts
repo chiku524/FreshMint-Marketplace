@@ -7,5 +7,8 @@ export async function GET() {
     mode: chainMode(),
     relayApi: relayApiBase(),
     networks: bridgeableNetworks(),
+  }, {
+    // Static config per deployment; let the CDN serve it.
+    headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" },
   });
 }

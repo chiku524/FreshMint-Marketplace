@@ -175,9 +175,10 @@ export default async function HomePage() {
             viewAllHref={discovery.hotWorks.viewAllHref}
           />
           <PuzzleRail>
-            {discovery.hotWorks.items.map((listing) => (
+            {discovery.hotWorks.items.map((listing, i) => (
               <WorkCard
                 key={listing.id}
+                priority={i < 2}
                 listing={listing}
                 bucket="open"
                 showActions

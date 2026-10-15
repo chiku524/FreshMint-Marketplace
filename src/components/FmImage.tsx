@@ -67,6 +67,9 @@ export function FmImage({
       height={height}
       className={className}
       style={style}
+      loading={priority ? "eager" : "lazy"}
+      decoding="async"
+      fetchPriority={priority ? "high" : undefined}
     />
   );
 }

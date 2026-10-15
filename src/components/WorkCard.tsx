@@ -147,6 +147,7 @@ export function WorkCard({
   canStageRising = false,
   rarityRank = null,
   rarityScoredSize = 0,
+  priority = false,
 }: {
   listing: Listing;
   emerging?: boolean;
@@ -163,6 +164,8 @@ export function WorkCard({
   /** Collection trait rarity rank (1 = rarest). Null = unranked / no traits. */
   rarityRank?: number | null;
   rarityScoredSize?: number;
+  /** Above-the-fold card: preload its image (LCP). */
+  priority?: boolean;
 }) {
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
@@ -298,6 +301,7 @@ export function WorkCard({
               alt=""
               fill
               sizes="(max-width: 640px) 90vw, 320px"
+              priority={priority}
             />
           ) : null}
         </div>
