@@ -1,5 +1,6 @@
 "use client";
 
+import { useSingleFlight } from "@/lib/client/single-flight";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { resolveBuyAuthCta } from "@/lib/marketplace/buy-auth-cta";
 import Link from "next/link";
@@ -30,6 +31,7 @@ export function OfferPanel({
   embedded?: boolean;
 }) {
   const router = useRouter();
+  const guard = useSingleFlight();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [amount, setAmount] = useState(
     listPriceUsd && listPriceUsd > 0
@@ -154,7 +156,10 @@ export function OfferPanel({
           </p>
         ) : auth === "ready" ? (
           <form
-            onSubmit={(e) => void submitOffer(e)}
+            onSubmit={(e) => {
+            e.preventDefault();
+            void guard(() => submitOffer(e));
+          }}
             className="fm-form-stack"
             style={{ maxWidth: "16rem", marginBottom: "0.75rem" }}
           >
@@ -211,7 +216,10 @@ export function OfferPanel({
                   type="button"
                   className="fm-btn fm-btn--primary"
                   disabled={busy}
-                  onClick={() => void accept(o.id)}
+                  onClick={() => {
+                    if (!window.confirm("Accept this offer? The sale settles to this buyer and can�t be undone.")) return;
+                    void guard(() => accept(o.id));
+                  }}
                 >
                   Accept
                 </button>
@@ -221,7 +229,7 @@ export function OfferPanel({
                   type="button"
                   className="fm-btn fm-btn--ghost"
                   disabled={busy}
-                  onClick={() => void cancel(o.id)}
+                  onClick={() => void guard(() => cancel(o.id))}
                 >
                   Cancel
                 </button>

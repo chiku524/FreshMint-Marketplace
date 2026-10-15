@@ -1,5 +1,6 @@
 "use client";
 
+import { isAbortError, useSingleFlight } from "@/lib/client/single-flight";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import {
@@ -71,12 +72,19 @@ export function CollectionPackagePanel({
     string | null | undefined
   >(undefined);
 
-  const load = useCallback(() => {
+  const guard = useSingleFlight();
+  const [loadError, setLoadError] = useState(false);
+  const load = useCallback((signal?: AbortSignal) => {
     void fetch(`/api/collections/${collectionId}/package`, {
       credentials: "include",
+      signal,
     })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (!r.ok && r.status >= 500) throw new Error(`package_${r.status}`);
+        return r.ok ? r.json() : null;
+      })
       .then((d: Eligibility | null) => {
+        setLoadError(false);
         if (!d) return;
         setData(d);
         setPrice(String(d.packagePriceUsd ?? d.defaultPriceUsd ?? ""));
@@ -87,11 +95,17 @@ export function CollectionPackagePanel({
             : ["ethereum"];
         setPayNetwork(nets[0]!);
       })
-      .catch(() => setData(null));
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        setData(null);
+        setLoadError(true);
+      });
   }, [collectionId]);
 
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   useEffect(() => {
@@ -185,7 +199,21 @@ export function CollectionPackagePanel({
     isOwner,
   ]);
 
-  if (!data) return null;
+  if (!data) {
+    return loadError ? (
+      <p role="alert" style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>
+        Couldn�t load package sale details.{" "}
+        <button
+          type="button"
+          className="badge"
+          style={{ cursor: "pointer", background: "transparent" }}
+          onClick={() => load()}
+        >
+          Retry
+        </button>
+      </p>
+    ) : null;
+  }
   const count = data.listings?.length ?? 0;
   if (!isOwner && (!data.packageSellEnabled || count < 2)) return null;
 
@@ -331,7 +359,7 @@ export function CollectionPackagePanel({
             className="badge featured"
             disabled={busy || count < 2}
             style={{ cursor: "pointer", background: "transparent" }}
-            onClick={() => void toggle(!data.packageSellEnabled)}
+            onClick={() => void guard(() => toggle(!data.packageSellEnabled))}
           >
             {data.packageSellEnabled ? "Disable package sell" : "Sell remaining as package"}
           </button>
@@ -423,7 +451,7 @@ export function CollectionPackagePanel({
                       cursor: busy ? "wait" : "pointer",
                       background: "transparent",
                     }}
-                    onClick={() => void buy({ simulate: false })}
+                    onClick={() => void guard(() => buy({ simulate: false }))}
                   >
                     {busy
                       ? primary.label
@@ -469,7 +497,7 @@ export function CollectionPackagePanel({
                   className="badge"
                   disabled={busy}
                   style={{ cursor: "pointer", background: "transparent" }}
-                  onClick={() => void buy({ simulate: true })}
+                  onClick={() => void guard(() => buy({ simulate: true }))}
                 >
                   Simulate package buy
                 </button>

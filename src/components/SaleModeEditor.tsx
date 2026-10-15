@@ -1,5 +1,6 @@
 "use client";
 
+import { useSingleFlight } from "@/lib/client/single-flight";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { SaleMode } from "@/lib/marketplace/sale-mode";
@@ -28,6 +29,7 @@ export function SaleModeEditor({
     saleMode === "fixed"
       ? saleMode
       : "fixed";
+  const guard = useSingleFlight();
   const [open, setOpen] = useState(initial !== "fixed");
   const [mode, setMode] = useState<SaleMode>(initial);
   const [startBid, setStartBid] = useState(
@@ -153,7 +155,7 @@ export function SaleModeEditor({
               type="button"
               className="fm-btn fm-btn--primary"
               disabled={busy}
-              onClick={() => void save()}
+              onClick={() => void guard(save)}
             >
               {busy ? "Saving…" : "Save selling options"}
             </button>

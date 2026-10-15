@@ -1,5 +1,6 @@
 "use client";
 
+import { useSingleFlight } from "@/lib/client/single-flight";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import type { Chain, NetworkId } from "@/lib/discovery/types";
 import { quoteNativeFromUsd, quotePayInFromUsdAt } from "@/lib/onchain/fx";
@@ -133,6 +134,7 @@ export function ListingActions({
       : chain === "boing"
         ? "boing"
         : "ethereum")) as NetworkId;
+  const guard = useSingleFlight();
   const [msg, setMsg] = useState<string | null>(null);
   const showCheckoutError = (raw: string | null | undefined) => {
     setMsg(humanizeCheckoutError(raw));
@@ -848,7 +850,7 @@ export function ListingActions({
               type="button"
               className="badge featured"
               style={{ cursor: "pointer", background: "transparent" }}
-              onClick={() => void openCheckout()}
+              onClick={() => void guard(openCheckout)}
             >
               Buy now
               {settleQuote?.formatted || priceUsd != null ? (
@@ -1022,7 +1024,7 @@ export function ListingActions({
                       });
                       return;
                     }
-                    void completePurchase();
+                    void guard(completePurchase);
                   }}
                 >
                   {primary.label}

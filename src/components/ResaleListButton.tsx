@@ -1,5 +1,6 @@
 "use client";
 
+import { useSingleFlight } from "@/lib/client/single-flight";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,6 +13,7 @@ export function ResaleListButton({
   defaultPriceUsd?: number | null;
 }) {
   const router = useRouter();
+  const guard = useSingleFlight();
   const [open, setOpen] = useState(false);
   const [price, setPrice] = useState(
     defaultPriceUsd && defaultPriceUsd > 0 ? String(defaultPriceUsd) : "",
@@ -60,7 +62,10 @@ export function ResaleListButton({
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="fm-form-stack" style={{ maxWidth: "16rem" }}>
+    <form onSubmit={(e) => {
+        e.preventDefault();
+        void guard(() => submit(e));
+      }} className="fm-form-stack" style={{ maxWidth: "16rem" }}>
       <label>
         List price (USD)
         <input

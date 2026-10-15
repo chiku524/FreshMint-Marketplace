@@ -1,5 +1,6 @@
 "use client";
 
+import { isAbortError, useSingleFlight } from "@/lib/client/single-flight";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -85,22 +86,40 @@ export function BidPanel({
     string | null | undefined
   >(undefined);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const guard = useSingleFlight();
 
-  function load() {
-    void fetch(`/api/listings/${listingId}/bids`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { bids: [] }))
-      .then((d: { bids?: Bid[]; settle?: SettleInfo }) => {
-        setBids(d.bids ?? []);
-        if (d.settle) setSettle(d.settle);
-      })
-      .catch(() => setBids([]));
-  }
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    const controller = new AbortController();
+    function load() {
+      // Skip polling while the tab is hidden; resumes on the next tick.
+      if (document.visibilityState === "hidden") return;
+      void fetch(`/api/listings/${listingId}/bids`, {
+        credentials: "include",
+        signal: controller.signal,
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error(`bids_${r.status}`);
+          return r.json();
+        })
+        .then((d: { bids?: Bid[]; settle?: SettleInfo }) => {
+          setBids(d.bids ?? []);
+          if (d.settle) setSettle(d.settle);
+          setLoadError(false);
+        })
+        .catch((e) => {
+          if (!isAbortError(e)) setLoadError(true);
+        });
+    }
     load();
     const t = window.setInterval(load, 12_000);
-    return () => window.clearInterval(t);
-  }, [listingId]);
+    return () => {
+      controller.abort();
+      window.clearInterval(t);
+    };
+  }, [listingId, reloadKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +156,7 @@ export function BidPanel({
       if (!res.ok) {
         throw new Error(data.error || "bid_failed");
       }
-      load();
+      setReloadKey((k) => k + 1);
       router.refresh();
     } catch (err) {
       setError(
@@ -214,7 +233,7 @@ export function BidPanel({
                 type="button"
                 className="fm-btn fm-btn--primary"
                 disabled={busy}
-                onClick={() => void onBid()}
+                onClick={() => void guard(onBid)}
               >
                 {busy ? "Placing bid…" : "Place bid"}
               </button>
@@ -310,6 +329,14 @@ export function BidPanel({
       )}
       {error ? (
         <p role="alert" style={{ color: "crimson", margin: "0.5rem 0 0", fontSize: "0.85rem" }}>{error}</p>
+      ) : null}
+      {loadError ? (
+        <p role="alert" style={{ color: "var(--ink-muted)", fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
+          Couldn�t refresh bids.{" "}
+          <button type="button" className="badge" style={{ cursor: "pointer", background: "transparent" }} onClick={() => setReloadKey((k) => k + 1)}>
+            Retry
+          </button>
+        </p>
       ) : null}
       {bids.length ? (
         <ul style={{ margin: "0.75rem 0 0", padding: 0, listStyle: "none" }}>
