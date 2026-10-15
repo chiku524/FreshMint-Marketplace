@@ -19,7 +19,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const limited = limitByIp(req, "auth:2fa/disable", 10, 15 * 60_000);
+  const limited = await limitByIp(req, "auth:2fa/disable", 10, 15 * 60_000);
   if (limited) return limited;
   const user = await getSessionUser();
   if (!user) {

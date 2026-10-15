@@ -1,3 +1,4 @@
+import { limitByUserOrIp } from "@/lib/http/rate-limit";
 import { getSessionUser } from "@/lib/auth/session";
 import { lazySettleEnglishAuction, listBidsForListing, placeBid } from "@/lib/marketplace/english-auction";
 import { NextRequest, NextResponse } from "next/server";
@@ -40,6 +41,8 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = await limitByUserOrIp(req, user.id, "bid", 30, 60_000);
+  if (limited) return limited;
   const { id } = await params;
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

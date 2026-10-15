@@ -1,3 +1,4 @@
+import { limitByUserOrIp } from "@/lib/http/rate-limit";
 import { getSessionUser } from "@/lib/auth/session";
 import { reserveCollectionMedia } from "@/lib/marketplace/service";
 import { storeUploadedMedia } from "@/lib/media/upload";
@@ -8,8 +9,13 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = await limitByUserOrIp(req, user.id, "media-upload", 60, 10 * 60_000);
+  if (limited) return limited;
 
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file_required" }, { status: 400 });

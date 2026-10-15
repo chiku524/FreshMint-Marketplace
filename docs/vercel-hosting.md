@@ -70,3 +70,28 @@ vercel --prod --scope nico-builds
 
 Verify: `GET https://fresh-mint-marketplace.vercel.app/api/health`  
 Expect `{ "mode": "prisma", "blobConfigured": true, ... }` once both stores are connected.
+
+## Rate limiting (Upstash Redis)
+
+API rate limits live in `src/lib/http/rate-limit.ts`. When Upstash Redis credentials are
+present (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, or the `KV_REST_API_URL` +
+`KV_REST_API_TOKEN` pair Vercel Marketplace injects) limits are shared across all serverless
+instances via `@upstash/ratelimit` (sliding window). Without them, or if Redis errors, a
+per-process in-memory limiter is used.
+
+Setup: Vercel ? Storage / Marketplace ? **Upstash for Redis** (free plan) ? create a database ?
+**Connect Project** ? `fresh-mint-marketplace` (all environments). Redeploy.
+
+| Route | Key | Limit |
+| --- | --- | --- |
+| `POST /api/auth/login`, `/credentials`, `/2fa/*` | IP | 10 / 15 min |
+| `POST /api/auth/register` | IP | 5 / hour |
+| `POST /api/auth/nonce` | IP | 30 / 5 min |
+| `POST /api/auth/verify` | IP | 20 / 5 min |
+| `POST /api/purchase` | user | 20 / min |
+| `POST /api/listings/[id]/bids` | user | 30 / min |
+| `POST /api/report` | user | 10 / hour |
+| `POST /api/signals` | user or IP | 300 / min |
+| `POST /api/media/upload` | user | 60 / 10 min |
+
+Exceeding a limit returns `429 { error: "rate_limited", retryAfterSec }` with a `Retry-After` header.

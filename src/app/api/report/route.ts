@@ -1,3 +1,4 @@
+import { limitByUserOrIp } from "@/lib/http/rate-limit";
 import { readJsonBody } from "@/lib/http/json";
 import { getSessionUser } from "@/lib/auth/session";
 import { reportListingForUser } from "@/lib/marketplace/service";
@@ -21,6 +22,8 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = await limitByUserOrIp(req, user.id, "report", 10, 60 * 60_000);
+  if (limited) return limited;
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });

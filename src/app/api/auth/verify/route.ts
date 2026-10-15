@@ -24,7 +24,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const limited = limitByIp(req, "auth:verify", 20, 5 * 60_000);
+  const limited = await limitByIp(req, "auth:verify", 20, 5 * 60_000);
   if (limited) return limited;
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {

@@ -1,3 +1,4 @@
+import { limitByUserOrIp } from "@/lib/http/rate-limit";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   purchaseBodySchema,
@@ -13,6 +14,8 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = await limitByUserOrIp(req, user.id, "purchase", 20, 60_000);
+  if (limited) return limited;
   const body = purchaseBodySchema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });

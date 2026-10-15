@@ -1,11 +1,17 @@
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 
 /**
- * Best-effort fixed-window rate limiter kept in process memory.
+ * Rate limiting for API routes.
  *
- * On serverless this is per-instance, so it slows brute force and abuse
- * rather than guaranteeing a global cap. Swap the store for Redis/KV when a
- * shared limit is needed.
+ * - When Upstash Redis is configured (UPSTASH_REDIS_REST_URL/TOKEN, or the
+ *   KV_REST_API_URL/TOKEN pair Vercel Marketplace injects) limits are shared
+ *   across all serverless instances.
+ * - Otherwise a per-process fixed-window limiter is used (fine for local dev;
+ *   best-effort only on serverless).
+ * - If Redis errors, requests fail open to the in-memory limiter so an
+ *   outage never locks users out.
  */
 type Bucket = { count: number; resetAt: number };
 
@@ -44,6 +50,59 @@ export function rateLimit(
   };
 }
 
+export function upstashCredentials(
+  env: Record<string, string | undefined> = process.env,
+): { url: string; token: string } | null {
+  const url = (env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL)?.trim();
+  const token = (env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN)?.trim();
+  return url && token ? { url, token } : null;
+}
+
+let redis: Redis | null | undefined;
+const limiters = new Map<string, Ratelimit>();
+
+function upstashLimiter(name: string, limit: number, windowMs: number): Ratelimit | null {
+  if (redis === undefined) {
+    const creds = upstashCredentials();
+    redis = creds ? new Redis(creds) : null;
+  }
+  if (!redis) return null;
+  const id = `${name}:${limit}:${windowMs}`;
+  let limiter = limiters.get(id);
+  if (!limiter) {
+    limiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(limit, `${windowMs} ms`),
+      prefix: `fm:rl:${name}`,
+      analytics: false,
+    });
+    limiters.set(id, limiter);
+  }
+  return limiter;
+}
+
+export async function checkRateLimit(
+  name: string,
+  identifier: string,
+  limit: number,
+  windowMs: number,
+): Promise<RateLimitResult> {
+  const limiter = upstashLimiter(name, limit, windowMs);
+  if (limiter) {
+    try {
+      const r = await limiter.limit(identifier);
+      return {
+        ok: r.success,
+        remaining: r.remaining,
+        retryAfterSec: r.success ? 0 : Math.max(1, Math.ceil((r.reset - Date.now()) / 1000)),
+      };
+    } catch (e) {
+      console.warn("[rate-limit] Upstash unavailable, using in-memory limiter", e);
+    }
+  }
+  return rateLimit(`${name}:${identifier}`, limit, windowMs);
+}
+
 export function clientIp(req: Request): string {
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) {
@@ -53,24 +112,39 @@ export function clientIp(req: Request): string {
   return req.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
-/**
- * Returns a 429 response when `req` exceeds `limit` requests per `windowMs`
- * for the given bucket name, otherwise `null`.
- */
-export function limitByIp(
-  req: Request,
-  name: string,
-  limit: number,
-  windowMs: number,
-): NextResponse | null {
-  const result = rateLimit(`${name}:${clientIp(req)}`, limit, windowMs);
-  if (result.ok) return null;
+function tooMany(result: RateLimitResult): NextResponse {
   return NextResponse.json(
     { error: "rate_limited", retryAfterSec: result.retryAfterSec },
     { status: 429, headers: { "Retry-After": String(result.retryAfterSec) } },
   );
 }
 
+/** 429 response when the caller's IP exceeds the limit for `name`, else null. */
+export async function limitByIp(
+  req: Request,
+  name: string,
+  limit: number,
+  windowMs: number,
+): Promise<NextResponse | null> {
+  const result = await checkRateLimit(name, clientIp(req), limit, windowMs);
+  return result.ok ? null : tooMany(result);
+}
+
+/** Same as limitByIp but keyed by signed-in user id when available. */
+export async function limitByUserOrIp(
+  req: Request,
+  userId: string | null | undefined,
+  name: string,
+  limit: number,
+  windowMs: number,
+): Promise<NextResponse | null> {
+  const id = userId ? `u:${userId}` : `ip:${clientIp(req)}`;
+  const result = await checkRateLimit(name, id, limit, windowMs);
+  return result.ok ? null : tooMany(result);
+}
+
 export function __resetRateLimitsForTests() {
   buckets.clear();
+  limiters.clear();
+  redis = undefined;
 }

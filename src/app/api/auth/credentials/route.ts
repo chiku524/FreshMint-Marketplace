@@ -12,7 +12,7 @@ const schema = z.object({
 
 /** Attach email + password to the signed-in profile. */
 export async function POST(req: NextRequest) {
-  const limited = limitByIp(req, "auth:credentials", 10, 15 * 60_000);
+  const limited = await limitByIp(req, "auth:credentials", 10, 15 * 60_000);
   if (limited) return limited;
   const user = await getSessionUser();
   if (!user) {
