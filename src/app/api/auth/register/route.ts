@@ -1,3 +1,4 @@
+import { limitByIp } from "@/lib/http/rate-limit";
 import { readJsonBody } from "@/lib/http/json";
 import { AccountError, registerWithPassword } from "@/lib/auth/account";
 import {
@@ -16,6 +17,8 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const limited = limitByIp(req, "auth:register", 5, 60 * 60_000);
+  if (limited) return limited;
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });

@@ -1,3 +1,4 @@
+import { limitByIp } from "@/lib/http/rate-limit";
 import { readJsonBody } from "@/lib/http/json";
 import { AccountError, attachPasswordToUser } from "@/lib/auth/account";
 import { getSessionUser } from "@/lib/auth/session";
@@ -11,6 +12,8 @@ const schema = z.object({
 
 /** Attach email + password to the signed-in profile. */
 export async function POST(req: NextRequest) {
+  const limited = limitByIp(req, "auth:credentials", 10, 15 * 60_000);
+  if (limited) return limited;
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

@@ -1,3 +1,4 @@
+import { limitByIp } from "@/lib/http/rate-limit";
 import { readJsonBody } from "@/lib/http/json";
 import { createSession, jsonWithSessionCookie } from "@/lib/auth/session";
 import {
@@ -20,6 +21,8 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const limited = limitByIp(req, "auth:2fa/verify", 10, 15 * 60_000);
+  if (limited) return limited;
   const body = schema.safeParse(await readJsonBody(req));
   if (!body.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
