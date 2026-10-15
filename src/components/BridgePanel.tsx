@@ -271,10 +271,10 @@ export function BridgePanel() {
       ) : null}
 
       {status ? (
-        <p style={{ margin: 0, color: "var(--emergent)" }}>Status: {status}</p>
+        <p role="status" aria-live="polite" style={{ margin: 0, color: "var(--emergent)" }}>Status: {status}</p>
       ) : null}
       {error ? (
-        <p style={{ margin: 0, color: "var(--danger)" }}>{error}</p>
+        <p role="alert" style={{ margin: 0, color: "var(--danger)" }}>{error}</p>
       ) : null}
     </div>
   );

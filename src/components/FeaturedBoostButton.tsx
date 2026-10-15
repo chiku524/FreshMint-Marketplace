@@ -263,7 +263,7 @@ export function FeaturedBoostButton({
         </p>
       )}
       {msg ? (
-        <p
+        <p role="status" aria-live="polite"
           style={{
             margin: "0.35rem 0 0",
             fontSize: "0.8rem",

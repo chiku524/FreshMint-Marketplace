@@ -144,7 +144,7 @@ export function StudioPanel({
             onSubmit={createShelf}
             style={{ display: "grid", gap: "0.75rem", maxWidth: "32rem" }}
           >
-            <input
+            <input aria-label="Shelf name"
               value={shelfName}
               onChange={(e) => setShelfName(e.target.value)}
               placeholder="Shelf name"

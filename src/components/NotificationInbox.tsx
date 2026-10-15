@@ -90,10 +90,16 @@ export function NotificationInbox() {
         </button>
       </div>
       {msg ? (
-        <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>{msg}</p>
+        <p role="status" aria-live="polite" style={{ color: "var(--ink-muted)", fontSize: "0.85rem" }}>{msg}</p>
       ) : null}
-      {items.length === 0 && !busy ? (
-        <p style={{ color: "var(--ink-muted)" }}>No notifications yet.</p>
+      {items.length === 0 && busy ? (
+        <p role="status" aria-live="polite" style={{ color: "var(--ink-muted)" }}>
+          Loading notifications�
+        </p>
+      ) : items.length === 0 ? (
+        <p style={{ color: "var(--ink-muted)" }}>
+          No notifications yet. Bids, auction results and sales will show up here.
+        </p>
       ) : (
         <ul className="notif-inbox">
           {items.map((n) => (

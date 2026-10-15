@@ -65,6 +65,9 @@ export default async function RootLayout({
         <Script id="fm-intro-boot" strategy="beforeInteractive">
           {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(sessionStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending");setTimeout(function(){document.documentElement.classList.remove("fm-intro-pending")},8000)}}catch(e){}`}
         </Script>
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
         <div className="site-shell">
           <div className="fm-intro-cover" aria-hidden="true" />
           <LogoIntroSplash />
@@ -80,7 +83,7 @@ export default async function RootLayout({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-              <Link href="/" style={{ fontSize: "1.3rem" }}>
+              <Link href="/" style={{ fontSize: "1.3rem" }} aria-label="FreshMint Marketplace home">
                 <BrandMark size={32} />
               </Link>
               <SiteNav signedIn={Boolean(initialUser)} />
@@ -90,7 +93,7 @@ export default async function RootLayout({
           <div className="site-frame">
             <DiscoverySidebar />
             <div className="site-frame__main">
-              <main style={{ flex: 1 }}>{children}</main>
+              <main id="main-content" tabIndex={-1} style={{ flex: 1 }}>{children}</main>
               <footer className="site-footer">
                 <span>
                   Attention is scarce. Emerging artists get a coded quota — not a

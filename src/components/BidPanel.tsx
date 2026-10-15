@@ -190,7 +190,7 @@ export function BidPanel({
             Open bidding in USD. Min next bid ${minBidUsd}.
           </p>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <input
+            <input aria-label="Bid amount in USD"
               type="number"
               min={minBidUsd}
               step="0.01"
@@ -319,7 +319,7 @@ export function BidPanel({
         </p>
       )}
       {error ? (
-        <p style={{ color: "crimson", margin: "0.5rem 0 0", fontSize: "0.85rem" }}>{error}</p>
+        <p role="alert" style={{ color: "crimson", margin: "0.5rem 0 0", fontSize: "0.85rem" }}>{error}</p>
       ) : null}
       {bids.length ? (
         <ul style={{ margin: "0.75rem 0 0", padding: 0, listStyle: "none" }}>

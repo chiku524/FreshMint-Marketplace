@@ -47,7 +47,7 @@ export function FollowButton({
         {busy ? "…" : following ? "Following" : "Follow artist"}
       </button>
       {error ? (
-        <span style={{ color: "var(--danger)", fontSize: "0.8rem" }}>{error}</span>
+        <span role="alert" style={{ color: "var(--danger)", fontSize: "0.8rem" }}>{error}</span>
       ) : null}
     </span>
   );

@@ -134,7 +134,7 @@ export function OpenLaneFilters({
         <input type="hidden" name="maxPrice" value={maxPrice ?? ""} />
         <input type="hidden" name="saleMode" value={saleMode ?? ""} />
         <input type="hidden" name="endingSoon" value={endingSoon ?? ""} />
-        <input
+        <input aria-label="Search titles"
           name="q"
           defaultValue={q ?? ""}
           placeholder="Search titles…"

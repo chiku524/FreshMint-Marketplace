@@ -89,7 +89,7 @@ export function TwoFactorChallenge({
           />
         </label>
         {error ? (
-          <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>
+          <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>
             {error}
           </p>
         ) : null}

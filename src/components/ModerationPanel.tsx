@@ -80,7 +80,7 @@ export function ModerationPanel() {
   return (
     <div style={{ display: "grid", gap: "2rem" }}>
       {error && error !== "forbidden" ? (
-        <p style={{ color: "var(--danger)" }}>{error}</p>
+        <p role="alert" style={{ color: "var(--danger)" }}>{error}</p>
       ) : null}
 
       <section>

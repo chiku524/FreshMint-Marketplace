@@ -99,7 +99,7 @@ export function WalletLinkPanel() {
         />
       ) : null}
       {error ? (
-        <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>
+        <p role="alert" style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>
           {error}
         </p>
       ) : null}

@@ -115,7 +115,7 @@ export function WithdrawCollectedButton({
         {busy ? "Claiming…" : "Claim legacy hold"}
       </button>
       {msg ? (
-        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
+        <span role="status" aria-live="polite" style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
       ) : null}
     </span>
   );

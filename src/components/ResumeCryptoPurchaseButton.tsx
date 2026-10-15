@@ -352,7 +352,7 @@ export function ResumeCryptoPurchaseButton({
           </button>
         ) : null}
         {msg ? (
-          <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
+          <span role="status" aria-live="polite" style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
         ) : null}
       </span>
     );
@@ -415,7 +415,7 @@ export function ResumeCryptoPurchaseButton({
         ) : null}
       </div>
       {msg ? (
-        <span style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
+        <span role="status" aria-live="polite" style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>{msg}</span>
       ) : null}
     </div>
   );

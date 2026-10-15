@@ -458,7 +458,7 @@ export function CollectionPackagePanel({
         </div>
       ) : null}
       {msg ? (
-        <p style={{ margin: "0.55rem 0 0", fontSize: "0.85rem", color: "var(--ink-muted)" }}>
+        <p role="status" aria-live="polite" style={{ margin: "0.55rem 0 0", fontSize: "0.85rem", color: "var(--ink-muted)" }}>
           {msg}
         </p>
       ) : null}

@@ -201,7 +201,7 @@ export function AccountAuthForm({
                 : "Sign in"}
           </button>
         </form>
-        {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
         <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.9rem" }}>
           {mode === "sign-up" ? (
             <>

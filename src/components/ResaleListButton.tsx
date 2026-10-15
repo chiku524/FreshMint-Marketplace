@@ -97,7 +97,7 @@ export function ResaleListButton({
         </button>
       </div>
       {error ? (
-        <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
+        <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
       ) : (
         <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.8rem" }}>
           Fixed-price secondary. Platform 0.5% + creator royalty (default 5%) come from the listed

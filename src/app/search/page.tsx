@@ -36,8 +36,8 @@ export default async function SearchPage({
       <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
         Search
       </h1>
-      <form action="/search" method="get" style={{ marginBottom: "1.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <input
+      <form role="search" action="/search" method="get" style={{ marginBottom: "1.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <input aria-label="Search the marketplace"
           name="q"
           defaultValue={qRaw}
           placeholder="Works, collections, creators…"

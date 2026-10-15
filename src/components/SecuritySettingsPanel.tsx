@@ -263,7 +263,7 @@ export function SecuritySettingsPanel({
       ) : null}
 
       {error ? (
-        <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.9rem" }}>{error}</p>
+        <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "0.9rem" }}>{error}</p>
       ) : null}
     </section>
   );

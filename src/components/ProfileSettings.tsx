@@ -373,7 +373,7 @@ export function ProfileSettings({
           </a>
         ) : null}
 
-        {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
         {ok ? <p style={{ color: "var(--emergent)", margin: 0 }}>{ok}</p> : null}
       </div>
     </section>
