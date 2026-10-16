@@ -6432,6 +6432,18 @@ a.treasury-balances__addr:focus-visible {
   .site-header .site-nav__trigger .site-nav__icon {
     display: none;
   }
+  /* Signed-in phones: the bell becomes icon-only so Docs/Alerts/Account don't collide. */
+  .site-header .notif-bell__trigger svg {
+    display: inline-block;
+  }
+  .site-header .notif-bell__trigger .site-nav__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .site-header__end {
     gap: 0.3rem;
     flex: 0 0 auto;

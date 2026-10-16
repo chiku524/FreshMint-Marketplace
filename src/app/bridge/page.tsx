@@ -15,7 +15,8 @@ export default function BridgePage() {
         <h1 className="display page-lead__title">Move funds</h1>
         <p className="page-lead__copy">
           Move ETH or SOL between {networks.map((n) => n.label).join(", ")} so
-          you have funds on the network a work is sold on.
+          you have funds on the network a work is sold on. Get a quote, then
+          confirm in your wallet.
           {chainMode() !== "mainnet" ? (
             <>
               {" "}

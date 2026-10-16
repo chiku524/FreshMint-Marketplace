@@ -760,7 +760,7 @@ export function ListingActions({
           onClick={() =>
             void post("/api/signals", { listingId, type: "save" }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg("Saved");
+                toast("Saved to your collection", "ok", { href: "/me", label: "View saved" });
                 router.refresh();
               }
             })
@@ -783,8 +783,9 @@ export function ListingActions({
           onClick={() =>
             void post("/api/nominate", { listingId }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg(
-                  `Nominated (−${DISCOVERY_CONFIG.nominationStakePoints} curator pts)`,
+                toast(
+                  `Nominated (−${DISCOVERY_CONFIG.nominationStakePoints} curator points)`,
+                  "ok",
                 );
                 setCuratorScore((s) =>
                   s == null
@@ -1086,7 +1087,7 @@ export function ListingActions({
               target: "rising_eligible",
             }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg("Pushed to Rising");
+                toast("Pushed to Rising", "ok");
                 router.refresh();
               }
             })
@@ -1109,7 +1110,7 @@ export function ListingActions({
               target: "soft_launch",
             }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg("Soft-launched to Open Lane");
+                toast("Live in the Open Lane", "ok");
                 router.refresh();
               }
             })
@@ -1132,7 +1133,8 @@ export function ListingActions({
               listingId,
               reason: "spam",
             }).then((d) => {
-              if (d && !("error" in d)) setMsg("Reported");
+              if (d && !("error" in d))
+                toast("Thanks \u2014 our moderators will review this work.", "ok");
             })
           }
         >

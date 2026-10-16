@@ -174,10 +174,6 @@ export function BridgePanel() {
 
   return (
     <div className="fm-form-stack bridge-shell">
-      <p className="fm-form-note">
-        1. Choose networks and an amount. 2. Get a quote. 3. Confirm in your
-        wallet. Bridging is powered by Relay.
-      </p>
 
       <label>
         From

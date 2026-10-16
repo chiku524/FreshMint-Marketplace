@@ -29,7 +29,9 @@ export function ListingPriceCard({ summary }: { summary: PurchaseSummary }) {
         <span className="listing-price-card__dot" aria-hidden="true" />
         {summary.statusText}
       </p>
-      <p className="listing-price-card__how">{summary.howToBuy}</p>
+      {summary.howToBuy ? (
+        <p className="listing-price-card__how">{summary.howToBuy}</p>
+      ) : null}
     </section>
   );
 }

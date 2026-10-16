@@ -66,6 +66,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Real database accounts must never be reachable through a password-less
+  // demo login (user ids are public on creator pages). Only an explicit opt-in
+  // for a throwaway environment enables it.
+  if (process.env.ALLOW_DEMO_AUTH !== "true") {
+    return NextResponse.json({ error: "disabled" }, { status: 403 });
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: { id: body.data.userId },

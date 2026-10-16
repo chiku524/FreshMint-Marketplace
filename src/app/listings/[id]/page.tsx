@@ -283,7 +283,7 @@ export default async function ListingDetailPage({
               </span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
-            <span className="badge">{saleModeBadge(listing)}</span>
+            {minted ? <span className="badge">{saleModeBadge(listing)}</span> : null}
             <span className="badge">{stageLabel(listing.stage)}</span>
             {cap != null ? (
               <span className="badge">
@@ -584,7 +584,7 @@ export default async function ListingDetailPage({
                   repeatable={cap == null || cap > 1}
                   minted={minted}
                   canStageRising={canUserStageListing(user, listing)}
-                  suppressBuy={saleMode === "english" && auctionLive}
+                  suppressBuy={(saleMode === "english" && auctionLive) || (Boolean(user?.id) && user?.id === sellerId)}
                   showSave={false}
                   showCommunityActions={false}
                   pendingPurchase={

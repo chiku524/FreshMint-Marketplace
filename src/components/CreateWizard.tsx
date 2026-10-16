@@ -60,6 +60,7 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/lib/client/toast";
 
 /** Parallel media uploads — high enough to cut serial wait, low enough for Blob/API. */
 const UPLOAD_CONCURRENCY = 4;
@@ -232,6 +233,14 @@ export function CreateWizard() {
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [csvNote, setCsvNote] = useState<string | null>(null);
+  // Mirror wizard feedback to the app-wide toast so it's seen even when the
+  // inline message is scrolled out of view (long uploads, mobile).
+  useEffect(() => {
+    if (error) toast(error, "error");
+  }, [error]);
+  useEffect(() => {
+    if (ok) toast(ok, "ok");
+  }, [ok]);
 
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [collectionId, setCollectionId] = useState("");

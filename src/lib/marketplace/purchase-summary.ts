@@ -132,5 +132,12 @@ export function buildPurchaseSummary(i: PurchaseSummaryInput): PurchaseSummary {
     };
   }
 
-  return { priceLabel, amount, howToBuy, timing, status, statusText, supply };
+  // "Buy instantly" contradicts "Not on sale yet"; explain what happens next instead.
+  const how =
+    status === "not_minted"
+      ? "Follow the creator or save it to hear when it goes on sale."
+      : status === "sold" || status === "unlisted"
+        ? ""
+        : howToBuy;
+  return { priceLabel, amount, howToBuy: how, timing, status, statusText, supply };
 }

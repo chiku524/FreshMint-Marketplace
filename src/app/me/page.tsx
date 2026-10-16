@@ -104,9 +104,6 @@ export default async function MeCollectionPage({
             Open Studio
           </Link>
         )}
-        <Link href={`/creators/${user.id}`} className="fm-btn fm-btn--ghost">
-          View public profile
-        </Link>
       </div>
 
       {openCheckouts.length > 0 ? (
@@ -174,9 +171,8 @@ export default async function MeCollectionPage({
               </h2>
               {liveSales.length === 0 ? (
                 <p className="fm-empty-copy">
-                  No collector checkouts yet. Soft-launch from{" "}
-                  <Link href="/studio">Studio</Link> or{" "}
-                  <Link href="/create">Create</Link>.
+                  No sales yet. Publish a work from{" "}
+                  <Link href="/create">Create</Link> to start selling.
                 </p>
               ) : (
                 <ul className="me-list">
@@ -208,8 +204,8 @@ export default async function MeCollectionPage({
               </h2>
               {profile.shelves.length === 0 ? (
                 <p className="fm-empty-copy">
-                  No shelves yet. Curate from{" "}
-                  <Link href="/studio">Studio</Link>.
+                  No shelves yet. Group works you love into a shelf from{" "}
+                  <Link href="/studio#shelves">Studio</Link>.
                 </p>
               ) : (
                 <ul className="me-list">
