@@ -59,12 +59,8 @@ export default async function MeSettingsPage() {
           Wallets
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 0.85rem", maxWidth: "48ch" }}>
-          Link EVM, Solana, or Boing by signing a message. If several EVM
-          wallets are installed, you can pick Coinbase, MetaMask, Phantom, or
-          another provider. Unlink removes the account connection only —
-          listings and on-chain history for that address stay. NFTs in each
-          linked address appear on Collection. Linked Boing wallets also show a
-          live BOING balance here.
+          Link a wallet by signing a message{" \u2014 "}no transaction, no fee.
+          Unlinking only disconnects it; listings and on-chain history stay.
         </p>
         {profile.wallets.length === 0 ? (
           <p style={{ color: "var(--ink-muted)", margin: "0 0 0.75rem" }}>
@@ -118,9 +114,14 @@ export default async function MeSettingsPage() {
                         justifySelf: "start",
                         fontFamily: "monospace",
                         whiteSpace: "normal",
+                        overflowWrap: "anywhere",
+                        minWidth: 0,
+                        maxWidth: "100%",
                       }}
                     >
-                      {w.network ?? w.chain}: {w.address}
+                      <span title={w.address}>
+                        {w.network ?? w.chain}: {shortAddr(w.address)}
+                      </span>
                       {isPrimary ? (
                         <span
                           style={{

@@ -159,7 +159,7 @@ export function ProfileSettings({
       <h2 className="display me-section__title">Profile</h2>
       <div className="fm-form-surface fm-form-stack">
         <p className="fm-form-note">
-          {email ? email : "No email on this profile yet"}
+          {email ? `Signed in as ${email}` : "No email yet \u2014 add one below to sign in without a wallet."}
           {googleLinked ? " · Google linked" : ""}
           {hasPassword ? " · password set" : ""}
         </p>
@@ -304,8 +304,9 @@ export function ProfileSettings({
             onSubmit={(e) => void attachCredentials(e)}
             className="fm-form-stack"
           >
+            <h3 className="me-subsection__title">Email sign-in</h3>
             <p className="fm-form-note">
-              Add email and password so you can sign in without a wallet.
+              Add an email and password so you can sign in without a wallet.
             </p>
             <label>
               Email

@@ -120,5 +120,17 @@ export function buildPurchaseSummary(i: PurchaseSummaryInput): PurchaseSummary {
           ? "Open edition"
           : null;
 
+  if (amount === "\u2014") {
+    return {
+      priceLabel: "Price",
+      amount: "Price not set",
+      howToBuy: "The creator hasn't set a price yet. Follow them to hear when it goes on sale.",
+      timing,
+      status: status === "available" ? "unlisted" : status,
+      statusText: status === "available" ? "Not for sale yet" : statusText,
+      supply,
+    };
+  }
+
   return { priceLabel, amount, howToBuy, timing, status, statusText, supply };
 }

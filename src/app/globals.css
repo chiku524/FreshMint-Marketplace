@@ -6528,3 +6528,7 @@ a.treasury-balances__addr:focus-visible {
   .fm-home-hero__feature { min-height: 0; }
   .fm-home-hero__feature:not(:empty) { min-height: 16rem; }
 }
+
+.listing-price-card--unlisted .listing-price-card__amount { font-size: 1.35rem; color: var(--ink-muted); }
+
+.me-subsection__title { margin: 0.5rem 0 0; font-size: 1.05rem; }

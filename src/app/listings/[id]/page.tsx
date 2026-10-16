@@ -626,7 +626,7 @@ export default async function ListingDetailPage({
                   You own this
                 </h3>
                 <p className="fm-form-note" style={{ margin: "0 0 0.5rem" }}>
-                  List it for sale on FreshMint (Buy now secondary).
+                  Resell it here at a fixed price. Buyers can purchase instantly; the creator&apos;s royalty and fees are shown before you confirm.
                 </p>
                 <ResaleListButton
                   purchaseId={completedPurchase.id}

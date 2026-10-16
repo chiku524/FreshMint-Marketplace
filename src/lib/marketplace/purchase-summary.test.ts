@@ -38,6 +38,11 @@ describe("buildPurchaseSummary", () => {
     expect(buildPurchaseSummary({ ...base, isSold: true }).statusText).toBe("Sold out");
     expect(buildPurchaseSummary({ ...base, startsAt: 2_000_000 }).status).toBe("upcoming");
   });
+  it("shows a clear state when no price is set", () => {
+    const s = buildPurchaseSummary({ ...base, displayPriceUsd: null });
+    expect(s.amount).toBe("Price not set");
+    expect(s.status).toBe("unlisted");
+  });
   it("formats durations", () => {
     expect(formatDuration(90_000_000)).toBe("1d 1h");
     expect(formatDuration(30_000)).toBe("1m");
