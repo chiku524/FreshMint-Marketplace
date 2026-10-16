@@ -22,11 +22,12 @@ export function FollowButton({
   const [hidden, setHidden] = useState(false);
   const [ready, setReady] = useState(Boolean(initiallyFollowing));
 
-  useEffect(() => {
-    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Re-sync when the server value or the artist changes (no effect needed).
+  const [synced, setSynced] = useState({ initiallyFollowing, artistId });
+  if (synced.initiallyFollowing !== initiallyFollowing || synced.artistId !== artistId) {
+    setSynced({ initiallyFollowing, artistId });
     setFollowing(initiallyFollowing);
-  }, [initiallyFollowing, artistId]);
+  }
 
   useEffect(() => {
     let cancelled = false;

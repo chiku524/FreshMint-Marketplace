@@ -2,7 +2,7 @@
 
 import { BrandMark } from "@/components/MintLeaf";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export type CreateLivePreviewProps = {
   collectionTitle: string;
@@ -94,22 +94,13 @@ export function CreateLivePreview({
     priceUsd && Number(priceUsd) > 0
       ? `$${Number(priceUsd).toLocaleString()}`
       : "—";
-  const [pulse, setPulse] = useState(0);
-
-  useEffect(() => {
-    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPulse((n) => n + 1);
-  }, [
-    collectionTitle,
-    heroTitle,
-    heroDescription,
-    heroMediaUrl,
-    network,
-    intent,
-    priceUsd,
-    pieceCount,
-  ]);
+  // Re-trigger the preview pulse animation whenever visible inputs change.
+  const pulseSig = JSON.stringify([collectionTitle, heroTitle, heroDescription, heroMediaUrl, network, intent, priceUsd, pieceCount]);
+  const [pulseState, setPulseState] = useState({ sig: pulseSig, n: 1 });
+  if (pulseState.sig !== pulseSig) {
+    setPulseState((p) => ({ sig: pulseSig, n: p.n + 1 }));
+  }
+  const pulse = pulseState.n;
 
   const bannerStyle = heroMediaUrl
     ? {

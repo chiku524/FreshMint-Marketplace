@@ -24,6 +24,7 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -52,6 +53,10 @@ function priceUsdForActions(listing: Listing): number | null {
   return listing.priceUsd;
 }
 
+function noopSubscribe() {
+  return () => {};
+}
+
 export function ListingPreviewModal({
   listing,
   onClose,
@@ -72,17 +77,16 @@ export function ListingPreviewModal({
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
-  const [mounted, setMounted] = useState(false);
+  // Portal target only exists on the client; false during SSR/hydration.
+  const mounted = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
 
   const close = useCallback(() => {
     onClose();
   }, [onClose]);
-
-  useEffect(() => {
-    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -136,9 +140,8 @@ export function ListingPreviewModal({
   const hue = hueFromId(listing.id);
   const media = listing.mediaUrl;
   const saleMode = resolveSaleMode(listing);
-  // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-  // eslint-disable-next-line react-hooks/purity
-  const now = Date.now();
+  // Captured once when the preview opens.
+  const [now] = useState(() => Date.now());
   const auctionLive =
     saleMode !== "fixed" &&
     listing.auctionStartsAt != null &&

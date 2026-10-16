@@ -231,28 +231,33 @@ export function CreateWizard() {
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [collectionId, setCollectionId] = useState("");
   const [newTitle, setNewTitle] = useState("");
-  const [newSlug, setNewSlug] = useState("");
+  const [slugInput, setNewSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
-  const [titleStatus, setTitleStatus] = useState<{
+  // Last server answer; `key` ties it to the title/collection it was checked for.
+  const [titleCheck, setTitleCheck] = useState<{
+    key: string;
     checking: boolean;
     available: boolean | null;
     issue: CollectionTitleIssue | null;
     message: string | null;
     normalized: string | null;
   }>({
+    key: "",
     checking: false,
     available: null,
     issue: null,
     message: null,
     normalized: null,
   });
-  const [slugStatus, setSlugStatus] = useState<{
+  const [slugCheck, setSlugCheck] = useState<{
+    key: string;
     checking: boolean;
     available: boolean | null;
     issue: CollectionSlugIssue | null;
     message: string | null;
     normalized: string | null;
   }>({
+    key: "",
     checking: false,
     available: null,
     issue: null,
@@ -448,25 +453,27 @@ export function CreateWizard() {
   }
 
   // Apply ?collectionId= once collections are available (Studio / Add works).
-  useEffect(() => {
-    if (!deepCollectionId || !collections.length) return;
+  // Adjusted during render (once per target + network) instead of in an effect.
+  const [appliedDeepLink, setAppliedDeepLink] = useState<string | null>(null);
+  const deepLinkKey = deepCollectionId ? `${deepCollectionId}|${network}` : null;
+  if (deepLinkKey && appliedDeepLink !== deepLinkKey && collections.length) {
     const target = collections.find((c) => c.id === deepCollectionId);
-    if (!target) return;
-    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCollectionId(target.id);
-    const targetNet = (target.network || target.chain || "").toLowerCase();
-    if (targetNet && targetNet !== network) {
-      setNetwork(targetNet);
-      return; // loadMine will re-run for the matching network
+    if (target) {
+      setAppliedDeepLink(deepLinkKey);
+      setCollectionId(target.id);
+      const targetNet = (target.network || target.chain || "").toLowerCase();
+      if (targetNet && targetNet !== network) {
+        setNetwork(targetNet); // loadMine re-runs for the matching network
+      } else {
+        setStepIndex((idx) => {
+          const defs = stepDefs(intent ?? "drop");
+          const artworkIdx = defs.findIndex((st) => st.id === "artwork");
+          if (artworkIdx >= 0) return Math.max(idx, artworkIdx);
+          return idx;
+        });
+      }
     }
-    setStepIndex((idx) => {
-      const defs = stepDefs(intent ?? "drop");
-      const artworkIdx = defs.findIndex((s) => s.id === "artwork");
-      if (artworkIdx >= 0) return Math.max(idx, artworkIdx);
-      return idx;
-    });
-  }, [deepCollectionId, collections, network, intent]);
+  }
 
   useEffect(() => {
     loadMine();
@@ -476,42 +483,18 @@ export function CreateWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMine closes over network + deepCollectionId
   }, [network, deepCollectionId]);
 
-  // Keep suggested slug in sync with title until the creator edits the slug field.
-  useEffect(() => {
-    if (collectionId || slugTouched) return;
-    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNewSlug(suggestCollectionSlug(newTitle));
-  }, [newTitle, collectionId, slugTouched]);
+  // Suggested slug follows the title until the creator edits the slug field.
+  const newSlug =
+    collectionId || slugTouched ? slugInput : suggestCollectionSlug(newTitle);
 
   // Debounced uniqueness + format feedback for new-collection names (global).
   // When editing/resuming an existing collection, exclude its own id so the
   // owner's current title is not reported as "already taken".
   useEffect(() => {
     const format = validateCollectionTitleFormat(newTitle);
-    if (!format.ok) {
-      // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTitleStatus({
-        checking: false,
-        available: false,
-        issue: format.issue,
-        message: newTitle.trim()
-          ? collectionTitleIssueMessage(format.issue)
-          : null,
-        normalized: null,
-      });
-      return;
-    }
+    if (!format.ok) return;
+    const key = `${format.normalized}|${collectionId}`;
     let cancelled = false;
-    setTitleStatus((prev) => ({
-      ...prev,
-      checking: true,
-      available: null,
-      issue: null,
-      message: "Checking name availability…",
-      normalized: format.normalized,
-    }));
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
@@ -528,7 +511,8 @@ export function CreateWizard() {
             normalized?: string | null;
           };
           if (cancelled) return;
-          setTitleStatus({
+          setTitleCheck({
+            key,
             checking: false,
             available: Boolean(data.available),
             issue: data.issue ?? null,
@@ -537,7 +521,8 @@ export function CreateWizard() {
           });
         } catch {
           if (cancelled) return;
-          setTitleStatus({
+          setTitleCheck({
+            key,
             checking: false,
             available: null,
             issue: null,
@@ -556,29 +541,9 @@ export function CreateWizard() {
   // Debounced uniqueness + format feedback for new-collection URLs.
   useEffect(() => {
     const format = validateCollectionSlugFormat(newSlug);
-    if (!format.ok) {
-      // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSlugStatus({
-        checking: false,
-        available: false,
-        issue: format.issue,
-        message: newSlug.trim()
-          ? collectionSlugIssueMessage(format.issue)
-          : null,
-        normalized: null,
-      });
-      return;
-    }
+    if (!format.ok) return;
+    const key = `${format.slug}|${collectionId}`;
     let cancelled = false;
-    setSlugStatus((prev) => ({
-      ...prev,
-      checking: true,
-      available: null,
-      issue: null,
-      message: "Checking availability…",
-      normalized: format.slug,
-    }));
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
@@ -595,7 +560,8 @@ export function CreateWizard() {
             slug?: string | null;
           };
           if (cancelled) return;
-          setSlugStatus({
+          setSlugCheck({
+            key,
             checking: false,
             available: Boolean(data.available),
             issue: data.issue ?? null,
@@ -604,7 +570,8 @@ export function CreateWizard() {
           });
         } catch {
           if (cancelled) return;
-          setSlugStatus({
+          setSlugCheck({
+            key,
             checking: false,
             available: null,
             issue: null,
@@ -619,6 +586,44 @@ export function CreateWizard() {
       window.clearTimeout(timer);
     };
   }, [newSlug, collectionId]);
+
+  // Format errors are derived during render; only the server check is async.
+  const titleFormatNow = validateCollectionTitleFormat(newTitle);
+  const titleStatus = !titleFormatNow.ok
+    ? {
+        checking: false,
+        available: false as boolean | null,
+        issue: titleFormatNow.issue as CollectionTitleIssue | null,
+        message: newTitle.trim() ? collectionTitleIssueMessage(titleFormatNow.issue) : null,
+        normalized: null as string | null,
+      }
+    : titleCheck.key === `${titleFormatNow.normalized}|${collectionId}`
+      ? titleCheck
+      : {
+          checking: true,
+          available: null,
+          issue: null,
+          message: "Checking name availability\u2026",
+          normalized: titleFormatNow.normalized as string | null,
+        };
+  const slugFormatNow = validateCollectionSlugFormat(newSlug);
+  const slugStatus = !slugFormatNow.ok
+    ? {
+        checking: false,
+        available: false as boolean | null,
+        issue: slugFormatNow.issue as CollectionSlugIssue | null,
+        message: newSlug.trim() ? collectionSlugIssueMessage(slugFormatNow.issue) : null,
+        normalized: null as string | null,
+      }
+    : slugCheck.key === `${slugFormatNow.slug}|${collectionId}`
+      ? slugCheck
+      : {
+          checking: true,
+          available: null,
+          issue: null,
+          message: "Checking availability\u2026",
+          normalized: slugFormatNow.slug as string | null,
+        };
 
   const networkCollections = useMemo(
     () =>

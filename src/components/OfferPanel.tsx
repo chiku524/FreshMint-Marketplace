@@ -43,18 +43,27 @@ export function OfferPanel({
   const auth = resolveBuyAuthCta(sessionUserId);
   const signInHref = `/sign-in?next=${encodeURIComponent(`/listings/${listingId}`)}`;
 
-  async function refresh() {
+  async function refresh(signal?: AbortSignal) {
     const res = await fetch(`/api/listings/${listingId}/offers`, {
       credentials: "include",
+      signal,
     });
     const data = (await res.json()) as { offers?: Offer[] };
     setOffers(data.offers ?? []);
   }
 
   useEffect(() => {
-    // Pre-existing effect/render pattern; safe here, refactor tracked separately.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh();
+    const controller = new AbortController();
+    fetch(`/api/listings/${listingId}/offers`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then((res) => res.json() as Promise<{ offers?: Offer[] }>)
+      .then((data) => setOffers(data.offers ?? []))
+      .catch(() => {
+        /* aborted or offline: keep current list */
+      });
+    return () => controller.abort();
   }, [listingId]);
 
   async function submitOffer(e: React.FormEvent) {
