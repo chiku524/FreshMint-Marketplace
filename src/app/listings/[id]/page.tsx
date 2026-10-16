@@ -1,3 +1,4 @@
+import { FmImage } from "@/components/FmImage";
 import { requestNow } from "@/lib/time";
 import { FollowButton } from "@/components/FollowButton";
 import { BidPanel } from "@/components/BidPanel";
@@ -183,7 +184,13 @@ export default async function ListingDetailPage({
         })
       : null;
 
-  const mediaStyle = media
+  // Remote / uploaded media goes through next/image (sized + preloaded as LCP);
+  // other sources keep the CSS background fallback.
+  const optimizedMedia =
+    media && (/^https?:\/\//.test(media) || media.startsWith("/uploads/")) ? media : null;
+  const mediaStyle = optimizedMedia
+    ? { position: "relative" as const, overflow: "hidden" as const }
+    : media
     ? {
         backgroundImage: `url(${media})`,
         backgroundSize: "cover" as const,
@@ -225,7 +232,17 @@ export default async function ListingDetailPage({
       </p>
 
       <div className="listing-detail-grid">
-        <div className="work-media listing-detail__media" style={mediaStyle} />
+        <div className="work-media listing-detail__media" style={mediaStyle}>
+          {optimizedMedia ? (
+            <FmImage
+              src={optimizedMedia}
+              alt={listing.title}
+              fill
+              priority
+              sizes="(max-width: 900px) 100vw, 55vw"
+            />
+          ) : null}
+        </div>
 
         <div className="listing-detail__info">
           <div className="listing-detail__badges">
