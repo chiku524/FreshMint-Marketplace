@@ -165,6 +165,33 @@ export async function POST(req: NextRequest) {
       });
     }
   } else {
+    // Concurrency guard: two resale requests for the same token could both
+    // pass the earlier "no active secondary" check. Re-check under a lock and
+    // discard our draft if someone else already listed it.
+    const won = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"resale:" + origin!.id}))`;
+      const active = await tx.listing.count({
+        where: {
+          isSecondary: true,
+          originListingId: origin!.id,
+          delisted: false,
+          NOT: { stage: "draft" },
+          id: { not: listingId },
+        },
+      });
+      if (active > 0) {
+        await tx.listing.delete({ where: { id: listingId } });
+        return false;
+      }
+      await tx.listing.update({
+        where: { id: listingId },
+        data: { stage: "soft_launch", softLaunchedAt: now, isSecondary: true, sellerId: user.id, originListingId: origin!.id },
+      });
+      return true;
+    });
+    if (!won) {
+      return NextResponse.json({ error: "resale_exists" }, { status: 409 });
+    }
     await prisma.listing.update({
       where: { id: listingId },
       data: {

@@ -3974,7 +3974,24 @@ export async function purchaseListing(input: {
     });
     purchaseId = row.id;
   } else {
-    const row = await prisma.purchase.create({
+    // Re-check supply and insert under a per-listing advisory lock in one
+    // transaction, so two buyers racing for the last edition can't both win.
+    const { purchaseReservesSupply } = await import("@/lib/marketplace/lifecycle");
+    const row = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"purchase:" + input.listingId}))`;
+      if (cap != null) {
+        const reserving = await tx.purchase.findMany({
+          where: {
+            listingId: input.listingId,
+            status: { in: ["completed", "pending_transfer", "pending_payment"] },
+          },
+          select: { status: true, createdAt: true },
+        });
+        if (reserving.filter((p) => purchaseReservesSupply(p)).length >= cap) {
+          throw new Error("already_sold");
+        }
+      }
+      return tx.purchase.create({
       data: {
         listingId: input.listingId,
         buyerId: input.buyerId,
@@ -3996,6 +4013,11 @@ export async function purchaseListing(input: {
         withdrawnAt: withdrawnAt ? new Date(withdrawnAt) : null,
       },
     });
+    }).catch((e: unknown) => {
+      if (e instanceof Error && e.message === "already_sold") return null;
+      throw e;
+    });
+    if (!row) return { ok: false as const, error: "already_sold" };
     purchaseId = row.id;
 
     if (status === "completed") {
