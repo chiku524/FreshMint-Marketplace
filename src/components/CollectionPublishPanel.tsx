@@ -1,5 +1,5 @@
 "use client";
-import { toast } from "@/lib/client/toast";
+import { toast, type ToastKind } from "@/lib/client/toast";
 import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
 import {
@@ -66,9 +66,14 @@ export function CollectionPublishPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgKind, setMsgKind] = useState<ToastKind>("info");
+  const say = (kind: ToastKind, text: string) => {
+    setMsgKind(kind);
+    setMsg(text);
+  };
   useEffect(() => {
-    if (msg) toast(msg, /fail|error|couldn|can.t|invalid|reject|denied|insufficient/i.test(msg) ? "error" : "info");
-  }, [msg]);
+    if (msg) toast(msg, msgKind);
+  }, [msg, msgKind]);
   const [progress, setProgress] = useState<string | null>(null);
   const [busyPhase, setBusyPhase] = useState<PublishPhaseId | null>(null);
   const [failedPhase, setFailedPhase] = useState<PublishPhaseId | null>(null);
@@ -126,7 +131,7 @@ export function CollectionPublishPanel({
         throw new Error(data.error || "publish_failed");
       }
       const n = Array.isArray(data.softLaunched) ? data.softLaunched.length : 0;
-      setMsg(
+      say("ok",
         n > 0
           ? `Published ${n} minted piece${n === 1 ? "" : "s"} to Open Lane.`
           : "No minted drafts left to publish.",
@@ -134,7 +139,7 @@ export function CollectionPublishPanel({
       router.refresh();
     } catch (err) {
       setFailedPhase("live");
-      setMsg(err instanceof Error ? err.message : "publish_failed");
+      say("error", formatBoingMintUserMessage(err instanceof Error ? err.message : "publish_failed"));
     } finally {
       setBusy(false);
       setBusyPhase(null);
@@ -298,7 +303,7 @@ export function CollectionPublishPanel({
     try {
       const listingIds = unmintedDrafts.map((d) => d.id);
       if (!listingIds.length) {
-        setMsg("Nothing left to mint — try Soft-launch minted drafts.");
+        say("info", "Nothing left to mint — try Soft-launch minted drafts.");
         return;
       }
       const chainVm =
@@ -364,7 +369,7 @@ export function CollectionPublishPanel({
         txHash?: string;
       }>;
       if (!batches.length) {
-        setMsg(
+        say("info",
           prepData.alreadyMinted
             ? "Already minted — soft-launching…"
             : "No mint batches needed.",
@@ -431,7 +436,7 @@ export function CollectionPublishPanel({
           );
         }
       }
-      setMsg(
+      say("ok",
         `Minted and published ${listingIds.length} piece${listingIds.length === 1 ? "" : "s"}. They should appear on Open Lane and New collections.`,
       );
       router.refresh();
@@ -439,7 +444,7 @@ export function CollectionPublishPanel({
       const text = mintPublishErrorMessage(
         err instanceof Error ? err.message : "mint_failed",
       );
-      setMsg(text);
+      say("error", text);
       if (isMissingContractError(text) || /deploy|contract/i.test(text)) {
         setFailedPhase("deploy");
       } else {
@@ -494,7 +499,7 @@ export function CollectionPublishPanel({
             disabled={busy}
             onClick={() => void mintAndPublishRemaining()}
           >
-            {mintedDrafts.length > 0 ? "Mint the rest" : `Mint ${unmintedDrafts.length} piece${unmintedDrafts.length === 1 ? "" : "s"}`}
+            {`Finish minting (${unmintedDrafts.length.toLocaleString("en-US")} piece${unmintedDrafts.length === 1 ? "" : "s"})`}
           </button>
         ) : null}
       </div>

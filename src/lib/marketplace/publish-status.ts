@@ -205,7 +205,7 @@ export function buildCollectionPublishLifecycle(
   } else if (current === "mint") {
     summary =
       input.progressNote?.trim() ||
-      "Contract is on-chain. Mint pieces (you pay gas), then they can go live.";
+      "Ready to mint. Confirm in your wallet (small network fee) and the pieces can go live.";
   } else if (input.mintedDraftCount > 0 && input.liveCount === 0) {
     summary = "Minted and ready — soft-launch to appear on Open Lane.";
   } else {

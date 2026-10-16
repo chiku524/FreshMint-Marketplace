@@ -1,5 +1,5 @@
 "use client";
-import { toast } from "@/lib/client/toast";
+import { toast, type ToastKind } from "@/lib/client/toast";
 import { isAbortError, useSingleFlight } from "@/lib/client/single-flight";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
@@ -57,9 +57,14 @@ export function CollectionPackagePanel({
   const [payNetwork, setPayNetwork] = useState("ethereum");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgKind, setMsgKind] = useState<ToastKind>("info");
+  const say = (kind: ToastKind, text: string) => {
+    setMsgKind(kind);
+    setMsg(text);
+  };
   useEffect(() => {
-    if (msg) toast(msg, /fail|error|couldn|can.t|invalid|reject|denied|insufficient/i.test(msg) ? "error" : "info");
-  }, [msg]);
+    if (msg) toast(msg, msgKind);
+  }, [msg, msgKind]);
   const [paymentAddress, setPaymentAddress] = useState<string | null>(null);
   const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
   const [bridgeFeeUsd, setBridgeFeeUsd] = useState<string | null>(null);
@@ -251,7 +256,7 @@ export function CollectionPackagePanel({
         setReceiveAddress(recv);
       }
     } catch (err) {
-      setMsg(humanizeCheckoutError(err instanceof Error ? err.message : "wallet_connect_failed"));
+      say("error", humanizeCheckoutError(err instanceof Error ? err.message : "wallet_connect_failed"));
     }
   }
 
@@ -270,11 +275,11 @@ export function CollectionPackagePanel({
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "update_failed");
-      setMsg(enabled ? "Package sell enabled" : "Package sell disabled");
+      say("ok", enabled ? "Bundle sale turned on" : "Bundle sale turned off");
       load();
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "update_failed");
+      say("error", humanizeCheckoutError(err instanceof Error ? err.message : "update_failed"));
     } finally {
       setBusy(false);
     }
@@ -310,13 +315,13 @@ export function CollectionPackagePanel({
       const simNote = opts.simulate
         ? " (simulated — no on-chain payment; for preview only.)"
         : "";
-      setMsg(
+      say("ok",
         `Package prepared (${body.purchaseIds?.length ?? 0} works, $${body.amountUsd}).${bridgeNote}${simNote}`,
       );
       load();
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "buy_failed");
+      say("error", humanizeCheckoutError(err instanceof Error ? err.message : "buy_failed"));
     } finally {
       setBusy(false);
     }

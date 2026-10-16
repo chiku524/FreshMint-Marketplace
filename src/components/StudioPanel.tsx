@@ -69,15 +69,23 @@ export function StudioPanel({
       return;
     }
     setPublishing(true);
-    const res = await fetch("/api/shelves", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: shelfName, listingIds: selected }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setPublishing(false);
-    if (!res.ok || !data.ok) {
+    let res: Response;
+    let data: { ok?: boolean; error?: unknown; shelf?: { name: string } };
+    try {
+      res = await fetch("/api/shelves", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: shelfName, listingIds: selected }),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      toast("Couldn't reach FreshMint. Check your connection and try again.", "error");
+      return;
+    } finally {
+      setPublishing(false);
+    }
+    if (!res.ok || !data.ok || !data.shelf) {
       const err = typeof data.error === "string" ? data.error : "";
       toast(
         err === "unauthorized"
