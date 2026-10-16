@@ -82,10 +82,10 @@ export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
     return engine;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const { enableMemoryMode, getMemoryEngine } = await import(
+    const { markDatabaseOutage, getMemoryEngine } = await import(
       "@/lib/data/memory-store"
     );
-    enableMemoryMode(message);
+    markDatabaseOutage(message);
     const engine = getMemoryEngine();
     engine.promoteEligibleSoftLaunches();
     return engine;

@@ -17,8 +17,8 @@ export async function loadMarketplaceState(): Promise<MarketplaceState> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn("[freshmint] prisma load failed, using memory catalog:", message);
-    const { enableMemoryMode } = await import("@/lib/data/memory-store");
-    enableMemoryMode(message);
+    const { markDatabaseOutage } = await import("@/lib/data/memory-store");
+    markDatabaseOutage(message);
     return getMemoryState();
   }
 }
