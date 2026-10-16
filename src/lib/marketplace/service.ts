@@ -2098,6 +2098,20 @@ export async function confirmCollectionMintBatch(input: {
     return { ok: false as const, error: "simulated_mint_not_allowed" };
   }
 
+  const pendingListingWrites = new Map<string, Record<string, unknown>>();
+  const stagedCreatorIds = new Set<string>();
+  const flushPendingListingWrites = async () => {
+    if (memory || pendingListingWrites.size === 0) return;
+    const writes = [...pendingListingWrites.entries()];
+    pendingListingWrites.clear();
+    for (let i = 0; i < writes.length; i += 200) {
+      await prisma.$transaction(
+        writes.slice(i, i + 200).map(([id, data]) =>
+          prisma.listing.update({ where: { id }, data }),
+        ),
+      );
+    }
+  };
   const mintedDraftIds: string[] = [];
   const skippedUnverified: Array<{ listingId: string; error: string }> = [];
 
@@ -2141,13 +2155,11 @@ export async function confirmCollectionMintBatch(input: {
     if (memory) {
       getMemoryEngine().state.listings.set(listingId, next);
     } else {
-      await prisma.listing.update({
-        where: { id: listingId },
-        data: {
-          mintTxHash,
-          tokenId,
-          ...(contractAddress ? { contractAddress } : {}),
-        },
+      // Deferred: merged with the soft-launch write and flushed in batches.
+      pendingListingWrites.set(listingId, {
+        mintTxHash,
+        tokenId,
+        ...(contractAddress ? { contractAddress } : {}),
       });
       engine.state.listings.set(listingId, next);
     }
@@ -2155,6 +2167,7 @@ export async function confirmCollectionMintBatch(input: {
   }
 
   if (mintedDraftIds.length === 0 && skippedUnverified.length > 0) {
+    await flushPendingListingWrites();
     return {
       ok: false as const,
       error: "boing_token_not_on_chain",
@@ -2177,9 +2190,8 @@ export async function confirmCollectionMintBatch(input: {
     }
     softLaunched.push(listingId);
     if (!memory) {
-      await prisma.listing.update({
-        where: { id: listingId },
-        data: {
+      pendingListingWrites.set(listingId, {
+        ...(pendingListingWrites.get(listingId) ?? {}),
           stage: staged.listing.stage,
           softLaunchedAt: staged.listing.softLaunchedAt
             ? new Date(staged.listing.softLaunchedAt)
@@ -2190,19 +2202,22 @@ export async function confirmCollectionMintBatch(input: {
           featuredAt: staged.listing.featuredAt
             ? new Date(staged.listing.featuredAt)
             : null,
-        },
       });
-      const creator = engine.state.creators.get(staged.listing.creatorId);
-      if (creator) {
-        await persistCreatorStats(staged.listing.creatorId, {
-          risingEntriesThisWeek: creator.risingEntriesThisWeek,
-          openLaneListingsToday: creator.openLaneListingsToday,
-          firstListingAt: creator.firstListingAt
-            ? new Date(creator.firstListingAt)
-            : null,
-        });
-      }
+      stagedCreatorIds.add(staged.listing.creatorId);
     }
+  }
+
+  // One combined write per listing (was 2 + a creator-stats write each),
+  // sent in transactions of 200 instead of thousands of round trips.
+  await flushPendingListingWrites();
+  for (const creatorId of stagedCreatorIds) {
+    const creator = engine.state.creators.get(creatorId);
+    if (!creator) continue;
+    await persistCreatorStats(creatorId, {
+      risingEntriesThisWeek: creator.risingEntriesThisWeek,
+      openLaneListingsToday: creator.openLaneListingsToday,
+      firstListingAt: creator.firstListingAt ? new Date(creator.firstListingAt) : null,
+    });
   }
 
   return {
