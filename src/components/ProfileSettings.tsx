@@ -1,8 +1,8 @@
 "use client";
-
+import { toast } from "@/lib/client/toast";
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 type Section = "photo" | "profile" | "login";
 
@@ -58,6 +58,9 @@ export function ProfileSettings({
     kind: "ok" | "error";
     text: string;
   } | null>(null);
+  useEffect(() => {
+    if (notice) toast(notice.text, notice.kind);
+  }, [notice]);
   const [section, setSectionState] = useState<Section>("profile");
   const sectionRef = useRef<Section>("profile");
   const setSection = (next: Section) => {

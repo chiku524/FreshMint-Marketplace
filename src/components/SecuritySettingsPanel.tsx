@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "@/lib/client/toast";
 
 export function SecuritySettingsPanel({
   totpEnabled: initialEnabled,
@@ -10,6 +11,9 @@ export function SecuritySettingsPanel({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (error) toast(error, "error");
+  }, [error]);
   const [enroll, setEnroll] = useState<{
     qrDataUrl: string;
     secret: string;

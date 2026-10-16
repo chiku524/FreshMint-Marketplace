@@ -1,5 +1,5 @@
 "use client";
-
+import { toast } from "@/lib/client/toast";
 import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
 import { formatBoingMintUserMessage } from "@/lib/onchain/boing-messages";
 import {
@@ -16,7 +16,7 @@ import {
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 type DraftPiece = {
   id: string;
@@ -66,6 +66,9 @@ export function CollectionPublishPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (msg) toast(msg, /fail|error|couldn|can.t|invalid|reject|denied|insufficient/i.test(msg) ? "error" : "info");
+  }, [msg]);
   const [progress, setProgress] = useState<string | null>(null);
   const [busyPhase, setBusyPhase] = useState<PublishPhaseId | null>(null);
   const [failedPhase, setFailedPhase] = useState<PublishPhaseId | null>(null);
@@ -461,19 +464,17 @@ export function CollectionPublishPanel({
         testId="collection-publish-lifecycle"
       />
       <p className="fm-form-note" style={{ margin: "0.75rem 0" }}>
-        {privateCount > 0
-          ? `${privateCount} draft${privateCount === 1 ? "" : "s"} still private`
-          : "No private drafts"}
-        {listedUnminted
-          ? ` \u00b7 ${listedUnminted} listed but not minted (can't be bought yet)`
-          : ""}
-        {mintedDrafts.length
-          ? ` · ${mintedDrafts.length} minted and ready to list`
-          : ""}
-        {unmintedDrafts.length
-          ? ` · ${unmintedDrafts.length} still need mint`
-          : ""}
-        . Soft-launch puts them on Open Lane with a working buy path.
+        {[
+          privateCount > 0
+            ? `${privateCount} private draft${privateCount === 1 ? "" : "s"}`
+            : null,
+          listedUnminted
+            ? `${listedUnminted} listed but not buyable until minted`
+            : null,
+          mintedDrafts.length ? `${mintedDrafts.length} minted, ready to go live` : null,
+        ]
+          .filter(Boolean)
+          .join(" \u00b7 ") || "Everything here is live."}
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
         {mintedDrafts.length > 0 ? (
