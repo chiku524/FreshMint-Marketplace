@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Children,
+  isValidElement,
   useLayoutEffect,
   useRef,
   type CSSProperties,
@@ -64,6 +66,18 @@ export function PuzzleRail({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
+  // Server-side guess of the packed layout so the first paint (before JS
+  // measures) already has the right shape on phones and tablets: no layout shift.
+  const kids = Children.toArray(children).filter(isValidElement) as {
+    props: { place?: string };
+  }[];
+  const ssrSparse = kids.length > 0 && kids.length <= 2;
+  const ssrItems = kids.length
+    ? kids.map((k) => ({
+        featured: !ssrSparse && (k.props?.place === "featured" || k.props?.place === "promoted"),
+      }))
+    : [{ featured: false }];
+
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -101,10 +115,11 @@ export function PuzzleRail({
     <div
       ref={ref}
       className={["lane-rail", className].filter(Boolean).join(" ")}
+      data-sparse={ssrSparse ? "1" : undefined}
       style={
         {
-          "--rail-cols": 4,
-          "--rail-rows": 2,
+          "--rail-rows-sm": simulateRows(ssrItems, 2),
+          "--rail-rows-md": simulateRows(ssrItems, 4),
           ...style,
         } as CSSProperties
       }

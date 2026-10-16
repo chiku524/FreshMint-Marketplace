@@ -267,7 +267,8 @@ body {
 .fm-engrave-glow--mint {
   width: min(48vw, 520px);
   height: min(48vw, 520px);
-  top: 8%;
+  /* Fixed offset (not %) so streamed content growing the page doesn't move it (CLS). */
+  top: clamp(48px, 9vh, 140px);
   right: -6%;
   background: radial-gradient(circle, var(--engrave-glow-mint), transparent 68%);
   animation: fm-glow-drift 18s ease-in-out infinite;
@@ -276,7 +277,7 @@ body {
 .fm-engrave-glow--gold {
   width: min(42vw, 460px);
   height: min(42vw, 460px);
-  bottom: 12%;
+  top: max(150vh, 900px);
   left: -8%;
   background: radial-gradient(circle, var(--engrave-glow-gold), transparent 70%);
   animation: fm-glow-drift 22s ease-in-out infinite reverse;
@@ -1454,8 +1455,9 @@ html.fm-intro-pending .fm-intro-cover {
 
 /* Puzzle mosaic: unit cells fill the rail; featured = 2×2, compact = 1×1 */
 .lane-rail {
+  /* Pre-hydration defaults; PuzzleRail overrides inline once it measures. */
   --rail-cols: 4;
-  --rail-rows: 2;
+  --rail-rows: var(--rail-rows-md, 2);
   --rail-gap: 0.7rem;
   display: grid;
   width: 100%;
@@ -1465,6 +1467,13 @@ html.fm-intro-pending .fm-intro-cover {
   grid-auto-flow: dense;
   aspect-ratio: var(--rail-cols) / var(--rail-rows);
   perspective: 1200px;
+}
+
+@media (max-width: 559px) {
+  .lane-rail {
+    --rail-cols: 2;
+    --rail-rows: var(--rail-rows-sm, 2);
+  }
 }
 
 .work-tile {
@@ -1930,8 +1939,10 @@ button.work-tile__media-link {
 }
 
 @keyframes rise-in {
+  /* Start partly visible: fully transparent text doesn't count as painted, which
+     held back Largest Contentful Paint until the entrance animation finished. */
   from {
-    opacity: 0;
+    opacity: 0.4;
     transform: translateY(12px);
   }
   to {
@@ -6683,4 +6694,31 @@ a.treasury-balances__addr:focus-visible {
   .site-nav--end {
     gap: 0.15rem 0.6rem;
   }
+}
+
+/* Route transition bar (NavProgress) */
+.fm-nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1000;
+  pointer-events: none;
+  transform-origin: left;
+  transform: scaleX(0);
+  opacity: 0;
+  background: var(--emergent, #3ccf91);
+  transition: opacity 0.2s ease;
+}
+.fm-nav-progress.is-active {
+  opacity: 1;
+  animation: fm-nav-progress 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+@keyframes fm-nav-progress {
+  from { transform: scaleX(0.05); }
+  to { transform: scaleX(0.92); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fm-nav-progress.is-active { animation: none; transform: scaleX(0.6); }
 }

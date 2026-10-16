@@ -29,6 +29,8 @@ export function FmImage({
   if (!src) return null;
   const isRemote = src.startsWith("http://") || src.startsWith("https://");
   const isLocalUpload = src.startsWith("/uploads/");
+  // The optimizer can't (or shouldn't) re-encode vectors or animations; serve those as-is.
+  const unoptimized = /\.(svg|gif)(\?|#|$)/i.test(src);
 
   if (isRemote || isLocalUpload) {
     if (fill) {
@@ -41,6 +43,7 @@ export function FmImage({
           style={{ objectFit: "cover", ...style }}
           sizes={sizes}
           priority={priority}
+          unoptimized={unoptimized}
         />
       );
     }
@@ -54,6 +57,7 @@ export function FmImage({
         style={style}
         sizes={sizes}
         priority={priority}
+        unoptimized={unoptimized}
       />
     );
   }
