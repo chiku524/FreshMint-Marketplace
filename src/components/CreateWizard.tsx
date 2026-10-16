@@ -55,8 +55,6 @@ import { useEffect, useMemo, useState } from "react";
 
 /** Parallel media uploads — high enough to cut serial wait, low enough for Blob/API. */
 const UPLOAD_CONCURRENCY = 4;
-/** Soft-launch stage calls after mint. */
-const STAGE_CONCURRENCY = 6;
 
 function collectionNetworkOf(c: CollectionOption): string {
   return (c.network || c.chain || "").toLowerCase();
@@ -1610,45 +1608,32 @@ export function CreateWizard() {
 
       // Mint confirm soft-launches server-side. Re-stage any leftover drafts
       // (idempotent when already Rising / soft-launched).
-      const stageSettled = await mapPoolSettled(
-        listingIds,
-        STAGE_CONCURRENCY,
-        async (listingId) => {
-          await retryWithBackoff(
-            async () => {
-              const stageRes = await fetch(`/api/listings/${listingId}/stage`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ target: "soft_launch" }),
-              });
-              const stageData = await stageRes.json();
-              if (!stageRes.ok) {
-                const errs = Array.isArray(stageData.errors)
-                  ? stageData.errors.join(", ")
-                  : stageData.error;
-                const message =
-                  errs === "listing_not_minted" ||
-                  (Array.isArray(stageData.errors) &&
-                    stageData.errors.includes("listing_not_minted"))
-                    ? "Mint must finish before soft-launch. Open the collection and use Publish remaining."
-                    : errs || "soft_launch_failed";
-                throw makeHttpError(message, stageRes.status);
-              }
-            },
-            { retries: 2, baseDelayMs: 300, maxDelayMs: 2_500 },
-          );
-          return listingId;
+      // One request for the whole collection instead of one per piece
+      // (10k pieces used to mean 10k stage calls).
+      const publishData = await retryWithBackoff(
+        async () => {
+          const res = await fetch(`/api/collections/${id}/publish`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "soft_launch_minted" }),
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            throw makeHttpError(String(json.error || "soft_launch_failed"), res.status);
+          }
+          return json as { remainingDrafts?: number; errors?: { errors: string[] }[] };
         },
+        { retries: 2, baseDelayMs: 400, maxDelayMs: 4_000 },
       );
-      const stageFail = stageSettled.filter((s) => !s.ok);
-      if (stageFail.length) {
-        const sample = stageFail
+      const stillDraft = publishData.remainingDrafts ?? 0;
+      if (stillDraft > 0) {
+        const sample = (publishData.errors ?? [])
           .slice(0, 2)
-          .map((f) => ("error" in f ? f.error.message : "soft_launch_failed"))
+          .map((e) => e.errors.join(", "))
           .join("; ");
         throw new Error(
-          `Some pieces minted and went live, but ${stageFail.length} of ${listingIds.length} still need publish${sample ? ` (${sample})` : ""}. Open the collection and use Publish remaining.`,
+          `Some pieces minted and went live, but ${stillDraft} of ${listingIds.length} still need publish${sample ? ` (${sample})` : ""}. Open the collection and use Publish remaining.`,
         );
       }
 
