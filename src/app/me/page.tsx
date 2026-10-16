@@ -157,10 +157,8 @@ export default async function MeCollectionPage({
         collections={collections}
         emptyCollections={
           <p className="fm-empty-copy">
-            No minted collections yet.{" "}
-            <Link href="/create">Publish a collection</Link>
-            {" · "}
-            <Link href="/studio">Studio</Link>.
+            No collections yet. <Link href="/create?intent=drop">Create one</Link>{" "}
+            or finish drafts in <Link href="/studio">Studio</Link>.
           </p>
         }
         trailing={

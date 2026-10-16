@@ -31,7 +31,7 @@ export function MeCollectionBrowser({
       creatorName={creatorName}
       emptyCollections={emptyCollections}
       title={`My collections (${collections.length})`}
-      hint="Gallery, grid, or list for your minted collections. Open a set to manage pieces."
+      hint="Your collections. Open one to manage its pieces."
       trailing={trailing}
     />
   );
