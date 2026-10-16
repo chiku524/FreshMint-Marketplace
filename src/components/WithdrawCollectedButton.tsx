@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import type { Chain, NetworkId } from "@/lib/discovery/types";
 import { maybeSendWalletTx } from "@/lib/onchain/wallet-client";
@@ -96,7 +97,7 @@ export function WithdrawCollectedButton({
       setMsg(note);
       router.refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "withdraw_failed");
+      setMsg(friendlyError(e instanceof Error ? e.message : "withdraw_failed"));
     } finally {
       setBusy(false);
     }

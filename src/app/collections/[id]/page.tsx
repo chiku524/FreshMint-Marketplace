@@ -264,12 +264,10 @@ export default async function CollectionDetailPage({
             </p>
             <p className="collection-owner-callout__body">
               Collectors can&apos;t see or buy {awaitingMint === 1 ? "it" : "them"} until you mint
-              and publish. You pay network gas; finished batches are kept if you stop.
+              and publish. Use <strong>Finish minting</strong> below; you pay a small
+              network fee, and finished batches are kept if you stop.
             </p>
           </div>
-          <a href="#publish" className="fm-btn fm-btn--primary">
-            Finish minting
-          </a>
         </section>
       ) : null}
 
@@ -345,7 +343,7 @@ export default async function CollectionDetailPage({
               {isOwner ? (
                 ownerDrafts.length > 0 || awaitingMint > 0 ? (
                   <>
-                    Nothing is live yet. Use <strong>Finish minting</strong> above to
+                    Nothing is live yet. Use <strong>Finish minting</strong> in the panel above to
                     mint your drafts, or{" "}
                     <Link
                       href={`/create?collectionId=${encodeURIComponent(collection.id)}`}

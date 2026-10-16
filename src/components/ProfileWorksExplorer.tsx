@@ -368,7 +368,7 @@ export function ProfileWorksExplorer({
       {collections.length === 0
         ? (emptyCollections ?? (
             <p className="fm-empty-copy">
-              No minted collections yet.
+              No collections yet.
             </p>
           ))
         : (

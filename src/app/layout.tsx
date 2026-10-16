@@ -13,6 +13,8 @@ import { FridayRaffleBanner } from "@/components/FridayRaffleBanner";
 import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ToastHost } from "@/components/ToastHost";
+import { NavProgress } from "@/components/NavProgress";
+import { Suspense } from "react";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
 import { appBaseUrl } from "@/lib/auth/paths";
 import { rootSiteMetadata, siteJsonLdGraph } from "@/lib/seo/site";
@@ -37,6 +39,7 @@ const contra = localFont({
   ],
   variable: "--font-contra",
   display: "swap",
+  adjustFontFallback: "Times New Roman",
   fallback: ["Georgia", "ui-serif", "serif"],
 });
 
@@ -105,6 +108,9 @@ export default async function RootLayout({
             </div>
           </div>
         </div>
+        <Suspense fallback={null}>
+          <NavProgress />
+        </Suspense>
         <ToastHost />
       </body>
     </html>

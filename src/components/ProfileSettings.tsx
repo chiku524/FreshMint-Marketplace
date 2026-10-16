@@ -1,8 +1,9 @@
 "use client";
-
+import { friendlyError } from "@/lib/client/friendly-error";
+import { toast } from "@/lib/client/toast";
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 type Section = "photo" | "profile" | "login";
 
@@ -16,7 +17,7 @@ const SETTINGS_ERRORS: Record<string, string> = {
 };
 
 function friendlySettingsError(code: string): string {
-  return SETTINGS_ERRORS[code] ?? code.replace(/_/g, " ");
+  return SETTINGS_ERRORS[code] ?? friendlyError(code);
 }
 
 export function ProfileSettings({
@@ -58,6 +59,9 @@ export function ProfileSettings({
     kind: "ok" | "error";
     text: string;
   } | null>(null);
+  useEffect(() => {
+    if (notice) toast(notice.text, notice.kind);
+  }, [notice]);
   const [section, setSectionState] = useState<Section>("profile");
   const sectionRef = useRef<Section>("profile");
   const setSection = (next: Section) => {
@@ -127,7 +131,7 @@ export function ProfileSettings({
       setOk("Profile photo updated");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "upload_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "upload_failed"));
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -144,7 +148,7 @@ export function ProfileSettings({
       setOk("Profile photo cleared");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "avatar_update_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "avatar_update_failed"));
     } finally {
       setBusy(false);
     }
@@ -172,7 +176,7 @@ export function ProfileSettings({
       e.currentTarget.reset();
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "attach_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "attach_failed"));
     } finally {
       setBusy(false);
     }
@@ -256,7 +260,7 @@ export function ProfileSettings({
                 setOk("Profile saved");
                 router.refresh();
               } catch (err) {
-                setError(err instanceof Error ? err.message : "update_failed");
+                setError(friendlyError(err instanceof Error ? err.message : "update_failed"));
               } finally {
                 setBusy(false);
               }

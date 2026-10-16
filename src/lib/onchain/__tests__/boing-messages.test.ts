@@ -35,7 +35,7 @@ describe("formatBoingMintUserMessage", () => {
     );
   });
 
-  it("passes through unrelated errors", () => {
-    expect(formatBoingMintUserMessage("listing_failed")).toBe("listing_failed");
+  it("turns unrelated error codes into friendly copy", () => {
+    expect(formatBoingMintUserMessage("listing_failed")).toBe("Something went wrong. Please try again.");
   });
 });

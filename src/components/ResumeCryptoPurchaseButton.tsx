@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import type { Chain, NetworkId } from "@/lib/discovery/types";
 import {
@@ -111,7 +112,7 @@ export function ResumeCryptoPurchaseButton({
       setBridgeEstimatedOutput(bridge?.estimatedOutput ?? null);
       setCrossChainResume(Boolean(data.bridge) || cross);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "quote_failed");
+      setMsg(friendlyError(e instanceof Error ? e.message : "quote_failed"));
       setBridgeFeeUsd(null);
     } finally {
       setBridgeLoading(false);
@@ -287,7 +288,7 @@ export function ResumeCryptoPurchaseButton({
 
       router.refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "resume_failed");
+      setMsg(friendlyError(e instanceof Error ? e.message : "resume_failed"));
     } finally {
       setBusy(false);
     }
@@ -309,7 +310,7 @@ export function ResumeCryptoPurchaseButton({
       setCancelled(true);
       router.refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "cancel_failed");
+      setMsg(friendlyError(e instanceof Error ? e.message : "cancel_failed"));
     } finally {
       setBusy(false);
     }

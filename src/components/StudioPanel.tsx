@@ -23,11 +23,17 @@ export function StudioPanel({
   const [msg, setMsg] = useState<string | null>(null);
   const [shelfName, setShelfName] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [listingsState, setListingsState] = useState<"loading" | "ready" | "error">("loading");
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     void fetch("/api/listings")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("listings_failed");
+        return r.json();
+      })
       .then((d) => {
+        setListingsState("ready");
         setListings(
           (d.items ?? []).map((l: ListingOpt) => ({
             id: l.id,
@@ -35,7 +41,8 @@ export function StudioPanel({
             stage: l.stage,
           })),
         );
-      });
+      })
+      .catch(() => setListingsState("error"));
   }, []);
 
   async function feature(listingId: string, action: "feature" | "unfeature") {
@@ -61,14 +68,24 @@ export function StudioPanel({
       setMsg("sign_in");
       return;
     }
-    const res = await fetch("/api/shelves", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: shelfName, listingIds: selected }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
+    setPublishing(true);
+    let res: Response;
+    let data: { ok?: boolean; error?: unknown; shelf?: { name: string } };
+    try {
+      res = await fetch("/api/shelves", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: shelfName, listingIds: selected }),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      toast("Couldn't reach FreshMint. Check your connection and try again.", "error");
+      return;
+    } finally {
+      setPublishing(false);
+    }
+    if (!res.ok || !data.ok || !data.shelf) {
       const err = typeof data.error === "string" ? data.error : "";
       toast(
         err === "unauthorized"
@@ -140,8 +157,7 @@ export function StudioPanel({
         </h2>
         <p className="studio-panel__section-lead">
           Name a shelf and add works you care about — others can follow it from{" "}
-          <Link href="/shelves">Shelves</Link>. Saving from a card can start you
-          here when you have none yet.
+          <Link href="/shelves">Shelves</Link>.
         </p>
         {!signedIn ? (
           <p style={{ color: "var(--ink-muted)" }}>
@@ -163,14 +179,32 @@ export function StudioPanel({
                 className="fm-field"
               />
             </label>
-            <div
+            <fieldset
               style={{
                 display: "grid",
                 gap: "0.35rem",
                 maxHeight: "12rem",
                 overflow: "auto",
+                border: 0,
+                padding: 0,
+                margin: 0,
               }}
+              aria-busy={listingsState === "loading"}
             >
+              <legend className="fm-form-note" style={{ marginBottom: "0.35rem" }}>
+                Works on this shelf{selected.length ? ` (${selected.length} selected)` : ""}
+              </legend>
+              {listingsState === "loading" ? (
+                <p className="fm-form-note" role="status">Loading works…</p>
+              ) : listingsState === "error" ? (
+                <p className="fm-form-error" role="alert">
+                  Couldn&apos;t load works. Refresh the page to try again.
+                </p>
+              ) : listings.length === 0 ? (
+                <p className="fm-form-note">
+                  No published works yet. <Link href="/open">Browse the Open Lane</Link> to find some.
+                </p>
+              ) : null}
               {listings.slice(0, 30).map((l) => (
                 <label
                   key={l.id}
@@ -190,10 +224,15 @@ export function StudioPanel({
                   {l.title}
                 </label>
               ))}
-            </div>
+            </fieldset>
             <div className="fm-form-actions">
-              <button type="submit" className="fm-btn fm-btn--primary">
-                Publish shelf
+              <button
+                type="submit"
+                className="fm-btn fm-btn--primary"
+                disabled={publishing || selected.length === 0}
+                aria-disabled={publishing || selected.length === 0}
+              >
+                {publishing ? "Publishing\u2026" : "Publish shelf"}
               </button>
             </div>
           </form>

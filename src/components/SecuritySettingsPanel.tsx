@@ -1,6 +1,8 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "@/lib/client/toast";
 
 export function SecuritySettingsPanel({
   totpEnabled: initialEnabled,
@@ -10,6 +12,9 @@ export function SecuritySettingsPanel({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (error) toast(error, "error");
+  }, [error]);
   const [enroll, setEnroll] = useState<{
     qrDataUrl: string;
     secret: string;
@@ -28,7 +33,7 @@ export function SecuritySettingsPanel({
       if (!res.ok) throw new Error(data.error ?? "enroll_failed");
       setEnroll({ qrDataUrl: data.qrDataUrl, secret: data.secret });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "enroll_failed");
+      setError(friendlyError(e instanceof Error ? e.message : "enroll_failed"));
     } finally {
       setBusy(false);
     }
@@ -51,7 +56,7 @@ export function SecuritySettingsPanel({
       setCode("");
       setBackupCodes(data.backupCodes as string[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "confirm_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "confirm_failed"));
     } finally {
       setBusy(false);
     }
@@ -73,7 +78,7 @@ export function SecuritySettingsPanel({
       setDisableCode("");
       setBackupCodes(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "disable_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "disable_failed"));
     } finally {
       setBusy(false);
     }
@@ -94,7 +99,7 @@ export function SecuritySettingsPanel({
       if (!res.ok) throw new Error(data.error ?? "regenerate_failed");
       setBackupCodes(data.backupCodes as string[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "regenerate_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "regenerate_failed"));
     } finally {
       setBusy(false);
     }

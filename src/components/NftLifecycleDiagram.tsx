@@ -39,7 +39,7 @@ const STEPS: Step[] = [
     realm: "ledger",
     x: 90,
     y: 88,
-    body: "Google, email, a wallet, or a demo persona. Creating and buying use your session; crypto checkout asks for a wallet when you pay.",
+    body: "Sign up with Google or email. Creating and buying use your session; crypto checkout asks for a wallet when you pay.",
   },
   {
     id: "collection",

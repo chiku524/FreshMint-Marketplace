@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import Link from "next/link";
 import { useState } from "react";
@@ -81,7 +82,7 @@ export function AccountAuthForm({
       }
       window.location.assign(nextPath);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "auth_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "auth_failed"));
     } finally {
       setBusy(false);
     }

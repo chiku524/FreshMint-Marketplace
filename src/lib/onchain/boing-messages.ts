@@ -1,3 +1,5 @@
+import { friendlyError } from "@/lib/client/friendly-error";
+
 /** Client-safe Boing mint / publish error copy (no Node RPC imports). */
 
 export function formatBoingMintUserMessage(error: string | undefined): string {
@@ -47,5 +49,5 @@ export function formatBoingMintUserMessage(error: string | undefined): string {
   if (code === "simulated_mint_not_allowed") {
     return "Wallet mint is required — simulated mint hashes are not accepted on live chains.";
   }
-  return raw || "mint_failed";
+  return friendlyError(raw || "mint_failed");
 }

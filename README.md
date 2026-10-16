@@ -16,7 +16,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to soft-launch a work → Open Lane / Rising / metrics.
+Sign up with email (or Google if configured) → **Create** to soft-launch a work → Open Lane / Rising / metrics. With no database configured, the seeded sample personas can be signed into via `POST /api/auth/demo` (sample-data mode only).
 
 ### Database / preview notes
 
@@ -26,6 +26,42 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 - Check `GET /api/health` for `{ ok, database: "ok" | "unreachable" | "not_configured" }`.
 
 For hosted previews, set `DATABASE_URL` to a managed Postgres URL (Neon, Supabase, Vercel Postgres, etc.).
+
+### Local dev against the hosted Neon database (`freshmint-pg`)
+
+Production uses the Vercel Storage Neon store, exposed as `STORAGE_DATABASE_URL`
+(pooled) and `STORAGE_DATABASE_URL_UNPOOLED` (direct). Precedence everywhere is:
+
+| Consumer | Order |
+| --- | --- |
+| App runtime (`src/lib/env.ts`) | `STORAGE_DATABASE_URL` → `DATABASE_URL` |
+| Prisma CLI (`prisma.config.ts`), migrations | `STORAGE_DATABASE_URL_UNPOOLED` → `STORAGE_DATABASE_URL` → `DATABASE_URL` |
+
+To run the app locally against Neon:
+
+```bash
+npm i -g vercel            # or use: npx vercel
+vercel login
+vercel link                # pick team nico-builds → project fresh-mint-marketplace
+vercel env pull .env.development.local --environment=development
+npm run dev
+```
+
+- Pull into **`.env.development.local`**, not `.env.local`, so your hand-written
+  `.env.local` is never overwritten. Next.js loads `.env.development.local` first
+  during `npm run dev`, so the pulled `STORAGE_DATABASE_URL` wins over any local
+  `DATABASE_URL`. The file is git-ignored (`.env*` in `.gitignore`).
+- If the Neon vars are marked *Sensitive* in Vercel they are pulled as empty
+  strings. In that case enable them for the **Development** environment (or copy
+  the connection string from the Neon dashboard) — otherwise the app falls back
+  to `DATABASE_URL`, then to the in-memory sample catalog.
+- Verify with `GET http://localhost:3000/api/health` → `"database": "ok"`.
+- **The Prisma CLI only reads `.env`** (via `dotenv/config`), not the `*.local`
+  files. That is intentional: `npm run db:seed` and `npm run db:reset` **wipe
+  tables**, so they should never hit the production Neon database by accident.
+  Run migrations against production only through the Vercel build.
+- To work fully offline, unset all database URLs: the app serves the seeded
+  sample catalog from memory (nothing is written anywhere).
 
 Step-by-step Vercel Blob + Neon/Prisma Postgres setup: [`docs/vercel-hosting.md`](docs/vercel-hosting.md).
 

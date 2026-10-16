@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -98,7 +99,7 @@ export function CollectionProfileEditor({
       setOk("Collection profile saved");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "update_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "update_failed"));
     } finally {
       setBusy(false);
     }
@@ -118,7 +119,7 @@ export function CollectionProfileEditor({
       else setBannerUrl(url);
       setOk(kind === "image" ? "Logo uploaded — save to apply" : "Banner uploaded — save to apply");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "upload_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "upload_failed"));
     } finally {
       setBusy(false);
       if (kind === "image" && imageRef.current) imageRef.current.value = "";

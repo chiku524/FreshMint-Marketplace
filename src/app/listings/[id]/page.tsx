@@ -1,3 +1,4 @@
+import { canModerate } from "@/lib/marketplace/moderation";
 import { ListingPriceCard } from "@/components/ListingPriceCard";
 import { buildPurchaseSummary } from "@/lib/marketplace/purchase-summary";
 import { FmImage } from "@/components/FmImage";
@@ -660,18 +661,20 @@ export default async function ListingDetailPage({
             </div>
           ) : null}
 
-          <dl className="listing-detail__signals">
+          {isManager || (user ? canModerate(user.role) : false) ? (
+          <dl className="listing-detail__signals" aria-label="Listing stats (visible to you only)">
             <dt>Saves</dt>
             <dd>{listing.signals.saves}</dd>
             <dt>Unique viewers</dt>
             <dd>{listing.signals.uniqueViewers}</dd>
             <dt>Page views</dt>
             <dd>{listing.signals.pageViews}</dd>
-            <dt>Nominations</dt>
+            <dt>Curator nominations</dt>
             <dd>{listing.signals.nominationScore}</dd>
-            <dt>Impressions (week)</dt>
+            <dt>Times shown (this week)</dt>
             <dd>{listing.signals.impressionsThisWeek}</dd>
           </dl>
+          ) : null}
         </div>
       </div>
 

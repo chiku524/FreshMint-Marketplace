@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { TxExplorerLink } from "@/components/TxExplorerLink";
 import type { NetworkId } from "@/lib/discovery/types";
@@ -114,7 +115,7 @@ export function UpdateFeeRecipientsButton({
           (operator ? ` · operator ${shortAddr(operator)}` : ""),
       );
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "update_failed");
+      setMsg(friendlyError(e instanceof Error ? e.message : "update_failed"));
     } finally {
       setBusy(false);
     }

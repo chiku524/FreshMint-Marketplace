@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -77,7 +78,7 @@ export function ManageListingPanel({
       setMsg("Price updated");
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "save_failed");
+      setMsg(friendlyError(err instanceof Error ? err.message : "save_failed"));
     } finally {
       setBusy(false);
     }
@@ -99,7 +100,7 @@ export function ManageListingPanel({
       setMsg("Listing cancelled");
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "cancel_failed");
+      setMsg(friendlyError(err instanceof Error ? err.message : "cancel_failed"));
     } finally {
       setBusy(false);
     }
@@ -125,7 +126,7 @@ export function ManageListingPanel({
       setMsg("Listed for sale again");
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "relist_failed");
+      setMsg(friendlyError(err instanceof Error ? err.message : "relist_failed"));
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,5 @@
 "use client";
-
+import { toast, type ToastKind } from "@/lib/client/toast";
 import { isAbortError, useSingleFlight } from "@/lib/client/single-flight";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
@@ -57,6 +57,14 @@ export function CollectionPackagePanel({
   const [payNetwork, setPayNetwork] = useState("ethereum");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgKind, setMsgKind] = useState<ToastKind>("info");
+  const say = (kind: ToastKind, text: string) => {
+    setMsgKind(kind);
+    setMsg(text);
+  };
+  useEffect(() => {
+    if (msg) toast(msg, msgKind);
+  }, [msg, msgKind]);
   const [paymentAddress, setPaymentAddress] = useState<string | null>(null);
   const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
   const [bridgeFeeUsd, setBridgeFeeUsd] = useState<string | null>(null);
@@ -216,6 +224,8 @@ export function CollectionPackagePanel({
   }
   const count = data.listings?.length ?? 0;
   if (!isOwner && (!data.packageSellEnabled || count < 2)) return null;
+  // Nothing unsold to bundle yet: keep the owner's page uncluttered.
+  if (isOwner && count === 0) return null;
 
   const payNetworks =
     data.payNetworks && data.payNetworks.length > 0
@@ -246,7 +256,7 @@ export function CollectionPackagePanel({
         setReceiveAddress(recv);
       }
     } catch (err) {
-      setMsg(humanizeCheckoutError(err instanceof Error ? err.message : "wallet_connect_failed"));
+      say("error", humanizeCheckoutError(err instanceof Error ? err.message : "wallet_connect_failed"));
     }
   }
 
@@ -265,11 +275,11 @@ export function CollectionPackagePanel({
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "update_failed");
-      setMsg(enabled ? "Package sell enabled" : "Package sell disabled");
+      say("ok", enabled ? "Bundle sale turned on" : "Bundle sale turned off");
       load();
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "update_failed");
+      say("error", humanizeCheckoutError(err instanceof Error ? err.message : "update_failed"));
     } finally {
       setBusy(false);
     }
@@ -305,13 +315,13 @@ export function CollectionPackagePanel({
       const simNote = opts.simulate
         ? " (simulated — no on-chain payment; for preview only.)"
         : "";
-      setMsg(
+      say("ok",
         `Package prepared (${body.purchaseIds?.length ?? 0} works, $${body.amountUsd}).${bridgeNote}${simNote}`,
       );
       load();
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "buy_failed");
+      say("error", humanizeCheckoutError(err instanceof Error ? err.message : "buy_failed"));
     } finally {
       setBusy(false);
     }
@@ -330,14 +340,13 @@ export function CollectionPackagePanel({
       }}
     >
       <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.2rem" }}>
-        Remaining works package
+        Sell the rest as a bundle
       </h2>
       <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
-        {count} unsold minted works
-        {data.defaultPriceUsd != null ? ` · default $${data.defaultPriceUsd}` : ""}
-        {data.network ? ` · receive on ${data.network}` : ""}.
-        Pay on the listing network or bridge once via Relay for the package total.
-        FreshMint takes 0.5% of the package price for the treasury.
+        {count} unsold {count === 1 ? "work" : "works"}
+        {data.defaultPriceUsd != null ? ` · suggested $${data.defaultPriceUsd}` : ""}
+        {data.network ? ` · paid on ${data.network}` : ""}. A collector can buy
+        all of them in one checkout. FreshMint keeps 0.5% for the treasury.
       </p>
       {isOwner ? (
         <>
