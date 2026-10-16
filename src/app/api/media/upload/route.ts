@@ -10,7 +10,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const limited = await limitByUserOrIp(req, user.id, "media-upload", 60, 10 * 60_000);
+  // 10k-item collections must be uploadable in one sitting: 3000 files per
+  // 10 min (~5/s) is abuse protection, not a collection-size limit.
+  const limited = await limitByUserOrIp(req, user.id, "media-upload", 3000, 10 * 60_000);
   if (limited) return limited;
 
   const form = await req.formData().catch(() => null);
