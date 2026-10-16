@@ -381,19 +381,22 @@ export function CreateWizard() {
 
   const deepCollectionId = searchParams.get("collectionId")?.trim() || "";
 
-  useEffect(() => {
-    const raw = searchParams.get("intent");
-    if (raw === "drop" || raw === "single" || raw === "auction") {
-      // Deep-link sync from ?intent= (Timed drops / Calendar).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIntent(raw);
-      // Skip the intent picker when deep-linked from Timed drops / Calendar.
+  // Deep-link sync from ?intent= / ?collectionId= (Timed drops, Calendar,
+  // Studio "Add works"). Adjust state during render when the params change
+  // instead of a setState-in-effect.
+  const rawIntent = searchParams.get("intent");
+  const intentLinkKey = `${rawIntent ?? ""}|${deepCollectionId}`;
+  const [prevDeepLinkKey, setPrevDeepLinkKey] = useState<string | null>(null);
+  if (prevDeepLinkKey !== intentLinkKey) {
+    setPrevDeepLinkKey(intentLinkKey);
+    if (rawIntent === "drop" || rawIntent === "single" || rawIntent === "auction") {
+      setIntent(rawIntent);
+      // Skip the intent picker when deep-linked.
       setStepIndex((idx) => (idx === 0 ? 1 : idx));
     } else if (deepCollectionId) {
-      // Studio / collection "Add works" — default to drop if intent omitted.
       setIntent((prev) => prev ?? "drop");
     }
-  }, [searchParams, deepCollectionId]);
+  }
 
   function loadMine() {
     const base = new URLSearchParams({ mine: "1", network });
