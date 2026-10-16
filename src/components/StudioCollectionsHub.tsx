@@ -49,16 +49,11 @@ export function StudioCollectionsHub({
       <section className="studio-hub" data-testid="studio-collections-hub">
         <header className="studio-hub__header">
           <h2 className="display studio-hub__title">Your collections</h2>
-          <p className="studio-hub__lead">
-            Studio tracks every collection from draft through live on Open Lane.
-          </p>
         </header>
         <div className="fm-empty-state">
           <h3 className="display fm-empty-state__title">Nothing in progress</h3>
           <p className="fm-empty-copy" style={{ marginTop: "0.5rem" }}>
-            Name a collection, deploy the contract, mint pieces, then soft-launch.
-            Minted collections also appear on{" "}
-            <Link href="/me">your profile</Link>.
+            Start a collection and it will appear here until it&apos;s live.
           </p>
           <p style={{ marginTop: "1rem" }}>
             <Link href="/create" className="fm-btn fm-btn--primary">

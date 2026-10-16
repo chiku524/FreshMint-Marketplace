@@ -2828,7 +2828,8 @@ export function CreateWizard() {
           </>
         ) : null}
 
-        {deployNote ? (
+        {/* On review the lifecycle card already shows deployNote. */}
+        {deployNote && step.id !== "review" ? (
           <p style={{ color: "var(--emergent)", margin: "0.75rem 0 0" }}>
             {deployNote}
           </p>

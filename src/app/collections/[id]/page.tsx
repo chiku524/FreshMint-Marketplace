@@ -100,6 +100,16 @@ export default async function CollectionDetailPage({
   const ownerDrafts = isOwner
     ? allInCollection.filter((l) => l.stage === "draft" && !l.delisted)
     : [];
+  // Soft-launched but never minted: still mintable via the same panel
+  // (mint prepare accepts any unminted listing in the collection).
+  const ownerListedUnminted = isOwner
+    ? allInCollection.filter(
+        (l) =>
+          l.stage !== "draft" &&
+          !l.delisted &&
+          !(l.tokenId && l.contractAddress && l.mintTxHash),
+      )
+    : [];
 
   const hero =
     pieces.find((l) => l.id === collection.heroListingId) ??
@@ -271,7 +281,8 @@ export default async function CollectionDetailPage({
             deployStatus={collection.deployStatus ?? "none"}
             contractAddress={collection.contractAddress}
             liveCount={liveCount}
-            drafts={ownerDrafts.map((l) => ({
+            drafts={[...ownerDrafts, ...ownerListedUnminted].map((l) => ({
+              listed: l.stage !== "draft",
               id: l.id,
               // Panel shows counts only; skip titles to keep 10k-draft payloads small.
               title: "",

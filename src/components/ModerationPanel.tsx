@@ -71,9 +71,13 @@ export function ModerationPanel() {
 
   if (error === "forbidden") {
     return (
-      <p style={{ color: "var(--ink-muted)" }}>
-        Sign in as a moderator or editor demo persona to access the queue.
-      </p>
+      <div className="fm-empty-state" role="status">
+        <p className="fm-empty-state__title">Moderators only</p>
+        <p className="fm-empty-state__body">
+          Your account doesn&apos;t have moderator access. If you think it should,
+          ask a FreshMint admin. To report a work, use Report on its listing page.
+        </p>
+      </div>
     );
   }
 

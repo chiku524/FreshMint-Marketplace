@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/lib/client/toast";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -73,6 +74,10 @@ export function FollowButton({
   }, [artistId, initiallyFollowing]);
 
   async function toggle() {
+    if (busy) return;
+    // Optimistic: flip now, roll back if the server says no.
+    const wasFollowing = following;
+    setFollowing(!wasFollowing);
     setBusy(true);
     setError(null);
     try {
@@ -80,10 +85,11 @@ export function FollowButton({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artistId, unfollow: following }),
+        body: JSON.stringify({ artistId, unfollow: wasFollowing }),
       });
       const data = (await res.json()) as { error?: string };
       if (res.status === 401) {
+        setFollowing(wasFollowing);
         const next = encodeURIComponent(
           typeof window !== "undefined" ? window.location.pathname : "/",
         );
@@ -91,10 +97,11 @@ export function FollowButton({
         return;
       }
       if (!res.ok) throw new Error(data.error ?? "failed");
-      setFollowing(!following);
+      toast(wasFollowing ? "Unfollowed" : "Following \u2014 their new work shows in your feed", "ok");
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
+    } catch {
+      setFollowing(wasFollowing);
+      toast("Couldn't update follow. Please try again.", "error");
     } finally {
       setBusy(false);
     }
@@ -113,9 +120,10 @@ export function FollowButton({
       <button
         type="button"
         className={`badge${following ? " emerging" : ""}`}
-        disabled={busy || !ready}
+        disabled={!ready}
+        aria-busy={busy}
         style={{
-          cursor: busy ? "wait" : "pointer",
+          cursor: "pointer",
           background: "transparent",
           padding: compact ? "0.12rem 0.4rem" : undefined,
           fontSize: compact ? "0.65rem" : undefined,
@@ -124,7 +132,7 @@ export function FollowButton({
         aria-pressed={following}
         aria-label={following ? "Following" : label}
       >
-        {busy ? "…" : following ? "Following" : label}
+        {following ? "Following" : label}
       </button>
       {error ? (
         <span role="alert" style={{ color: "var(--danger)", fontSize: "0.8rem" }}>{error}</span>

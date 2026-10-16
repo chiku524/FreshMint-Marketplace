@@ -12,6 +12,7 @@ import { DiscoverySidebar } from "@/components/DiscoverySidebar";
 import { FridayRaffleBanner } from "@/components/FridayRaffleBanner";
 import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ToastHost } from "@/components/ToastHost";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
 import { appBaseUrl } from "@/lib/auth/paths";
 import { rootSiteMetadata, siteJsonLdGraph } from "@/lib/seo/site";
@@ -104,6 +105,7 @@ export default async function RootLayout({
             </div>
           </div>
         </div>
+        <ToastHost />
       </body>
     </html>
   );

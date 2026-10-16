@@ -97,9 +97,13 @@ export function NotificationInbox() {
           Loading notifications…
         </p>
       ) : items.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
-          No notifications yet. Bids, auction results and sales will show up here.
-        </p>
+        <div className="fm-empty-state" role="status">
+          <p className="fm-empty-state__title">You&apos;re all caught up</p>
+          <p className="fm-empty-state__body">
+            Bids, auction results and sales will show up here. Follow artists to
+            hear about their new drops.
+          </p>
+        </div>
       ) : (
         <ul className="notif-inbox">
           {items.map((n) => (

@@ -22,6 +22,8 @@ type DraftPiece = {
   id: string;
   title: string;
   minted: boolean;
+  /** Already on Open Lane (soft-launched) but not minted yet. */
+  listed?: boolean;
 };
 
 function mintPublishErrorMessage(raw: string): string {
@@ -70,6 +72,8 @@ export function CollectionPublishPanel({
 
   const mintedDrafts = drafts.filter((d) => d.minted);
   const unmintedDrafts = drafts.filter((d) => !d.minted);
+  const privateCount = drafts.filter((d) => !d.listed).length;
+  const listedUnminted = drafts.filter((d) => d.listed && !d.minted).length;
 
   const lifecycle = useMemo(
     () =>
@@ -457,7 +461,12 @@ export function CollectionPublishPanel({
         testId="collection-publish-lifecycle"
       />
       <p className="fm-form-note" style={{ margin: "0.75rem 0" }}>
-        {drafts.length} draft{drafts.length === 1 ? "" : "s"} still private
+        {privateCount > 0
+          ? `${privateCount} draft${privateCount === 1 ? "" : "s"} still private`
+          : "No private drafts"}
+        {listedUnminted
+          ? ` \u00b7 ${listedUnminted} listed but not minted (can't be bought yet)`
+          : ""}
         {mintedDrafts.length
           ? ` · ${mintedDrafts.length} minted and ready to list`
           : ""}
@@ -480,11 +489,11 @@ export function CollectionPublishPanel({
         {unmintedDrafts.length > 0 ? (
           <button
             type="button"
-            className="fm-btn fm-btn--ghost"
+            className={mintedDrafts.length > 0 ? "fm-btn fm-btn--ghost" : "fm-btn fm-btn--primary"}
             disabled={busy}
             onClick={() => void mintAndPublishRemaining()}
           >
-            Mint &amp; publish remaining
+            {mintedDrafts.length > 0 ? "Mint the rest" : `Mint ${unmintedDrafts.length} piece${unmintedDrafts.length === 1 ? "" : "s"}`}
           </button>
         ) : null}
       </div>

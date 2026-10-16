@@ -6625,3 +6625,20 @@ a.treasury-balances__addr:focus-visible {
 .collection-owner-callout__title { margin: 0; font-weight: 700; font-size: 1.05rem; }
 .collection-owner-callout__body { margin: 0.2rem 0 0; color: var(--ink-muted); font-size: 0.9rem; max-width: 52ch; }
 @media (max-width: 640px) { .collection-owner-callout .fm-btn { width: 100%; justify-content: center; } }
+
+/* --- UX refresh r6: toasts --- */
+.fm-toasts {
+  position: fixed; z-index: 80; left: 50%; bottom: max(1rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%); display: grid; gap: 0.5rem; width: min(26rem, calc(100vw - 2rem)); pointer-events: none;
+}
+.fm-toast {
+  pointer-events: auto; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.65rem 0.9rem; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface-menu, var(--panel-solid)); color: var(--ink); box-shadow: var(--surface-shadow-deep, 0 12px 28px rgba(0,0,0,.25));
+  font-size: 0.9rem; animation: fm-toast-in 180ms ease-out;
+}
+.fm-toast--ok { border-left: 3px solid var(--emergent); }
+.fm-toast--error { border-left: 3px solid var(--danger); }
+.fm-toast__link { font-weight: 600; white-space: nowrap; }
+@keyframes fm-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .fm-toast { animation: none; } }

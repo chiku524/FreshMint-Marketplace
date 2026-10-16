@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/lib/client/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -26,7 +27,9 @@ export function SaveButton({
   async function onSave(event: React.MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    if (busy) return;
+    if (busy || saved) return;
+    // Optimistic: show Saved immediately, roll back on failure.
+    setSaved(true);
     setBusy(true);
     setMsg(null);
     try {
@@ -38,10 +41,15 @@ export function SaveButton({
       });
       const data = await res.json();
       if (!res.ok) {
-        setMsg(data.error || "failed");
+        setSaved(false);
+        if (res.status === 401) {
+          toast("Sign in to save works", "info", { href: "/sign-in", label: "Sign in" });
+        } else {
+          toast(data.error === "rate_limited" ? "Slow down a little \u2014 try again in a moment" : "Couldn't save. Please try again.", "error");
+        }
         return;
       }
-      setSaved(true);
+      toast("Saved", "ok", { href: "/studio#shelves", label: "Add to a shelf" });
 
       // First-run: signed-in saver with zero owned shelves → Make a shelf.
       try {
@@ -67,7 +75,8 @@ export function SaveButton({
       }
       router.refresh();
     } catch {
-      setMsg("failed");
+      setSaved(false);
+      toast("Couldn't save. Check your connection.", "error");
     } finally {
       setBusy(false);
     }
@@ -84,9 +93,10 @@ export function SaveButton({
       <button
         type="button"
         className={`badge${saved ? " emerging" : ""}`}
-        disabled={busy}
+        aria-busy={busy}
+        aria-pressed={saved}
         style={{
-          cursor: busy ? "wait" : "pointer",
+          cursor: "pointer",
           background: "transparent",
           padding: compact ? "0.12rem 0.4rem" : undefined,
           fontSize: compact ? "0.65rem" : undefined,
@@ -94,7 +104,7 @@ export function SaveButton({
         onClick={(e) => void onSave(e)}
         aria-label={saved ? "Saved" : "Save work"}
       >
-        {busy ? "…" : saved ? "Saved" : "Save"}
+        {saved ? "Saved" : "Save"}
       </button>
       {msg && msg !== "failed" ? (
         <span style={{ fontSize: "0.68rem", color: "var(--ink-muted)" }}>

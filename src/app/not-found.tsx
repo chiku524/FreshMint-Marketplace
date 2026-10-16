@@ -14,9 +14,13 @@ export default function NotFound() {
         This piece, creator or collection may have been delisted, or the link is
         mistyped.
       </p>
-      <p style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-        <Link href="/">Back to discovery</Link>
-        <Link href="/search">Search the marketplace</Link>
+      <p style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+        <Link href="/" className="fm-btn fm-btn--primary">
+          Back to discovery
+        </Link>
+        <Link href="/search" className="fm-btn fm-btn--ghost">
+          Search the marketplace
+        </Link>
       </p>
     </div>
   );
