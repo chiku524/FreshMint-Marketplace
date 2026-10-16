@@ -1,15 +1,17 @@
-"use client";
-
 import { WorkCard } from "@/components/WorkCard";
 import type { Collection, Listing } from "@/lib/discovery/types";
 import {
   RARITY_METHOD_BLURB,
   type ListingRarity,
 } from "@/lib/marketplace/rarity";
-import { useMemo, useState } from "react";
+import type { CollectionSort } from "@/lib/marketplace/rarity-order";
+import Link from "next/link";
 
-type SortMode = "newest" | "rarity";
-
+/**
+ * Gallery for one page of a collection. Ordering (newest / rarity) is done on
+ * the server across every item, so "Rarity" on page 1 shows the rarest pieces
+ * of the whole collection, not just of the first page.
+ */
 export function CollectionItemsWithRarity({
   pieces,
   rarityById,
@@ -19,6 +21,8 @@ export function CollectionItemsWithRarity({
   creatorName,
   creatorAvatarUrl,
   collection,
+  sort,
+  sortHrefs,
 }: {
   pieces: Listing[];
   rarityById: Record<string, ListingRarity>;
@@ -28,24 +32,10 @@ export function CollectionItemsWithRarity({
   creatorName: string;
   creatorAvatarUrl?: string | null;
   collection: Pick<Collection, "id" | "title" | "slug">;
+  sort: CollectionSort;
+  sortHrefs: Record<CollectionSort, string>;
 }) {
-  const [sort, setSort] = useState<SortMode>("newest");
-  const sold = useMemo(() => new Set(soldIds), [soldIds]);
-
-  const ordered = useMemo(() => {
-    if (!hasTraits || sort !== "rarity") {
-      return pieces;
-    }
-    return [...pieces].sort((a, b) => {
-      const ra = rarityById[a.id];
-      const rb = rarityById[b.id];
-      const rankA = ra?.rank ?? Number.POSITIVE_INFINITY;
-      const rankB = rb?.rank ?? Number.POSITIVE_INFINITY;
-      if (rankA !== rankB) return rankA - rankB;
-      return b.createdAt - a.createdAt;
-    });
-  }, [pieces, rarityById, hasTraits, sort]);
-
+  const sold = new Set(soldIds);
   if (!pieces.length) return null;
 
   return (
@@ -58,28 +48,28 @@ export function CollectionItemsWithRarity({
             role="group"
             aria-label="Sort items"
           >
-            <button
-              type="button"
+            <Link
+              href={sortHrefs.newest}
+              scroll={false}
               className={sort === "newest" ? "is-active" : undefined}
-              aria-pressed={sort === "newest"}
-              onClick={() => setSort("newest")}
+              aria-current={sort === "newest" ? "true" : undefined}
             >
               Newest
-            </button>
-            <button
-              type="button"
+            </Link>
+            <Link
+              href={sortHrefs.rarity}
+              scroll={false}
               className={sort === "rarity" ? "is-active" : undefined}
-              aria-pressed={sort === "rarity"}
-              onClick={() => setSort("rarity")}
+              aria-current={sort === "rarity" ? "true" : undefined}
             >
               Rarity
-            </button>
+            </Link>
           </div>
         </div>
       ) : null}
 
       <div className="collection-items-grid">
-        {ordered.map((listing) => {
+        {pieces.map((listing) => {
           const rarity = rarityById[listing.id];
           return (
             <WorkCard

@@ -18,6 +18,10 @@ import { deriveCollectionFloorUsd } from "@/lib/marketplace/home-discovery";
 import {
   listingVisibleOnCollectionPage,
 } from "@/lib/marketplace/listing-manage";
+import {
+  orderCollectionPieces,
+  parseCollectionSort,
+} from "@/lib/marketplace/rarity-order";
 import { computeCollectionRarity } from "@/lib/marketplace/rarity";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -61,9 +65,11 @@ export default async function CollectionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; sort?: string }>;
 }) {
-  const pageParam = Number((await searchParams)?.page ?? "1");
+  const sp = await searchParams;
+  const pageParam = Number(sp?.page ?? "1");
+  const sort = parseCollectionSort(sp?.sort);
   const { id: idOrSlug } = await params;
   const engine = await getDiscoveryEngine();
   const surface = engine.getCollectionSurface(idOrSlug);
@@ -119,12 +125,28 @@ export default async function CollectionDetailPage({
   const page = Number.isFinite(pageParam)
     ? Math.min(Math.max(1, Math.floor(pageParam)), pageCount)
     : 1;
-  const pagePieces = pieces.slice(
+  const ordered = orderCollectionPieces(
+    pieces,
+    rarity.hasTraits ? rarity.byListingId : new Map(),
+    sort,
+  );
+  const pagePieces = ordered.slice(
     (page - 1) * GALLERY_PAGE_SIZE,
     page * GALLERY_PAGE_SIZE,
   );
-  const pageHref = (n: number) =>
-    `/collections/${collection.slug || collection.id}${n > 1 ? `?page=${n}` : ""}`;
+  const basePath = `/collections/${collection.slug || collection.id}`;
+  const hrefFor = (n: number, s: string) => {
+    const q = new URLSearchParams();
+    if (n > 1) q.set("page", String(n));
+    if (s !== "newest") q.set("sort", s);
+    const qs = q.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  };
+  const pageHref = (n: number) => hrefFor(n, sort);
+  // Only ship rarity data for the cards on this page.
+  const pageRarityById = Object.fromEntries(
+    pagePieces.map((l) => [l.id, rarityById[l.id]]).filter(([, r]) => r),
+  );
   const rarityById = Object.fromEntries(rarity.byListingId);
 
   return (
@@ -230,7 +252,8 @@ export default async function CollectionDetailPage({
             liveCount={liveCount}
             drafts={ownerDrafts.map((l) => ({
               id: l.id,
-              title: l.title,
+              // Panel shows counts only; skip titles to keep 10k-draft payloads small.
+              title: "",
               minted: Boolean(
                 l.tokenId && l.contractAddress && l.mintTxHash,
               ),
@@ -261,7 +284,9 @@ export default async function CollectionDetailPage({
             <>
             <CollectionItemsWithRarity
               pieces={pagePieces}
-              rarityById={rarityById}
+              rarityById={pageRarityById}
+              sort={sort}
+              sortHrefs={{ newest: hrefFor(1, "newest"), rarity: hrefFor(1, "rarity") }}
               hasTraits={rarity.hasTraits}
               soldIds={[...soldIds]}
               isOwner={isOwner}
