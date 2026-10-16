@@ -12,7 +12,7 @@ async function canQuery(): Promise<boolean> {
     // Reuse the process-wide singleton — do not open a second throwaway pool.
     const { prisma } = await import("@/lib/db");
     await prisma.$connect();
-    await prisma.user.count();
+    await prisma.$queryRaw`SELECT 1`;
     return true;
   } catch {
     return false;

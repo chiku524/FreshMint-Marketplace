@@ -64,8 +64,17 @@ export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
   }
 
   try {
-    const state = await loadMarketplaceState();
-    const engine = new DiscoveryEngine(state);
+    const { createEngineCache, engineCacheTtlMs } = await import(
+      "@/lib/data/engine-cache"
+    );
+    const g = globalThis as unknown as {
+      __fmEngineCache?: ReturnType<typeof createEngineCache<DiscoveryEngine>>;
+    };
+    g.__fmEngineCache ??= createEngineCache<DiscoveryEngine>();
+    const engine = await g.__fmEngineCache.get(
+      async () => new DiscoveryEngine(await loadMarketplaceState()),
+      { ttlMs: engineCacheTtlMs() },
+    );
     const promoted = engine.promoteEligibleSoftLaunches();
     if (promoted.length) {
       await persistRisingPromotions(engine, promoted);
@@ -87,19 +96,26 @@ async function persistRisingPromotions(
   engine: DiscoveryEngine,
   promoted: Listing[],
 ) {
-  for (const listing of promoted) {
-    await prisma.listing.update({
-      where: { id: listing.id },
-      data: {
-        stage: listing.stage,
-        risingEligibleAt: listing.risingEligibleAt
-          ? new Date(listing.risingEligibleAt)
-          : null,
-      },
-    });
-    const creator = engine.state.creators.get(listing.creatorId);
+  // One transaction per promotion sweep instead of 2 sequential round trips
+  // per listing; creator stats are written once per creator.
+  const creatorIds = [...new Set(promoted.map((l) => l.creatorId))];
+  await prisma.$transaction([
+    ...promoted.map((listing) =>
+      prisma.listing.update({
+        where: { id: listing.id },
+        data: {
+          stage: listing.stage,
+          risingEligibleAt: listing.risingEligibleAt
+            ? new Date(listing.risingEligibleAt)
+            : null,
+        },
+      }),
+    ),
+  ]);
+  for (const creatorId of creatorIds) {
+    const creator = engine.state.creators.get(creatorId);
     if (!creator) continue;
-    await persistCreatorStats(listing.creatorId, {
+    await persistCreatorStats(creatorId, {
       risingEntriesThisWeek: creator.risingEntriesThisWeek,
       openLaneListingsToday: creator.openLaneListingsToday,
       firstListingAt: creator.firstListingAt
@@ -2479,12 +2495,24 @@ export async function reserveCollectionMedia(input: {
     return { ok: true as const, mediaBytes };
   }
 
-  const updated = await prisma.collection.update({
-    where: { id: input.collectionId },
-    data: { mediaBytes },
+  // Atomic conditional increment: safe under parallel uploads (the old
+  // read-modify-write could lose bytes or overshoot the cap) and costs one
+  // statement per file.
+  const res = await prisma.collection.updateMany({
+    where: {
+      id: input.collectionId,
+      creatorId: input.creatorId,
+      mediaBytes: { lte: COLLECTION_MEDIA_CAP_BYTES - input.size },
+    },
+    data: { mediaBytes: { increment: input.size } },
   });
-  engine.state.collections.set(input.collectionId, toCollection(updated));
-  return { ok: true as const, mediaBytes: updated.mediaBytes };
+  if (res.count === 0) {
+    return { ok: false as const, error: "collection_quota" };
+  }
+  const current = engine.state.collections.get(input.collectionId) ?? existing;
+  const next = (current.mediaBytes ?? 0) + input.size;
+  engine.state.collections.set(input.collectionId, { ...current, mediaBytes: next });
+  return { ok: true as const, mediaBytes: Math.max(next, mediaBytes) };
 }
 
 export async function listCollectionsForUser(
