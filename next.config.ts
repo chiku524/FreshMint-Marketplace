@@ -23,6 +23,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Locally stored uploads are same-origin; if an SVG is opened directly
+        // it must not be able to run anything. <img> display is unaffected.
+        source: "/uploads/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
+      },
+      {
         source: "/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

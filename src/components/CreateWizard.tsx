@@ -150,6 +150,7 @@ function uploadErrorMessage(code: string | undefined, fallback = "upload_failed"
   }
   if (code === "file_too_large") return "Each file can be up to 100 MB";
   if (code === "unsupported_type") return "Unsupported file type";
+  if (code === "unsafe_svg") return "This SVG contains scripts or embedded content and can\u2019t be uploaded";
   if (code === "empty_file") return "Empty file skipped";
   if (
     code === "blob_suspended" ||
