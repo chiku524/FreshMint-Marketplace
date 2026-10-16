@@ -3,7 +3,6 @@ import { isGoogleAuthConfigured } from "@/lib/auth/google";
 import { safeNextPath } from "@/lib/auth/paths";
 import { getSessionUser } from "@/lib/auth/session";
 import { noIndexMetadata } from "@/lib/seo/site";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -35,9 +34,6 @@ export default async function SignUpPage({
         googleEnabled={isGoogleAuthConfigured()}
         initialError={params.error}
       />
-      <p className="fm-form-note" style={{ marginTop: "1.15rem" }}>
-        <Link href="/sign-in">Already have a profile?</Link>
-      </p>
     </div>
   );
 }

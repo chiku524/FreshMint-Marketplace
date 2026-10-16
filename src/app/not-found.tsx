@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Not found — FreshMint Marketplace",
+  title: "Not found",
 };
 
 export default function NotFound() {
