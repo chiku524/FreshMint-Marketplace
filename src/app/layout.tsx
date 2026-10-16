@@ -64,7 +64,7 @@ export default async function RootLayout({
           {THEME_BOOT_SCRIPT}
         </Script>
         <Script id="fm-intro-boot" strategy="beforeInteractive">
-          {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(sessionStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending");setTimeout(function(){document.documentElement.classList.remove("fm-intro-pending")},8000)}}catch(e){}`}
+          {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(localStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending");setTimeout(function(){document.documentElement.classList.remove("fm-intro-pending")},8000)}}catch(e){}`}
         </Script>
         <a href="#main-content" className="skip-link">
           Skip to content

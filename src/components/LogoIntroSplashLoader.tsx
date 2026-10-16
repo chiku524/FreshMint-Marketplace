@@ -20,7 +20,7 @@ function concealSite() {
 
 function markSeen() {
   try {
-    sessionStorage.setItem(LOGO_INTRO_SEEN_KEY, "1");
+    localStorage.setItem(LOGO_INTRO_SEEN_KEY, "1");
   } catch {
     /* private mode */
   }
@@ -28,7 +28,7 @@ function markSeen() {
 
 function clearSeen() {
   try {
-    sessionStorage.removeItem(LOGO_INTRO_SEEN_KEY);
+    localStorage.removeItem(LOGO_INTRO_SEEN_KEY);
   } catch {
     /* private mode */
   }
@@ -45,7 +45,7 @@ function shouldForceReplay() {
 function shouldPlayIntro() {
   if (prefersReducedMotion()) return false;
   try {
-    return shouldForceReplay() || sessionStorage.getItem(LOGO_INTRO_SEEN_KEY) !== "1";
+    return shouldForceReplay() || localStorage.getItem(LOGO_INTRO_SEEN_KEY) !== "1";
   } catch {
     return true;
   }
@@ -95,7 +95,7 @@ export function LogoIntroSplash() {
   useEffect(() => {
     if (shouldPlayIntro()) {
       concealSite();
-      // sessionStorage decides intro playback; only knowable after mount.
+      // localStorage (first-ever visit) decides intro playback; only knowable after mount.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhase("play");
       return;

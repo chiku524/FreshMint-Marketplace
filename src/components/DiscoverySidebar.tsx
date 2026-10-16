@@ -9,6 +9,8 @@ type DiscoveryLink = {
   href: string;
   label: string;
   icon: string;
+  /** Short explainer shown as a tooltip. */
+  hint?: string;
 };
 
 /** Primary product IA — SiteNav stays free of these lane duplicates. */
@@ -20,8 +22,8 @@ export const BROWSE_LINKS: DiscoveryLink[] = [
 
 export const DISCOVER_LINKS: DiscoveryLink[] = [
   { href: "/search", label: "Search", icon: "trending" },
-  { href: "/open", label: "Open Lane", icon: "open" },
-  { href: "/rising", label: "Rising", icon: "rising" },
+  { href: "/open", label: "Open Lane", icon: "open", hint: "Every published work, newest first. No ranking, no paid placement." },
+  { href: "/rising", label: "Rising", icon: "rising", hint: "Ranked picks. A fixed share is reserved for Emerging artists (first 90 days)." },
   { href: "/featured", label: "Featured", icon: "featured" },
   { href: "/trending", label: "Most viewed", icon: "trending" },
   { href: "/auctions", label: "Auctions", icon: "auctions" },
@@ -59,6 +61,7 @@ function DiscoveryGroup({
               <Link
                 href={item.href}
                 className={`discovery-rail__link${active ? " is-active" : ""}`}
+                title={item.hint}
                 aria-current={active ? "page" : undefined}
               >
                 <span className="discovery-rail__icon-slot">

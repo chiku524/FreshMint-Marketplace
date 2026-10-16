@@ -6483,3 +6483,48 @@ a.treasury-balances__addr:focus-visible {
   margin-top: 1.25rem;
 }
 
+
+/* --- UX refresh r2: listing price card, provenance, home terms --- */
+.listing-detail__info { display: flex; flex-direction: column; }
+.listing-detail__info > * { order: 10; }
+.listing-detail__info > .listing-detail__badges { order: 1; }
+.listing-detail__info > .listing-detail__title { order: 2; }
+.listing-detail__info > .listing-detail__byline,
+.listing-detail__info > .listing-detail__meta { order: 3; }
+.listing-detail__info > .listing-price-card { order: 4; }
+.listing-detail__info > .listing-detail__buyer-rail { order: 5; }
+.listing-detail__info > .listing-provenance { order: 6; }
+.listing-medium, .listing-detail__medium { text-transform: capitalize; }
+.listing-price-card {
+  margin: 1rem 0 0.75rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-solid);
+}
+.listing-price-card__top { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-end; }
+.listing-price-card__label { margin: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted); }
+.listing-price-card__amount { margin: 0.1rem 0 0; font-size: clamp(1.8rem, 4vw, 2.4rem); font-weight: 700; line-height: 1.1; color: var(--ink); }
+.listing-price-card__side { text-align: right; font-size: 0.85rem; color: var(--ink-muted); }
+.listing-price-card__side p { margin: 0; }
+.listing-price-card__timing { font-weight: 600; color: var(--ink); }
+.listing-price-card__status { display: flex; align-items: center; gap: 0.45rem; margin: 0.75rem 0 0.25rem; font-weight: 600; }
+.listing-price-card__dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); flex: none; }
+.listing-price-card--not_minted .listing-price-card__dot,
+.listing-price-card--upcoming .listing-price-card__dot { background: #d9a400; }
+.listing-price-card--sold .listing-price-card__dot,
+.listing-price-card--ended .listing-price-card__dot,
+.listing-price-card--unlisted .listing-price-card__dot { background: var(--ink-muted); }
+.listing-price-card__how { margin: 0; font-size: 0.88rem; color: var(--ink-muted); }
+.listing-provenance {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem 1rem; margin: 0.75rem 0; padding: 0.8rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.listing-provenance dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted); }
+.listing-provenance dd { margin: 0.1rem 0 0; font-weight: 600; }
+.fm-home-hero__terms { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.88rem; color: var(--ink-muted); max-width: 38rem; }
+.fm-home-hero__feature:empty { display: none; }
+@media (max-width: 900px) {
+  .fm-home-hero__feature { min-height: 0; }
+  .fm-home-hero__feature:not(:empty) { min-height: 16rem; }
+}

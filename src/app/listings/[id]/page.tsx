@@ -1,3 +1,5 @@
+import { ListingPriceCard } from "@/components/ListingPriceCard";
+import { buildPurchaseSummary } from "@/lib/marketplace/purchase-summary";
 import { FmImage } from "@/components/FmImage";
 import { requestNow } from "@/lib/time";
 import { FollowButton } from "@/components/FollowButton";
@@ -220,6 +222,27 @@ export default async function ListingDetailPage({
         ? "$—"
         : "Timed listing";
 
+  const purchaseSummary = buildPurchaseSummary({
+    saleMode,
+    listingType: listing.type,
+    displayPriceUsd:
+      englishAwardAmount ?? displayPriceUsd ?? listing.priceUsd ?? listing.startingBidUsd ?? null,
+    startingBidUsd: listing.startingBidUsd,
+    currentHighBidUsd: listing.currentHighBidUsd,
+    minBidUsd: minBid,
+    reserveUsd: listing.reserveUsd,
+    reserveMet: Boolean(reserveMet),
+    startsAt: listing.auctionStartsAt ?? listing.oeStartsAt ?? null,
+    endsAt: listing.auctionEndsAt ?? listing.oeEndsAt ?? null,
+    dropState: drop.state,
+    cap,
+    isSold: isSold && !pendingPurchase,
+    delisted: Boolean(listing.delisted),
+    minted,
+    isSecondary: Boolean(listing.isSecondary),
+    now,
+  });
+
   return (
     <div className="page-wrap">
       <PageViewTracker listingId={listing.id} />
@@ -246,7 +269,12 @@ export default async function ListingDetailPage({
 
         <div className="listing-detail__info">
           <div className="listing-detail__badges">
-            {emerging ? <span className="badge emerging">Emerging</span> : null}
+            {emerging ? <span
+                className="badge emerging"
+                title="Emerging: this artist is in their first 90 days, so a share of Rising is reserved for their work."
+              >
+                Emerging
+              </span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
             <span className="badge">{saleModeBadge(listing)}</span>
@@ -282,7 +310,9 @@ export default async function ListingDetailPage({
               <span className="listing-detail__sep" aria-hidden="true">
                 ·
               </span>
-              <span className="listing-detail__medium">{listing.medium}</span>
+              <span className="listing-detail__medium">
+                {listing.medium.replace(/[_-]+/g, " ")}
+              </span>
               {collection ? (
                 <>
                   <span className="listing-detail__sep" aria-hidden="true">
@@ -311,6 +341,46 @@ export default async function ListingDetailPage({
               ) : null}
             </p>
           </div>
+          <ListingPriceCard summary={purchaseSummary} />
+          <dl className="listing-provenance">
+            <div>
+              <dt>Creator</dt>
+              <dd>
+                <Link href={`/creators/${listing.creatorId}`}>
+                  {creator?.displayName ?? listing.creatorId}
+                </Link>
+              </dd>
+            </div>
+            {listing.isSecondary && sellerId && sellerId !== listing.creatorId ? (
+              <div>
+                <dt>Owner</dt>
+                <dd>
+                  <Link href={`/creators/${sellerId}`}>
+                    {engine.state.creators.get(sellerId)?.displayName ?? sellerId}
+                  </Link>
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>Network</dt>
+              <dd>{net.label}</dd>
+            </div>
+            <div>
+              <dt>On-chain</dt>
+              <dd>{minted ? "Minted" : "Not minted yet"}</dd>
+            </div>
+            {listing.isSecondary ? (
+              <div>
+                <dt>Sale</dt>
+                <dd>
+                  Resale
+                  {listing.creatorRoyaltyBps
+                    ? ` \u00b7 ${(listing.creatorRoyaltyBps / 100).toFixed(1)}% to the creator`
+                    : ""}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
           <p className="listing-detail__desc">
             {listing.description || "No description yet."}
           </p>

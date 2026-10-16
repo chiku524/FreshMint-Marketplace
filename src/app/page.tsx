@@ -107,6 +107,16 @@ export default async function HomePage() {
           <p className="fm-home-hero__lede anim-rise-delay">
             Fair discovery for digital art. Emerging artists get a real quota.
           </p>
+          <ul className="fm-home-hero__terms anim-rise-delay" aria-label="How discovery works">
+            <li>
+              <strong>Emerging</strong> artists are in their first 90 days; a fixed
+              share of Rising is reserved for them.
+            </li>
+            <li>
+              <strong>Open Lane</strong> lists every published work, newest first
+              {" \u2014 "}no ranking, no paid placement.
+            </li>
+          </ul>
           <div className="fm-home-hero__actions anim-rise-delay">
             <Link href="/open" className="fm-btn fm-btn--primary">
               Browse works
@@ -258,7 +268,7 @@ export default async function HomePage() {
           subtitle={
             personalized
               ? "A fair mix of Emerging, Following, and Featured."
-              : "Pick tastes below to tune Emerging — then explore your feed."
+              : "New and emerging work, mixed fairly."
           }
           viewAllHref="/open"
           viewAllLabel="Browse all"

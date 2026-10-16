@@ -22,6 +22,7 @@ export function MobileDiscoveryNav() {
               <Link
                 href={item.href}
                 className={`fm-mobile-lanes__chip${active ? " is-active" : ""}`}
+                title={item.hint}
                 aria-current={active ? "page" : undefined}
               >
                 {item.label}
