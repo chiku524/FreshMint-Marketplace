@@ -199,16 +199,21 @@ export function CollectionsExplorer({
         lane === "top" ? (
           <section className="fm-empty-state">
             <h2 className="display fm-empty-state__title">
-              No collections at the volume bar yet
+              No top collections yet
             </h2>
-            <p className="fm-form-note">
-              The Top list only shows collections with at least $
-              {COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} in completed
-              primary sales (including package sales). Browse{" "}
-              <Link href="/collections/new">New this week</Link> for fresh sets,
-              or open a collection from a creator profile / direct link — those
-              still work below the bar.
+            <p className="fm-empty-state__body">
+              Collections appear here once they pass $
+              {COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} in sales. Newer
+              sets are listed under New this week.
             </p>
+            <div className="fm-empty-state__actions">
+              <Link href="/collections/new" className="fm-btn fm-btn--ghost">
+                New this week
+              </Link>
+              <Link href="/create?intent=drop" className="fm-btn fm-btn--primary">
+                Start a collection
+              </Link>
+            </div>
           </section>
         ) : (
           <p className="fm-empty-copy" style={{ marginTop: "1rem" }}>

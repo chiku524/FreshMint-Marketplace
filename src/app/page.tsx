@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/EmptyState";
+import { FirstRunWelcome } from "@/components/FirstRunWelcome";
 import { requestNow } from "@/lib/time";
 import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
 import { EnglishAuctionHomeCard } from "@/components/EnglishAuctionHomeCard";
@@ -85,6 +87,12 @@ export default async function HomePage() {
     getCachedCreatorsHomeSection(),
   ]);
   const personalized = Boolean(user);
+  // Brand-new marketplace: nothing published anywhere yet.
+  const marketplaceEmpty =
+    home.feed.length === 0 &&
+    discovery.collections.items.length === 0 &&
+    discovery.hotWorks.items.length === 0 &&
+    creatorsHome.items.length === 0;
 
   return (
     <div className="fm-home">
@@ -104,7 +112,7 @@ export default async function HomePage() {
               Browse works
             </Link>
             <Link href="/create" className="fm-btn fm-btn--ghost">
-              Soft-launch a work
+              Start creating
             </Link>
           </div>
         </div>
@@ -112,6 +120,8 @@ export default async function HomePage() {
           <FeaturedOfTheWeek />
         </div>
       </section>
+
+      {marketplaceEmpty ? <FirstRunWelcome signedIn={Boolean(user)} /> : null}
 
       {discovery.collections.items.length > 0 ? (
         <section className="site-section">
@@ -262,9 +272,16 @@ export default async function HomePage() {
             .filter((id): id is string => !!id)}
         />
         {home.feed.length === 0 ? (
-          <p className="fm-empty-copy">
-            Feed is empty — soft-launch a work or follow an emerging artist.
-          </p>
+          <EmptyState
+            compact
+            title={marketplaceEmpty ? "Your feed will fill up as creators publish" : "Nothing matches these tastes yet"}
+            body={
+              marketplaceEmpty
+                ? "Choose a few tastes above now; matching new work appears here automatically."
+                : "Try other tastes, or browse everything in the Open Lane."
+            }
+            actions={marketplaceEmpty ? [] : [{ href: "/open", label: "Browse the Open Lane", variant: "ghost" }]}
+          />
         ) : (
           <PuzzleRail>
             {home.feed.map((item) => (
