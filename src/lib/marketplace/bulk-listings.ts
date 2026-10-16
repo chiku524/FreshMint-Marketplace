@@ -176,8 +176,26 @@ export async function bulkCreateCollectionListings(input: {
           maxSupply: item.maxSupply != null && item.maxSupply > 0 ? item.maxSupply : null,
         })),
         select: { id: true, mediaHash: true, isCollectionHero: true },
+        // The (collectionId, mediaHash) unique index makes concurrent retries
+        // of the same chunk safe: losers are skipped, then looked up below.
+        skipDuplicates: true,
       })
     : [];
+
+  const createdHashes = new Set(created.map((r) => r.mediaHash));
+  const raced = plan.toCreate.filter((i) => !createdHashes.has(i.mediaHash));
+  if (raced.length) {
+    const rows = await prisma.listing.findMany({
+      where: {
+        collectionId: input.collectionId,
+        mediaHash: { in: raced.map((i) => i.mediaHash) },
+      },
+      select: { id: true, mediaHash: true },
+    });
+    for (const r of rows) {
+      plan.results.set(r.mediaHash, { mediaHash: r.mediaHash, status: "existing", listingId: r.id });
+    }
+  }
 
   for (const row of created) {
     plan.results.set(row.mediaHash, {
