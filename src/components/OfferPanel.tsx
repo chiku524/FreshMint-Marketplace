@@ -1,5 +1,6 @@
 "use client";
-
+import { toast } from "@/lib/client/toast";
+import { humanizeCheckoutError } from "@/lib/marketplace/buy-auth-cta";
 import { useSingleFlight } from "@/lib/client/single-flight";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { resolveBuyAuthCta } from "@/lib/marketplace/buy-auth-cta";
@@ -85,10 +86,13 @@ export function OfferPanel({
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "offer_failed");
       setMsg("Offer submitted");
+      toast("Offer submitted", "ok");
       await refresh();
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "offer_failed");
+      const text = humanizeCheckoutError(err instanceof Error ? err.message : "offer_failed");
+      setMsg(text);
+      toast(text, "error");
     } finally {
       setBusy(false);
     }
@@ -105,10 +109,13 @@ export function OfferPanel({
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "accept_failed");
       setMsg("Offer accepted — buyer can complete payment");
+      toast("Offer accepted — buyer can complete payment", "ok");
       await refresh();
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "accept_failed");
+      const text = humanizeCheckoutError(err instanceof Error ? err.message : "accept_failed");
+      setMsg(text);
+      toast(text, "error");
     } finally {
       setBusy(false);
     }
@@ -125,9 +132,12 @@ export function OfferPanel({
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "cancel_failed");
       setMsg("Offer cancelled");
+      toast("Offer cancelled", "ok");
       await refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "cancel_failed");
+      const text = humanizeCheckoutError(err instanceof Error ? err.message : "cancel_failed");
+      setMsg(text);
+      toast(text, "error");
     } finally {
       setBusy(false);
     }

@@ -25,11 +25,10 @@ export default async function TreasuryPage() {
         <p className="treasury-page__brand">FreshMint</p>
         <h1 className="display page-lead__title">Treasury</h1>
         <p className="page-lead__copy">
-          Platform fee wallets on {overview.mode} — {PLATFORM_FEE_PERCENT.total}
-          % of each marketplace sale funds community buys and the Friday raffle.
-          This week’s fee profit:{" "}
-          <strong>${overview.weekProfitUsd.toFixed(2)}</strong> (window{" "}
-          {overview.windowId}).
+          {PLATFORM_FEE_PERCENT.total}% of each sale goes to the FreshMint
+          treasury, which buys work from artists and funds the Friday raffle.
+          Fees collected this week:{" "}
+          <strong>${overview.weekProfitUsd.toFixed(2)}</strong>.
         </p>
       </header>
 
@@ -37,7 +36,7 @@ export default async function TreasuryPage() {
         <h2 className="display treasury-balances__title">Balances</h2>
         {configured.length === 0 ? (
           <p className="page-lead__copy">
-            Treasury addresses are not configured in this environment yet.
+            Treasury wallets will be listed here once they are published.
           </p>
         ) : (
           <ul className="treasury-balances__list">
@@ -69,11 +68,10 @@ export default async function TreasuryPage() {
           </ul>
         )}
         <p className="treasury-balances__note">
-          Native balances via live RPCs where reachable. BTC uses a public
-          explorer when configured.{" "}
-          <Link href="/docs#fees">Fee split</Link>
+          Balances are read live from each network.{" "}
+          <Link href="/docs#fees">How fees work</Link>
           {" · "}
-          <Link href="/open">Open Lane</Link>
+          <Link href="/open">Browse works</Link>
         </p>
       </section>
 

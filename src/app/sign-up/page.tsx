@@ -24,8 +24,8 @@ export default async function SignUpPage({
       <header className="page-lead">
         <h1 className="display page-lead__title">Create a profile</h1>
         <p className="page-lead__copy">
-          Start with Google or email. Connect wallets from your profile after you
-          are in.
+          Sign up with Google or email — no wallet needed to start. You can
+          connect one later from your profile to buy or mint.
         </p>
       </header>
       <AccountAuthForm

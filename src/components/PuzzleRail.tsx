@@ -75,8 +75,13 @@ export function PuzzleRail({
       const tiles = Array.from(
         el.querySelectorAll<HTMLElement>("[data-tile]"),
       );
+      // With only one or two works, a 2×2 "featured" tile dwarfs the page
+      // (full-width on phones). Lay sparse rails out as uniform small tiles.
+      const sparse = tiles.length > 0 && tiles.length <= 2;
+      if (sparse) el.dataset.sparse = "1";
+      else delete el.dataset.sparse;
       const items = tiles.map((t) => ({
-        featured: t.dataset.tile === "featured",
+        featured: !sparse && t.dataset.tile === "featured",
       }));
       const rows = simulateRows(
         items.length > 0 ? items : [{ featured: false }],

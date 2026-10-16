@@ -25,52 +25,19 @@ export default async function CalendarPage() {
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Drop calendar
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "54ch", marginBottom: "1.25rem" }}>
-        Congestion caps: {cal.caps.maxOeStartsPerHour} collection drops/hour ·{" "}
-        {cal.caps.maxAuctionStartsPerHour} timed-drop starts/hour ·{" "}
-        {cal.caps.maxConcurrentOeOnRising} concurrent OE on Rising ·{" "}
-        {cal.caps.liveAuctionStripSlots} live timed-drop strip slots.
-      </p>
-      <div className="metric-grid" style={{ marginBottom: "2rem" }}>
-        <div
-          style={{
-            border: "1px solid var(--line)",
-            padding: "1rem",
-            background: "var(--panel)",
-          }}
-        >
-          <div style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-            Live OE on Rising path
-          </div>
-          <div className="display" style={{ fontSize: "1.8rem" }}>
-            {cal.risingOeLiveCount}/{cal.caps.maxConcurrentOeOnRising}
-          </div>
-        </div>
-        <div
-          style={{
-            border: "1px solid var(--line)",
-            padding: "1rem",
-            background: "var(--panel)",
-          }}
-        >
-          <div style={{ color: "var(--ink-muted)", fontSize: "0.8rem" }}>
-            Live timed drops
-          </div>
-          <div className="display" style={{ fontSize: "1.8rem" }}>
-            {cal.liveAuctionStripCount}/{cal.caps.liveAuctionStripSlots}
-          </div>
-        </div>
-      </div>
-
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Drop calendar</h1>
+        <p className="page-lead__copy">
+          Upcoming and live open editions and timed drops. Set a reminder by
+          saving a work, then come back when it opens.
+        </p>
+      </header>
       <h2 className="display" style={{ fontSize: "1.5rem" }}>
         Open editions
       </h2>
       {cal.openEditions.filter((e) => e.status !== "ended").length === 0 ? (
         <p style={{ color: "var(--ink-muted)", margin: "1rem 0 2.5rem" }}>
-          No live or upcoming open editions. Schedule one from{" "}
+          No open editions are live or scheduled. Creators can schedule one from{" "}
           <Link href="/create?intent=drop">Create</Link>.
         </p>
       ) : (
@@ -98,7 +65,7 @@ export default async function CalendarPage() {
       </h2>
       {cal.auctions.filter((e) => e.status !== "ended").length === 0 ? (
         <p style={{ color: "var(--ink-muted)", marginTop: "1rem" }}>
-          No live or upcoming timed drops. Schedule one from <Link href="/create?intent=auction">Create</Link>.
+          No timed drops are live or scheduled. Creators can schedule one from <Link href="/create?intent=auction">Create</Link>.
         </p>
       ) : (
       <PuzzleRail style={{ marginTop: "1rem" }}>

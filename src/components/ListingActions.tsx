@@ -377,6 +377,8 @@ export function ListingActions({
                   ? "This work isn't available to buy"
                   : raw === "listing_not_minted"
                     ? "This listing isn't minted on-chain yet"
+                    : raw === "boing_token_not_on_chain"
+                      ? "This work isn't confirmed on Boing yet — try again in a minute"
                     : raw === "boing_same_chain_only"
                       ? "Boing listings are same-chain only (pay with BOING)"
                       : raw === "boing_settlement_unavailable"

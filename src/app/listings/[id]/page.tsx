@@ -127,7 +127,13 @@ export default async function ListingDetailPage({
   const media = listing.mediaUrl;
   const network = resolveNetwork(listing.network, listing.chain);
   const net = getNetwork(network);
-  const minted = Boolean(
+  // Boing nodes can acknowledge a mint with a placeholder (e.g. "ok") before the
+  // token is readable on-chain. Treat anything that isn't a real hash as pending.
+  const boingPendingMint =
+    listing.chain === "boing" &&
+    Boolean(listing.tokenId || listing.mintTxHash) &&
+    !(listing.mintTxHash && /^(0x)?[0-9a-f]{64}$/i.test(listing.mintTxHash));
+  const minted = !boingPendingMint && Boolean(
     listing.tokenId && listing.contractAddress && listing.mintTxHash,
   );
   const drop = dropWindowFor(listing, collection);
@@ -367,7 +373,7 @@ export default async function ListingDetailPage({
             </div>
             <div>
               <dt>On-chain</dt>
-              <dd>{minted ? "Minted" : "Not minted yet"}</dd>
+              <dd>{minted ? "Minted" : boingPendingMint ? "Confirming on Boing" : "Not minted yet"}</dd>
             </div>
             {listing.isSecondary ? (
               <div>
@@ -384,7 +390,16 @@ export default async function ListingDetailPage({
           <p className="listing-detail__desc">
             {listing.description || "No description yet."}
           </p>
-          {minted || listing.tokenId ? (
+          {boingPendingMint ? (
+            <div className="listing-detail__chain" role="status">
+              <p className="listing-detail__token">
+                <strong>Not on Boing yet.</strong> The mint was submitted but the
+                token isn&apos;t readable on-chain so far. This usually clears in a
+                minute{isManager ? " — if it doesn’t, retry Mint & publish from the collection page" : ""}.
+                Buying opens once it&apos;s confirmed.
+              </p>
+            </div>
+          ) : minted || listing.tokenId ? (
             <div className="listing-detail__chain">
               {listing.tokenId ? (
                 <p

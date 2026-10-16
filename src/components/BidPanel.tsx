@@ -1,5 +1,5 @@
 "use client";
-
+import { toast } from "@/lib/client/toast";
 import { isAbortError, useSingleFlight } from "@/lib/client/single-flight";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
@@ -158,12 +158,13 @@ export function BidPanel({
       }
       setReloadKey((k) => k + 1);
       router.refresh();
+      toast(`Bid placed: $${Number(amount).toFixed(2)}. We'll notify you if you're outbid.`, "ok");
     } catch (err) {
-      setError(
-        humanizeCheckoutError(
-          err instanceof Error ? err.message : "bid_failed",
-        ),
+      const text = humanizeCheckoutError(
+        err instanceof Error ? err.message : "bid_failed",
       );
+      setError(text);
+      toast(text, "error");
     } finally {
       setBusy(false);
     }

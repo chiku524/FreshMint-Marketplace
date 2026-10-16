@@ -3,6 +3,7 @@
 import { StudioCollectionsHub } from "@/components/StudioCollectionsHub";
 import type { StudioCollectionRow } from "@/lib/marketplace/studio-hub";
 import Link from "next/link";
+import { toast } from "@/lib/client/toast";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -46,10 +47,10 @@ export function StudioPanel({
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      setMsg(data.error ?? "failed");
+      toast("Couldn't update Featured. Please try again.", "error");
       return;
     }
-    setMsg(action === "feature" ? "Featured" : "Removed from Featured");
+    toast(action === "feature" ? "Added to Featured" : "Removed from Featured", "ok");
     router.refresh();
   }
 
@@ -68,10 +69,21 @@ export function StudioPanel({
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      setMsg(data.error ?? "failed");
+      const err = typeof data.error === "string" ? data.error : "";
+      toast(
+        err === "unauthorized"
+          ? "Sign in to publish a shelf."
+          : err
+            ? `Couldn't publish shelf: ${err.replace(/_/g, " ")}`
+            : "Couldn't publish shelf. Please try again.",
+        "error",
+      );
       return;
     }
-    setMsg(`Shelf “${data.shelf.name}” created`);
+    toast(`Shelf \u201c${data.shelf.name}\u201d published`, "ok", {
+      href: "/shelves",
+      label: "View shelves",
+    });
     setShelfName("");
     setSelected([]);
     router.refresh();

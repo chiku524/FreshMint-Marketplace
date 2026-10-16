@@ -1,8 +1,8 @@
+import { EmptyState } from "@/components/EmptyState";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { listClosedPrimarySaleIds } from "@/lib/marketplace/sales";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
-import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -19,17 +19,22 @@ export default async function ShelvesPage() {
 
   return (
     <div className="page-wrap">
-      <h1 className="display" style={{ margin: "0 0 0.5rem", fontSize: "2.4rem" }}>
-        Collector shelves
-      </h1>
-      <p style={{ color: "var(--ink-muted)", maxWidth: "52ch", marginBottom: "1.75rem" }}>
-        Collectors amplify emerging work through named curations that others can
-        follow — discovery without waiting on a central editorial team.
-      </p>
-      {shelves.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
-          No shelves yet. After you <Link href="/open">Save</Link> a work, curate a shelf from the shelves section in <Link href="/studio#shelves">Studio</Link>.
+      <header className="page-lead">
+        <h1 className="display page-lead__title">Collector shelves</h1>
+        <p className="page-lead__copy">
+          Hand-picked sets of works curated by collectors. Follow a shelf to
+          discover artists through people whose taste you trust.
         </p>
+      </header>
+      {shelves.length === 0 ? (
+        <EmptyState
+          title="No shelves yet"
+          body="Save works you love, then group them into a shelf from your Studio. Others can follow it."
+          actions={[
+            { href: "/studio#shelves", label: "Make a shelf" },
+            { href: "/open", label: "Find works to save", variant: "ghost" },
+          ]}
+        />
       ) : (
         shelves.map((shelf) => {
           const listings = shelf.listingIds
@@ -43,10 +48,11 @@ export default async function ShelvesPage() {
               </h2>
               <p style={{ margin: "0 0 1rem", color: "var(--ink-muted)" }}>
                 Curated by {curator?.displayName ?? shelf.curatorId} ·{" "}
-                {shelf.followerIds.length} followers
+                {shelf.followerIds.length}{" "}
+                {shelf.followerIds.length === 1 ? "follower" : "followers"}
               </p>
               {listings.length === 0 ? (
-                <p style={{ color: "var(--ink-muted)" }}>This shelf is empty.</p>
+                <p style={{ color: "var(--ink-muted)" }}>No works on this shelf yet.</p>
               ) : (
                 <PuzzleRail>
                   {listings.map((listing) => (

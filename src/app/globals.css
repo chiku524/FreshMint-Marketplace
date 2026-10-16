@@ -1528,6 +1528,15 @@ html.fm-intro-pending .fm-intro-cover {
   overflow: hidden;
 }
 
+.lane-rail[data-sparse] .work-tile--featured {
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.lane-rail[data-sparse] {
+  max-width: 44rem;
+}
+
 .work-tile--featured .work-tile__media-link,
 .work-tile--compact .work-tile__media-link {
   position: absolute;

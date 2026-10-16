@@ -14,8 +14,14 @@ export default function BridgePage() {
       <header className="page-lead">
         <h1 className="display page-lead__title">Move funds</h1>
         <p className="page-lead__copy">
-          Bridge native gas across {networks.map((n) => n.label).join(", ")}.{" "}
-          Mode: <span className="badge">{chainMode()}</span>
+          Move ETH or SOL between {networks.map((n) => n.label).join(", ")} so
+          you have funds on the network a work is sold on.
+          {chainMode() !== "mainnet" ? (
+            <>
+              {" "}
+              <span className="badge">Test networks</span>
+            </>
+          ) : null}
         </p>
       </header>
       <BridgePanel />
