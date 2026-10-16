@@ -55,8 +55,6 @@ import { useEffect, useMemo, useState } from "react";
 
 /** Parallel media uploads — high enough to cut serial wait, low enough for Blob/API. */
 const UPLOAD_CONCURRENCY = 4;
-/** Listing drafts are lightweight JSON posts. */
-const LISTING_CONCURRENCY = 6;
 /** Soft-launch stage calls after mint. */
 const STAGE_CONCURRENCY = 6;
 
@@ -1357,121 +1355,122 @@ export function CreateWizard() {
         }
       }
 
+      // Bulk path: chunks of up to 500 drafts per request (20 requests for a
+      // 10k collection instead of 10k). Idempotent per media hash, so a retry
+      // or a re-run after partial failure picks up where it left off.
       setListProgress({ current: 0, total: pieces.length });
-      let listingsDone = 0;
-      const listingSettled = await mapPoolSettled(
-        pieces,
-        LISTING_CONCURRENCY,
-        async (item, index) => {
-          const supply =
-            intent === "drop" && dropKind === "limited" && item.maxSupply
-              ? Number(item.maxSupply)
-              : intent === "drop" && dropKind === "open" && item.maxSupply
-                ? Number(item.maxSupply)
-                : null;
-          let type: "single" | "collection" | "open_edition" | "auction" =
-            "single";
-          if (intent === "auction") type = "auction";
-          else if (intent === "drop") {
-            type =
-              dropKind === "open" || (supply != null && supply > 1)
-                ? "open_edition"
-                : "collection";
-          }
-
-          const listingId = await retryWithBackoff(
+      const BULK_CHUNK = 500;
+      const description =
+        intent === "drop"
+          ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
+          : intent === "auction"
+            ? "Auction listing"
+            : "";
+      const planned = pieces.map((item, index) => {
+        const supply =
+          intent === "drop" && item.maxSupply ? Number(item.maxSupply) : null;
+        let type: "single" | "collection" | "open_edition" | "auction" = "single";
+        if (intent === "auction") type = "auction";
+        else if (intent === "drop") {
+          type =
+            dropKind === "open" || (supply != null && supply > 1)
+              ? "open_edition"
+              : "collection";
+        }
+        return {
+          index,
+          type,
+          body: {
+            title: item.title || `Piece ${index + 1}`,
+            description: item.description || description,
+            mediaHash: item.mediaHash,
+            mediaUrl: item.mediaUrl,
+            traits: parseTraits(item.traits),
+            maxSupply: supply && supply > 0 ? supply : null,
+            isCollectionHero: index === 0,
+          },
+        };
+      });
+      const idByIndex = new Map<number, string>();
+      const failures: string[] = [];
+      const byType = new Map<string, typeof planned>();
+      for (const p of planned) {
+        const list = byType.get(p.type) ?? [];
+        list.push(p);
+        byType.set(p.type, list);
+      }
+      for (const [type, group] of byType) {
+        for (let off = 0; off < group.length; off += BULK_CHUNK) {
+          const chunk = group.slice(off, off + BULK_CHUNK);
+          const data = await retryWithBackoff(
             async () => {
-              const res = await fetch("/api/listings", {
+              const res = await fetch(`/api/collections/${id}/listings/bulk`, {
                 method: "POST",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  title: item.title || `Piece ${index + 1}`,
-                  description:
-                    item.description ||
-                    (intent === "drop"
-                      ? `${dropKind === "open" ? "Open" : "Limited"} edition drop`
-                      : intent === "auction"
-                        ? "Auction listing"
-                        : ""),
-                  type,
-                  network,
-                  priceUsd: price,
-                  medium: medium.trim() || "digital",
-                  styleTags: tags,
-                  mediaHash: item.mediaHash,
-                  mediaUrl: item.mediaUrl,
-                  collectionId: id,
-                  isCollectionHero: index === 0,
-                  traits: parseTraits(item.traits),
-                  maxSupply: supply && supply > 0 ? supply : null,
-                  oeStartsAt: intent === "drop" ? start : null,
-                  oeEndsAt: intent === "drop" ? end : null,
-                  auctionStartsAt: intent === "auction" ? start : null,
-                  auctionEndsAt: intent === "auction" ? end : null,
-                  saleMode:
-                    intent === "auction"
-                      ? saleMode
-                      : intent === "single"
-                        ? "fixed"
-                        : "fixed",
-                  startingBidUsd:
-                    intent === "auction" &&
-                    (saleMode === "english" || saleMode === "dutch")
-                      ? Number(startingBidUsd) || Number(price) || null
-                      : null,
-                  reserveUsd:
-                    intent === "auction" &&
-                    (saleMode === "english" || saleMode === "dutch") &&
-                    reserveUsd
-                      ? Number(reserveUsd)
-                      : null,
-                  publishSoftLaunch: false,
+                  shared: {
+                    type,
+                    network,
+                    priceUsd: price,
+                    medium: medium.trim() || "digital",
+                    styleTags: tags,
+                    oeStartsAt: intent === "drop" ? start : null,
+                    oeEndsAt: intent === "drop" ? end : null,
+                    auctionStartsAt: intent === "auction" ? start : null,
+                    auctionEndsAt: intent === "auction" ? end : null,
+                    saleMode: intent === "auction" ? saleMode : "fixed",
+                    startingBidUsd:
+                      intent === "auction" &&
+                      (saleMode === "english" || saleMode === "dutch")
+                        ? Number(startingBidUsd) || Number(price) || null
+                        : null,
+                    reserveUsd:
+                      intent === "auction" &&
+                      (saleMode === "english" || saleMode === "dutch") &&
+                      reserveUsd
+                        ? Number(reserveUsd)
+                        : null,
+                  },
+                  items: chunk.map((c) => c.body),
                 }),
               });
-              const data = await res.json();
+              const json = await res.json();
               if (!res.ok) {
-                const raw =
-                  (data.errors && data.errors.join(", ")) ||
-                  data.error ||
-                  "listing_failed";
-                throw makeHttpError(listingErrorMessage(String(raw)), res.status);
+                throw makeHttpError(
+                  listingErrorMessage(String(json.error ?? "listing_failed")),
+                  res.status,
+                );
               }
-              const lid = String(data.listing?.id ?? data.id ?? "");
-              if (!lid) throw makeHttpError("listing_failed", 502);
-              return lid;
+              return json as {
+                results: (
+                  | { mediaHash: string; status: "created" | "existing"; listingId: string }
+                  | { mediaHash: string; status: "error"; error: string }
+                )[];
+              };
             },
-            { retries: 3, baseDelayMs: 280, maxDelayMs: 3_000 },
+            { retries: 3, baseDelayMs: 400, maxDelayMs: 5_000 },
           );
-          listingsDone += 1;
-          setListProgress({ current: listingsDone, total: pieces.length });
-          return { index, listingId };
-        },
-      );
-
-      const listingOk = listingSettled.filter(
-        (s): s is { ok: true; value: { index: number; listingId: string }; index: number } =>
-          s.ok,
-      );
-      const listingFail = listingSettled.filter((s) => !s.ok);
-      if (listingFail.length) {
-        const sample = listingFail
-          .slice(0, 2)
-          .map((f) =>
-            listingErrorMessage(
-              "error" in f ? f.error.message : "listing_failed",
-            ),
-          )
-          .join("; ");
+          data.results.forEach((r, i) => {
+            const planItem = chunk[i];
+            if (!planItem) return;
+            if (r.status === "error") failures.push(listingErrorMessage(r.error));
+            else idByIndex.set(planItem.index, r.listingId);
+          });
+          setListProgress({ current: idByIndex.size, total: pieces.length });
+        }
+      }
+      if (failures.length) {
+        const sample = failures.slice(0, 2).join("; ");
         throw new Error(
-          listingOk.length === 0
-            ? `Could not create listings (${sample || "unknown error"}). Fix the files or media conflicts and try again — nothing new was saved.`
-            : `Created ${listingOk.length} of ${pieces.length} listings — ${listingFail.length} failed${sample ? ` (${sample})` : ""}. Successful drafts were kept; retry mint to continue with those plus any fixed files.`,
+          idByIndex.size === 0
+            ? `Could not create listings (${sample || "unknown error"}). Fix the files or media conflicts and try again \u2014 nothing new was saved.`
+            : `Created ${idByIndex.size} of ${pieces.length} listings \u2014 ${failures.length} failed${sample ? ` (${sample})` : ""}. Successful drafts were kept; retry mint to continue with those plus any fixed files.`,
         );
       }
-      const listingIds = listingOk
-        .sort((a, b) => a.value.index - b.value.index)
-        .map((s) => s.value.listingId);
+      const listingIds = [...idByIndex.entries()]
+        .sort((x, y) => x[0] - y[0])
+        .map(([, lid]) => lid);
       setListProgress(null);
 
       // Mint into the collection contract (creator pays gas).
