@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/EmptyState";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
@@ -9,7 +10,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Most viewed",
+  title: "Trending",
   description:
     "Public works ordered by recorded page views, saves, and unique viewers.",
 };
@@ -26,10 +27,9 @@ export default async function TrendingPage() {
   return (
     <div className="page-wrap">
       <header className="page-lead">
-        <h1 className="display page-lead__title">Most viewed</h1>
+        <h1 className="display page-lead__title">Trending</h1>
         <p className="page-lead__copy">
-          Public works ordered by views, then saves, then unique viewers — no
-          separate trend score.
+          The works collectors are viewing and saving most right now.
         </p>
       </header>
 
@@ -39,8 +39,7 @@ export default async function TrendingPage() {
             Trending collections
           </h2>
           <p style={{ margin: "0 0 0.75rem", color: "var(--ink-muted)", fontSize: "0.88rem" }}>
-            Derived from the ranked grid below — grouped by collection, no extra
-            backend score.
+            Collections with the most attention in the list below.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
             {collectionStrip.map((item) => (
@@ -53,7 +52,7 @@ export default async function TrendingPage() {
                 {item.collection.title}
                 <span style={{ opacity: 0.7 }}>
                   {" "}
-                  · {item.listingCount} work{item.listingCount === 1 ? "" : "s"}
+                  Â· {item.listingCount} work{item.listingCount === 1 ? "" : "s"}
                 </span>
               </Link>
             ))}
@@ -62,10 +61,14 @@ export default async function TrendingPage() {
       ) : null}
 
       {ranked.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
-          Nothing has recorded attention yet. Browse the{" "}
-          <Link href="/open">Open Lane</Link> or <Link href="/rising">Rising</Link>.
-        </p>
+        <EmptyState
+          title="Nothing trending yet"
+          body="As collectors view and save works, the most popular ones show up here."
+          actions={[
+            { href: "/open", label: "Browse all works" },
+            { href: "/rising", label: "See what's rising", variant: "ghost" },
+          ]}
+        />
       ) : (
         <PuzzleRail>
           {ranked.map((listing) => (
@@ -86,8 +89,8 @@ export default async function TrendingPage() {
               }
               footer={
                 <>
-                  {listing.signals.pageViews} page views · {listing.signals.saves}{" "}
-                  saves · {listing.signals.uniqueViewers} viewers
+                  {listing.signals.pageViews} views Â· {listing.signals.saves}{" "}
+                  {listing.signals.saves === 1 ? "save" : "saves"}
                 </>
               }
             />

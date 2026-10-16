@@ -460,10 +460,10 @@ export function DocsGuide() {
               ))}
             </div>
             <p style={{ margin: 0, color: "var(--ink-muted)", fontSize: "0.92rem" }}>
-              Max {cfg.maxArtistPerScreen} artist per screen · collection flood capped
-              at {cfg.maxCollectionFloodPerSession} per session · one chain ≤{" "}
-              {pct(cfg.maxChainSharePerPage)} of a page. Guest Emerging uses a taste
-              seed, not a demo follow graph.
+              To keep feeds varied, we show at most {cfg.maxArtistPerScreen} work per
+              artist on a screen, {cfg.maxCollectionFloodPerSession} from one collection per
+              visit, and no more than {pct(cfg.maxChainSharePerPage)} of a page from one
+              chain.
             </p>
             </div>
 

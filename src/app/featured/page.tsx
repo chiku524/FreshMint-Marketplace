@@ -16,7 +16,6 @@ export const metadata = {
 export default async function FeaturedPage() {
   const engine = await getDiscoveryEngine();
   const featured = engine.buildFeatured();
-  const budgets = engine.getBudgets();
   const boosted = selectBoostedFeatured(engine.state.listings.values());
   const editorialIds = new Set(featured.map((item) => item.listing.id));
   const boostedOnly = boosted.filter((l) => !editorialIds.has(l.id));
@@ -27,14 +26,14 @@ export default async function FeaturedPage() {
       <header className="page-lead">
         <h1 className="display page-lead__title">Featured</h1>
         <p className="page-lead__copy">
-          Curated picks ({budgets.featuredTotal} slots/day). Paid boosts stay in
-          Promoted — they never touch Rising or Open Lane quotas.
+          Works our editors love, plus clearly labeled promoted placements.
+          Promotion never affects Rising or the Open Lane.
         </p>
       </header>
 
       <section style={{ marginBottom: "2.75rem" }}>
         <h2 className="display" style={{ margin: "0 0 0.4rem", fontSize: "1.35rem" }}>
-          Promoted · Boosted ({boosted.length})
+          Promoted ({boosted.length})
         </h2>
         <p
           style={{
@@ -44,14 +43,12 @@ export default async function FeaturedPage() {
             fontSize: "0.9rem",
           }}
         >
-          Paid promotional placement (${FEATURED_BOOST_USD} USD fee to treasury).
-          Distinct from editorial picks. Creators request a boost from their
-          listing page after publish.
+          Creators can promote a published work for ${FEATURED_BOOST_USD} from its
+          listing page. Promoted works are always labeled.
         </p>
         {boosted.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No boosted works right now. Creators can request a Featured boost
-            from a published listing.
+            No promoted works right now.
           </p>
         ) : (
           <PuzzleRail>
@@ -72,7 +69,7 @@ export default async function FeaturedPage() {
                     ? engine.state.collections.get(listing.collectionId) ?? null
                     : null
                 }
-                footer={<>Promoted · Featured boost</>}
+                footer={<>Promoted</>}
               />
             ))}
           </PuzzleRail>
@@ -91,12 +88,11 @@ export default async function FeaturedPage() {
             fontSize: "0.9rem",
           }}
         >
-          Curator / editor inventory. Featured dominance does not buy Rising
-          monopoly — Emerging Rising stays algorithmically reserved.
+          Hand-picked by the FreshMint team.
         </p>
         {featured.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No editorial featured works today. Browse{" "}
+            No editor picks today. Browse{" "}
             <Link href="/rising">Rising</Link> or the{" "}
             <Link href="/open">Open Lane</Link>.
           </p>

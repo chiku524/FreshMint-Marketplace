@@ -1,8 +1,8 @@
+import { EmptyState } from "@/components/EmptyState";
 import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { RankedWorkCard } from "@/components/WorkCard";
 import { getSessionUser } from "@/lib/auth/session";
-import { emergingShare } from "@/lib/discovery";
 import { readViewerSession } from "@/lib/discovery/cookies";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Rising",
   description:
-    "Fairness-aware Rising feed with a hard Emerging quota and explore slots.",
+    "Fresh work from new and emerging artists, with a guaranteed daily share of the spotlight.",
 };
 
 export default async function RisingPage() {
@@ -19,30 +19,25 @@ export default async function RisingPage() {
   const user = await getSessionUser();
   const session = await readViewerSession(user?.id ?? null);
   const rising = engine.buildRising(session);
-  const share = emergingShare(rising);
-  const budgets = engine.getBudgets();
 
   return (
     <div className="page-wrap">
       <header className="page-lead">
         <h1 className="display page-lead__title">Rising</h1>
         <p className="page-lead__copy">
-          Fairness-aware discovery with a hard Emerging quota (
-          {Math.round(budgets.risingEmergingReserved)} of {budgets.risingTotal}{" "}
-          daily slots reserved, {budgets.risingExplore} explore). Current Emerging
-          share:{" "}
-          <strong style={{ color: "var(--emergent)" }}>
-            {(share * 100).toFixed(0)}%
-          </strong>
-          .
+          New and emerging artists, given a guaranteed share of the spotlight
+          every day so fresh work gets seen — not just the biggest names.
         </p>
       </header>
       {rising.length === 0 ? (
-        <p className="fm-empty-copy">
-          Rising is empty right now — publish a minted work and it enters
-          Rising automatically when quality gates pass. Your first work skips
-          the new-wallet wait.
-        </p>
+        <EmptyState
+          title="Nothing rising yet"
+          body="Newly published works appear here automatically. Publish your first piece to get it in front of collectors."
+          actions={[
+            { href: "/create", label: "Create a work" },
+            { href: "/open", label: "Browse all works", variant: "ghost" },
+          ]}
+        />
       ) : (
         <>
           <DiscoverySessionRecorder

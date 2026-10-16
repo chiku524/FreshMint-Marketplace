@@ -4,6 +4,21 @@ import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+type Section = "photo" | "profile" | "login";
+
+const SETTINGS_ERRORS: Record<string, string> = {
+  update_failed: "Couldn't save. Check your connection and try again.",
+  attach_failed: "Couldn't add email sign-in. Please try again.",
+  email_taken: "That email is already used by another profile.",
+  sign_in: "Your session expired. Sign in again.",
+  upload_failed: "Upload failed. Try a smaller image.",
+  avatar_update_failed: "Couldn't update your photo. Please try again.",
+};
+
+function friendlySettingsError(code: string): string {
+  return SETTINGS_ERRORS[code] ?? code.replace(/_/g, " ");
+}
+
 export function ProfileSettings({
   userId,
   displayName,
@@ -38,30 +53,36 @@ export function ProfileSettings({
   const [twitterUrl, setTwitterUrl] = useState(initialTwitter ?? "");
   const [farcasterUrl, setFarcasterUrl] = useState(initialFarcaster ?? "");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
-
-  async function saveName(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    setOk(null);
-    try {
-      const res = await fetch("/api/auth/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName: name }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "update_failed");
-      setOk("Display name saved");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "update_failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [notice, setNotice] = useState<{
+    section: Section;
+    kind: "ok" | "error";
+    text: string;
+  } | null>(null);
+  const [section, setSectionState] = useState<Section>("profile");
+  const sectionRef = useRef<Section>("profile");
+  const setSection = (next: Section) => {
+    sectionRef.current = next;
+    setSectionState(next);
+  };
+  const setError = (text: string | null) =>
+    setNotice(text ? { section: sectionRef.current, kind: "error", text: friendlySettingsError(text) } : null);
+  const setOk = (text: string | null) =>
+    setNotice(text ? { section: sectionRef.current, kind: "ok", text } : null);
+  const dirty =
+    name.trim() !== displayName.trim() ||
+    bio !== initialBio ||
+    websiteUrl !== (initialWebsite ?? "") ||
+    twitterUrl !== (initialTwitter ?? "") ||
+    farcasterUrl !== (initialFarcaster ?? "");
+  const feedback = (f: Section) =>
+    notice && notice.section === f ? (
+      <p
+        role={notice.kind === "error" ? "alert" : "status"}
+        className={notice.kind === "error" ? "fm-form-error" : "fm-form-ok"}
+      >
+        {notice.text}
+      </p>
+    ) : null;
 
   async function patchAvatar(next: string | null) {
     const res = await fetch("/api/auth/profile", {
@@ -76,6 +97,7 @@ export function ProfileSettings({
 
   async function onPickFile(file: File | null) {
     if (!file) return;
+    setSection("photo");
     setBusy(true);
     setError(null);
     setOk(null);
@@ -113,6 +135,7 @@ export function ProfileSettings({
   }
 
   async function clearPhoto() {
+    setSection("photo");
     setBusy(true);
     setError(null);
     setOk(null);
@@ -130,6 +153,7 @@ export function ProfileSettings({
   async function attachCredentials(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    setSection("login");
     setBusy(true);
     setError(null);
     setOk(null);
@@ -159,7 +183,7 @@ export function ProfileSettings({
       <h2 className="display me-section__title">Profile</h2>
       <div className="fm-form-surface fm-form-stack">
         <p className="fm-form-note">
-          {email ? email : "No email on this profile yet"}
+          {email ? `Signed in as ${email}` : "No email yet \u2014 add one below to sign in without a wallet."}
           {googleLinked ? " · Google linked" : ""}
           {hasPassword ? " · password set" : ""}
         </p>
@@ -173,8 +197,8 @@ export function ProfileSettings({
           />
           <div style={{ display: "grid", gap: "0.4rem" }}>
             <p className="fm-form-note">
-              Upload a square-ish photo (PNG, JPEG, WebP, GIF). Same pipeline as
-              listing media.
+              Square photo works best (PNG, JPEG, WebP or GIF). Saves as soon
+              as it uploads.
             </p>
             <div className="fm-form-actions">
               <button
@@ -203,30 +227,14 @@ export function ProfileSettings({
               hidden
               onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
             />
+            {feedback("photo")}
           </div>
         </div>
-
-        <form onSubmit={(e) => void saveName(e)} className="fm-form-stack">
-          <label>
-            Display name
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={64}
-              required
-              className="fm-field"
-            />
-          </label>
-          <div className="fm-form-actions">
-            <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
-              Save name
-            </button>
-          </div>
-        </form>
 
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            setSection("profile");
             void (async () => {
               setBusy(true);
               setError(null);
@@ -236,6 +244,7 @@ export function ProfileSettings({
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
+                    displayName: name.trim(),
                     bio,
                     websiteUrl: websiteUrl || null,
                     twitterUrl: twitterUrl || null,
@@ -244,7 +253,7 @@ export function ProfileSettings({
                 });
                 const data = (await res.json()) as { error?: string };
                 if (!res.ok) throw new Error(data.error ?? "update_failed");
-                setOk("Profile details saved");
+                setOk("Profile saved");
                 router.refresh();
               } catch (err) {
                 setError(err instanceof Error ? err.message : "update_failed");
@@ -255,6 +264,16 @@ export function ProfileSettings({
           }}
           className="fm-form-stack"
         >
+          <label>
+            Display name
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={64}
+              required
+              className="fm-field"
+            />
+          </label>
           <label>
             Short bio
             <textarea
@@ -293,10 +312,16 @@ export function ProfileSettings({
             />
           </label>
           <div className="fm-form-actions">
-            <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
-              Save profile details
+            <button
+              type="submit"
+              disabled={busy || !dirty}
+              className="fm-btn fm-btn--primary"
+            >
+              {busy && section === "profile" ? "Saving\u2026" : "Save profile"}
             </button>
+            {dirty ? <span className="fm-form-note">Unsaved changes</span> : null}
           </div>
+          {feedback("profile")}
         </form>
 
         {!hasPassword ? (
@@ -304,8 +329,9 @@ export function ProfileSettings({
             onSubmit={(e) => void attachCredentials(e)}
             className="fm-form-stack"
           >
+            <h3 className="me-subsection__title">Email sign-in</h3>
             <p className="fm-form-note">
-              Add email and password so you can sign in without a wallet.
+              Add an email and password so you can sign in without a wallet.
             </p>
             <label>
               Email
@@ -330,9 +356,10 @@ export function ProfileSettings({
             </label>
             <div className="fm-form-actions">
               <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
-                Save login
+                {busy && section === "login" ? "Saving\u2026" : "Add email sign-in"}
               </button>
             </div>
+            {feedback("login")}
           </form>
         ) : null}
 
@@ -345,8 +372,6 @@ export function ProfileSettings({
           </a>
         ) : null}
 
-        {error ? <p role="alert" className="fm-form-error">{error}</p> : null}
-        {ok ? <p className="fm-form-ok">{ok}</p> : null}
       </div>
     </section>
   );

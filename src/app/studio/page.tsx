@@ -30,17 +30,14 @@ export default async function StudioPage() {
       <header className="page-lead">
         <h1 className="display page-lead__title">Studio</h1>
         <p className="page-lead__copy">
-          Manage your collections through draft → deploy → mint → live. Finish
-          incomplete publishes, add works, or open a live set.{" "}
+          Pick up unfinished collections, add works, and curate shelves.{" "}
           {user ? (
-            <>
-              Minted collections also show on{" "}
-              <Link href="/me">your profile</Link>
-              {attention > 0
-                ? ` · ${attention} still need a next step`
-                : null}
-              .
-            </>
+            attention > 0 ? (
+              <strong>
+                {attention} collection{attention === 1 ? "" : "s"} need
+                {attention === 1 ? "s" : ""} a next step.
+              </strong>
+            ) : null
           ) : (
             <>
               <Link href="/sign-in?next=/studio">Sign in</Link> to manage your

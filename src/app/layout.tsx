@@ -1,3 +1,4 @@
+import { MobileDiscoveryNav } from "@/components/MobileDiscoveryNav";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
@@ -11,6 +12,7 @@ import { DiscoverySidebar } from "@/components/DiscoverySidebar";
 import { FridayRaffleBanner } from "@/components/FridayRaffleBanner";
 import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ToastHost } from "@/components/ToastHost";
 import { getSessionUser, publicSession } from "@/lib/auth/session";
 import { appBaseUrl } from "@/lib/auth/paths";
 import { rootSiteMetadata, siteJsonLdGraph } from "@/lib/seo/site";
@@ -63,7 +65,7 @@ export default async function RootLayout({
           {THEME_BOOT_SCRIPT}
         </Script>
         <Script id="fm-intro-boot" strategy="beforeInteractive">
-          {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(sessionStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending");setTimeout(function(){document.documentElement.classList.remove("fm-intro-pending")},8000)}}catch(e){}`}
+          {`try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&(localStorage.getItem("fm-logo-intro-seen")!=="1"||/[?&]intro(?:[=&]|$)/.test(location.search))){document.documentElement.classList.add("fm-intro-pending");setTimeout(function(){document.documentElement.classList.remove("fm-intro-pending")},8000)}}catch(e){}`}
         </Script>
         <a href="#main-content" className="skip-link">
           Skip to content
@@ -87,11 +89,12 @@ export default async function RootLayout({
           <div className="site-frame">
             <DiscoverySidebar />
             <div className="site-frame__main">
+              <MobileDiscoveryNav />
               <FridayRaffleBanner />
               <main id="main-content" tabIndex={-1} className="site-main">{children}</main>
               <footer className="site-footer">
                 <span className="site-footer__tagline">
-                  Attention is scarce. Emerging artists get a coded quota.
+                  Every day, part of the spotlight is reserved for new artists.
                 </span>
                 <span className="site-footer__links">
                   <Link href="/docs#settlement">How it works</Link>
@@ -102,6 +105,7 @@ export default async function RootLayout({
             </div>
           </div>
         </div>
+        <ToastHost />
       </body>
     </html>
   );

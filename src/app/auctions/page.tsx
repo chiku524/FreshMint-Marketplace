@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Auctions",
   description:
-    "Live timed drops and English auctions, plus cleared past primary sales.",
+    "Live auctions, timed drops, and recently sold works on FreshMint.",
 };
 
 function DiscoverLinks() {
@@ -43,13 +43,13 @@ function DiscoverLinks() {
         Featured
       </Link>
       <Link href="/trending" className="badge">
-        Most viewed
+        Trending
       </Link>
       <Link href="/calendar" className="badge">
         Calendar
       </Link>
       <Link href="/create?intent=auction" className="badge">
-        Create timed / auction listing
+        Start an auction
       </Link>
     </p>
   );
@@ -63,10 +63,10 @@ function liveHeading(filter: AuctionsSaleModeFilter, count: number): string {
 }
 
 function archiveHeading(filter: AuctionsSaleModeFilter, count: number): string {
-  if (filter === "english") return `Cleared English auctions (${count})`;
-  if (filter === "dutch") return `Cleared Dutch auctions (${count})`;
-  if (filter === "timed_window") return `Cleared timed listings (${count})`;
-  return `Cleared sales (${count})`;
+  if (filter === "english") return `Sold English auctions (${count})`;
+  if (filter === "dutch") return `Sold Dutch auctions (${count})`;
+  if (filter === "timed_window") return `Sold timed listings (${count})`;
+  return `Recently sold (${count})`;
 }
 
 export default async function AuctionsPage({
@@ -96,8 +96,8 @@ export default async function AuctionsPage({
       <header className="page-lead">
         <h1 className="display page-lead__title">Auctions</h1>
         <p className="page-lead__copy">
-          Timed listings (Buy now in a window), English auctions (highest bid),
-          and Dutch auctions (declining price). Filters stay in the URL.
+          Bid on live auctions, catch time-limited drops, and see what recently
+          sold. Use the tabs to narrow by sale type.
         </p>
       </header>
 
@@ -114,19 +114,18 @@ export default async function AuctionsPage({
           }}
         >
           <h2 className="display" style={{ margin: "0 0 0.45rem", fontSize: "1.25rem" }}>
-            No {filter === "all" ? "auctions" : filterLabel.toLowerCase()} live or
-            cleared yet
+            No {filter === "all" ? "auctions" : filterLabel.toLowerCase()} yet
           </h2>
           <p style={{ margin: 0, color: "var(--ink-muted)", lineHeight: 1.55 }}>
-            This lane stays empty until a creator schedules a matching window and
-            collectors finish a primary sale. We do not invent live windows.
-            Try another tab, or start from Create with the timed-drop / English
-            intent.
+            Nothing is live or recently sold here yet. Try another tab, browse
+            everything for sale, or schedule your own auction.
           </p>
           <DiscoverLinks />
         </section>
       ) : null}
 
+      {empty ? null : (
+      <>
       <section style={{ marginTop: "1.75rem", marginBottom: "3rem" }}>
         <h2 className="display" style={{ margin: "0 0 1rem", fontSize: "1.45rem" }}>
           {liveHeading(filter, live.length)}
@@ -135,10 +134,10 @@ export default async function AuctionsPage({
           <>
             <p style={{ color: "var(--ink-muted)", margin: 0, maxWidth: "48ch" }}>
               {filter === "english"
-                ? "No English auctions are open right now. Open bidding appears on the listing when a window is live."
+                ? "No English auctions are open right now. Check back soon or browse other sale types."
                 : filter === "timed_window"
-                  ? "No timed drop windows are open right now. When live, you buy at the listed USD quote before the end time."
-                  : "No auction windows are open right now."}
+                  ? "No timed drops are open right now. When one is live, you can buy at the listed price until it ends."
+                  : "Nothing is live right now. Check back soon."}
             </p>
             {!empty ? <DiscoverLinks /> : null}
           </>
@@ -172,13 +171,11 @@ export default async function AuctionsPage({
           {archiveHeading(filter, sold.length)}
         </h2>
         <p style={{ color: "var(--ink-muted)", margin: "0 0 1.25rem", maxWidth: "48ch" }}>
-          Past artwork that sold successfully during an auction window —
-          Emerging and established alike.
+          Works that sold during an auction or timed drop.
         </p>
         {sold.length === 0 ? (
           <p style={{ color: "var(--ink-muted)" }}>
-            No cleared sales in this filter yet. When a collector completes
-            checkout during a matching window, it appears here.
+            Nothing has sold under this filter yet.
           </p>
         ) : (
           <PuzzleRail>
@@ -197,6 +194,8 @@ export default async function AuctionsPage({
           </PuzzleRail>
         )}
       </section>
+      </>
+      )}
     </div>
   );
 }

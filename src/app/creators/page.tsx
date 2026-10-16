@@ -40,11 +40,11 @@ function sortBlurb(sort: CreatorsSortId): string {
 function emptyCopy(sort: CreatorsSortId): string {
   switch (sort) {
     case "top":
-      return "No creators cleared a completed sale in the last 7 days yet. Soft-launch from Create, or try New / All-time volume.";
+      return "No creator has made a sale in the last 7 days yet. Try New or All-time, or publish your own work to get on the board.";
     case "new":
-      return "No creators published their first work this week. Soft-launch from Create.";
+      return "No one has published their first work this week yet \u2014 you could be first.";
     case "all_time":
-      return "No creators with completed primary volume yet. Browse Open Lane while the first sales land.";
+      return "No sales yet. Browse the Open Lane while the first works find collectors.";
   }
 }
 
@@ -107,7 +107,7 @@ export default async function CreatorsIndexPage({
           </p>
           <p style={{ margin: "0.85rem 0 0", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
             <Link href="/create" className="badge emerging">
-              Soft-launch a work
+              Start creating
             </Link>
             <Link href="/open" className="badge">
               Open Lane

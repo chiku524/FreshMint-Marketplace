@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/EmptyState";
 import { OpenLaneFilters } from "@/components/OpenLaneFilters";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
@@ -71,8 +72,8 @@ export default async function OpenLanePage({
       <header className="page-lead">
         <h1 className="display page-lead__title">Open Lane</h1>
         <p className="page-lead__copy">
-          Browse soft-launched works across Ethereum, Base, Arbitrum, Optimism,
-          Solana, and Boing — ranked lightly by quality, not dump-fed.
+          Every published work across Ethereum, Base, Arbitrum, Optimism,
+          Solana, and Boing. Filter by chain, medium, price, or sale type.
         </p>
       </header>
       <OpenLaneFilters
@@ -86,11 +87,16 @@ export default async function OpenLanePage({
         saleMode={saleMode}
         endingSoon={endingSoon ? "1" : undefined}
       />
-      <p className="lane-count">{ranked.length} works</p>
+      <p className="lane-count">{ranked.length} {ranked.length === 1 ? "work" : "works"}</p>
       {ranked.length === 0 ? (
-        <p className="fm-empty-copy">
-          No works match these filters. Clear filters or soft-launch something new.
-        </p>
+        <EmptyState
+          title="No works match these filters"
+          body="Try removing a filter or widening the price range."
+          actions={[
+            { href: "/open", label: "Clear filters" },
+            { href: "/create", label: "Create a work", variant: "ghost" },
+          ]}
+        />
       ) : (
         <PuzzleRail>
           {ranked.map((item) => (

@@ -34,7 +34,7 @@ export function TasteSeed({
   return (
     <div className="fm-taste-seed">
       <p className="fm-taste-seed__label">
-        Pick a few tastes for Emerging — not someone else’s follow graph.
+        Pick the styles you like to tune your feed.
       </p>
       <div className="fm-taste-seed__tags">
         {DISCOVERY_CONFIG.taste.seedTags.map((tag) => {

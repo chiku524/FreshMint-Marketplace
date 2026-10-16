@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/EmptyState";
+import { FirstRunWelcome } from "@/components/FirstRunWelcome";
 import { requestNow } from "@/lib/time";
 import { DiscoverySessionRecorder } from "@/components/DiscoverySessionRecorder";
 import { EnglishAuctionHomeCard } from "@/components/EnglishAuctionHomeCard";
@@ -85,6 +87,12 @@ export default async function HomePage() {
     getCachedCreatorsHomeSection(),
   ]);
   const personalized = Boolean(user);
+  // Brand-new marketplace: nothing published anywhere yet.
+  const marketplaceEmpty =
+    home.feed.length === 0 &&
+    discovery.collections.items.length === 0 &&
+    discovery.hotWorks.items.length === 0 &&
+    creatorsHome.items.length === 0;
 
   return (
     <div className="fm-home">
@@ -97,14 +105,24 @@ export default async function HomePage() {
             Discover new art before it floods the feed.
           </h1>
           <p className="fm-home-hero__lede anim-rise-delay">
-            Fair discovery for digital art. Emerging artists get a real quota.
+            A marketplace for digital art where new artists always get seen.
           </p>
+          <ul className="fm-home-hero__terms anim-rise-delay" aria-label="How discovery works">
+            <li>
+              <strong>Emerging</strong> artists (in their first 90 days) get a
+              reserved share of Rising every day.
+            </li>
+            <li>
+              <strong>Open Lane</strong> lists every published work, newest first
+              {" \u2014 "}no paid placement.
+            </li>
+          </ul>
           <div className="fm-home-hero__actions anim-rise-delay">
             <Link href="/open" className="fm-btn fm-btn--primary">
               Browse works
             </Link>
             <Link href="/create" className="fm-btn fm-btn--ghost">
-              Soft-launch a work
+              Start creating
             </Link>
           </div>
         </div>
@@ -112,6 +130,8 @@ export default async function HomePage() {
           <FeaturedOfTheWeek />
         </div>
       </section>
+
+      {marketplaceEmpty ? <FirstRunWelcome signedIn={Boolean(user)} /> : null}
 
       {discovery.collections.items.length > 0 ? (
         <section className="site-section">
@@ -243,12 +263,12 @@ export default async function HomePage() {
           title={
             personalized
               ? `For ${user!.displayName}`
-              : "Composed for you"
+              : "Picked for you"
           }
           subtitle={
             personalized
               ? "A fair mix of Emerging, Following, and Featured."
-              : "Pick tastes below to tune Emerging — then explore your feed."
+              : "New and emerging work, mixed fairly."
           }
           viewAllHref="/open"
           viewAllLabel="Browse all"
@@ -262,9 +282,16 @@ export default async function HomePage() {
             .filter((id): id is string => !!id)}
         />
         {home.feed.length === 0 ? (
-          <p className="fm-empty-copy">
-            Feed is empty — soft-launch a work or follow an emerging artist.
-          </p>
+          <EmptyState
+            compact
+            title={marketplaceEmpty ? "Your feed will fill up as creators publish" : "Nothing matches these tastes yet"}
+            body={
+              marketplaceEmpty
+                ? "Pick a few styles above and matching new work will appear here."
+                : "Try other tastes, or browse everything in the Open Lane."
+            }
+            actions={marketplaceEmpty ? [] : [{ href: "/open", label: "Browse the Open Lane", variant: "ghost" }]}
+          />
         ) : (
           <PuzzleRail>
             {home.feed.map((item) => (

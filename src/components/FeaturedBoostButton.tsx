@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "@/lib/client/toast";
 
 const PAY_LABELS: Record<string, string> = {
   ethereum: "Ethereum (ETH)",
@@ -84,12 +85,22 @@ export function FeaturedBoostButton({
     );
   }
 
+  // Show inline and as a toast; the payment result only arrives after the server answers.
+  const say = (text: string, kind: "ok" | "error" | "info" = "error") => {
+    setMsg(text);
+    toast(text, kind);
+  };
+  const readable = (code: unknown, fallback: string) =>
+    typeof code === "string" && code && !/^[a-z0-9_]+$/.test(code)
+      ? code
+      : fallback;
+
   async function boost() {
     setBusy(true);
     setMsg(null);
     try {
       if (!browserWalletAvailable(payVm)) {
-        setMsg(
+        say(
           payVm === "solana"
             ? "Connect Phantom to pay the Featured boost"
             : payVm === "boing"
@@ -101,7 +112,7 @@ export function FeaturedBoostButton({
 
       const fromAddress = await requestBuyerAddress(payVm);
       if (!fromAddress) {
-        setMsg("Wallet address required");
+        say("Wallet address required");
         return;
       }
 
@@ -113,7 +124,7 @@ export function FeaturedBoostButton({
       });
       const prep = await prepRes.json();
       if (!prepRes.ok) {
-        setMsg(
+        say(
           prep.error === "publish_first"
             ? "Soft-launch or publish before boosting"
             : prep.error === "already_boosted"
@@ -122,7 +133,7 @@ export function FeaturedBoostButton({
                 ? "Sign in to request a boost"
                 : prep.error === "wallet_required"
                   ? "Connect a wallet to pay"
-                  : prep.error || "boost_failed",
+                  : readable(prep.error, "Couldn\u2019t start the boost. Please try again."),
         );
         return;
       }
@@ -134,7 +145,7 @@ export function FeaturedBoostButton({
         amountUsd: FEATURED_BOOST_USD,
       });
       if (!paymentHash) {
-        setMsg("Confirm the $15 treasury payment in your wallet popup");
+        say(`Confirm the $${FEATURED_BOOST_USD} payment in your wallet to finish the boost`, "info");
         return;
       }
 
@@ -146,12 +157,12 @@ export function FeaturedBoostButton({
       });
       const conf = await confRes.json();
       if (!confRes.ok) {
-        setMsg(
+        say(
           conf.error === "invalid_tx" || conf.error === "tx_reverted"
             ? "Payment could not be verified — try again or wait for confirmation"
             : conf.error === "already_boosted"
               ? "Already boosted"
-              : conf.error || "boost_confirm_failed",
+              : readable(conf.error, "Couldn\u2019t confirm the boost payment. Please try again."),
         );
         return;
       }
@@ -160,12 +171,13 @@ export function FeaturedBoostButton({
         prep.quote && typeof prep.quote.formatted === "string"
           ? ` (${prep.quote.formatted} ${prep.quote.symbol ?? ""})`.trimEnd()
           : "";
-      setMsg(
-        `Featured boost active · paid $${FEATURED_BOOST_USD}${quoteNote} to treasury · ${shortAddr(String(paymentHash))}`,
+      say(
+        `Featured boost active · paid $${FEATURED_BOOST_USD}${quoteNote} · ${shortAddr(String(paymentHash))}`,
+        "ok",
       );
       router.refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "boost_failed");
+      say(readable(e instanceof Error ? e.message : "", "Boost failed. Please try again."));
     } finally {
       setBusy(false);
     }

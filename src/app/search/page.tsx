@@ -1,4 +1,5 @@
 import { CreatorAvatar } from "@/components/CreatorAvatar";
+import { EmptyState } from "@/components/EmptyState";
 import { PuzzleRail } from "@/components/PuzzleRail";
 import { WorkCard } from "@/components/WorkCard";
 import { collectionHref } from "@/lib/marketplace/collection-slug";
@@ -66,13 +67,21 @@ export default async function SearchPage({
       </form>
 
       {!qRaw.trim() ? (
-        <p style={{ color: "var(--ink-muted)" }}>
-          Type a title or name. Results are shareable via <code>?q=</code>.
+        <p className="fm-form-note">
+          Search by work title, collection, creator name or style tag (try
+          {" "}<Link href="/search?q=ink">ink</Link>,{" "}
+          <Link href="/search?q=glitch">glitch</Link> or{" "}
+          <Link href="/search?q=paper">paper</Link>).
         </p>
       ) : hits.length === 0 ? (
-        <p style={{ color: "var(--ink-muted)" }}>
-          No matches for “{qRaw}”. Try Open Lane or Creators.
-        </p>
+        <EmptyState
+          title={`No matches for \u201c${qRaw.trim()}\u201d`}
+          body="Check the spelling or try a broader word. You can also browse every published work or find artists directly."
+          actions={[
+            { href: "/open", label: "Browse all works" },
+            { href: "/creators", label: "Find creators", variant: "ghost" },
+          ]}
+        />
       ) : (
         <>
           {works.length > 0 ? (

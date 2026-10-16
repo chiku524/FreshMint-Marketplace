@@ -5,6 +5,16 @@ import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+const RESALE_ERRORS: Record<string, string> = {
+  resale_failed: "Couldn't list it right now. Please try again.",
+  unauthorized: "Your session expired. Sign in again to list this piece.",
+  already_listed: "This piece is already listed for resale.",
+};
+
+function friendlyResaleError(code: string): string {
+  return RESALE_ERRORS[code] ?? code.replace(/_/g, " ");
+}
+
 export function ResaleListButton({
   purchaseId,
   defaultPriceUsd,
@@ -42,7 +52,7 @@ export function ResaleListButton({
       router.push(data.href ?? "/open");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "resale_failed");
+      setError(friendlyResaleError(err instanceof Error ? err.message : "resale_failed"));
     } finally {
       setBusy(false);
     }
@@ -52,11 +62,10 @@ export function ResaleListButton({
     return (
       <button
         type="button"
-        className="badge"
-        style={{ cursor: "pointer", background: "transparent" }}
+        className="fm-btn fm-btn--primary"
         onClick={() => setOpen(true)}
       >
-        List for sale
+        Resell this piece
       </button>
     );
   }
@@ -65,16 +74,20 @@ export function ResaleListButton({
     <form onSubmit={(e) => {
         e.preventDefault();
         void guard(() => submit(e));
-      }} className="fm-form-stack" style={{ maxWidth: "16rem" }}>
+      }} className="fm-form-stack" style={{ maxWidth: "22rem" }}>
       <label>
-        List price (USD)
+        Your price (USD)
         <input
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           inputMode="decimal"
           required
+          autoFocus
           className="fm-field"
         />
+        {defaultPriceUsd && defaultPriceUsd > 0 ? (
+          <span className="fm-form-note">You paid ${defaultPriceUsd}.</span>
+        ) : null}
       </label>
       <div className="fm-form-actions">
         <button type="submit" disabled={busy} className="fm-btn fm-btn--primary">
@@ -90,13 +103,12 @@ export function ResaleListButton({
       </div>
       {error ? (
         <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
-      ) : (
-        <PlatformFeeBreakdown
-          priceUsd={Number(price) > 0 ? Number(price) : defaultPriceUsd}
-          compact
-          isSecondary
-        />
-      )}
+      ) : null}
+      <PlatformFeeBreakdown
+        priceUsd={Number(price) > 0 ? Number(price) : defaultPriceUsd}
+        compact
+        isSecondary
+      />
     </form>
   );
 }

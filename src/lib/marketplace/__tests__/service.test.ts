@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 import {
   enableMemoryMode,
   getMemoryEngine,
@@ -949,6 +953,14 @@ describe("marketplace service (memory mode)", () => {
   it(
     "filters mine collections by network and deploy readiness",
     async () => {
+    // Hermetic: Boing paths probe a public RPC; blocked/offline networks made
+    // this hang to the 15s timeout. Fail every fetch fast (restored in afterEach).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network disabled in tests");
+      }),
+    );
 const boingCreator = `0x${"11".repeat(32)}`;
     const pendingBoing = await createCollectionForUser({
       creatorId: "artist-fresh",

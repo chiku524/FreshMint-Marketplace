@@ -54,9 +54,7 @@ export default async function SignInPage({
         initialName={params.name}
       />
       <p className="fm-form-note" style={{ marginTop: "1.15rem" }}>
-        No account yet?{" "}
-        <Link href={`/sign-up?next=${encodeURIComponent(nextPath)}`}>Create a profile</Link>, or{" "}
-        <Link href="/">browse without one</Link>.
+        Just looking? <Link href="/">Browse without an account</Link>.
       </p>
     </div>
   );

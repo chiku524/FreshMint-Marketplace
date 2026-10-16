@@ -29,10 +29,15 @@ export default async function MeLayout({
           </Link>
         </div>
         <p className="me-head__meta">
-          Role: {user.role} · curator score {user.curatorScore}
-          {user.verifiedCreator ? " · verified" : ""}
-          {user.establishedBadge ? " · established" : ""}
-          {user.totpEnabled ? " · 2FA on" : ""}.
+          {[
+            user.role !== "member" ? user.role : null,
+            `${user.curatorScore} curator points`,
+            user.verifiedCreator ? "verified" : null,
+            user.establishedBadge ? "established" : null,
+            user.totpEnabled ? "2FA on" : null,
+          ]
+            .filter(Boolean)
+            .join(" \u00b7 ")}
         </p>
       </header>
       <AccountTabs />

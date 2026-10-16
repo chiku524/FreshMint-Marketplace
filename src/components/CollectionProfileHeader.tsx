@@ -28,6 +28,8 @@ export type CollectionProfileHeaderProps = {
   coverUrl?: string | null;
   chain: string;
   itemCount: number;
+  /** Pieces created but not minted yet (hidden from collectors). */
+  pendingCount?: number;
   floorUsd?: number | null;
   volumeUsd?: number | null;
   badges?: ReactNode;
@@ -54,6 +56,7 @@ export function CollectionProfileHeader({
   coverUrl,
   chain,
   itemCount,
+  pendingCount = 0,
   floorUsd,
   volumeUsd,
   badges,
@@ -143,8 +146,15 @@ export function CollectionProfileHeader({
 
         <dl className="collection-profile__stats">
           <div>
-            <dt>Items</dt>
-            <dd>{itemCount}</dd>
+            <dt>{itemCount > 0 ? "Items" : "Live items"}</dt>
+            <dd>
+              {itemCount > 0 ? itemCount.toLocaleString("en-US") : "None yet"}
+              {pendingCount ? (
+                <span className="collection-profile__stat-note">
+                  {pendingCount.toLocaleString("en-US")} awaiting mint
+                </span>
+              ) : null}
+            </dd>
           </div>
           <div>
             <dt>Floor</dt>

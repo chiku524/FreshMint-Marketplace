@@ -1,5 +1,5 @@
 "use client";
-
+import { toast } from "@/lib/client/toast";
 import { useSingleFlight } from "@/lib/client/single-flight";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import type { Chain, NetworkId } from "@/lib/discovery/types";
@@ -137,7 +137,9 @@ export function ListingActions({
   const guard = useSingleFlight();
   const [msg, setMsg] = useState<string | null>(null);
   const showCheckoutError = (raw: string | null | undefined) => {
-    setMsg(humanizeCheckoutError(raw));
+    const text = humanizeCheckoutError(raw);
+    setMsg(text);
+    toast(text, "error");
     void captureCheckoutError(new Error(String(raw || "checkout_failed")), {
       route: "ListingActions",
       listingId,
@@ -377,6 +379,8 @@ export function ListingActions({
                   ? "This work isn't available to buy"
                   : raw === "listing_not_minted"
                     ? "This listing isn't minted on-chain yet"
+                    : raw === "boing_token_not_on_chain"
+                      ? "This work isn't confirmed on Boing yet — try again in a minute"
                     : raw === "boing_same_chain_only"
                       ? "Boing listings are same-chain only (pay with BOING)"
                       : raw === "boing_settlement_unavailable"
@@ -389,6 +393,7 @@ export function ListingActions({
                           ? "Couldn't start this purchase. Try again."
                           : raw;
       setMsg(error);
+      if (error !== "already_sold") toast(humanizeCheckoutError(error), "error");
       return { error };
     }
     return data as Record<string, unknown>;
@@ -724,6 +729,7 @@ export function ListingActions({
     const xfer =
       typeof data.transferTxHash === "string" ? data.transferTxHash : null;
     setMsg(`${prefix}${feeNote}`);
+    toast("Purchase complete \u2014 it\u2019s in your collection", "ok", { href: "/me", label: "View collection" });
     setLastTxHash(xfer);
     setBoughtThisSession(true);
     setHeldPurchase(null);
@@ -754,7 +760,7 @@ export function ListingActions({
           onClick={() =>
             void post("/api/signals", { listingId, type: "save" }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg("Saved");
+                toast("Saved to your collection", "ok", { href: "/me", label: "View saved" });
                 router.refresh();
               }
             })
@@ -777,8 +783,9 @@ export function ListingActions({
           onClick={() =>
             void post("/api/nominate", { listingId }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg(
-                  `Nominated (−${DISCOVERY_CONFIG.nominationStakePoints} curator pts)`,
+                toast(
+                  `Nominated (−${DISCOVERY_CONFIG.nominationStakePoints} curator points)`,
+                  "ok",
                 );
                 setCuratorScore((s) =>
                   s == null
@@ -787,7 +794,7 @@ export function ListingActions({
                 );
                 router.refresh();
               } else if (d && "error" in d) {
-                setMsg(String((d as { error?: string }).error ?? "nominate_failed"));
+                setMsg("Couldn\u2019t nominate this work. Please try again.");
               }
             })
           }
@@ -1080,7 +1087,7 @@ export function ListingActions({
               target: "rising_eligible",
             }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg("Pushed to Rising");
+                toast("Pushed to Rising", "ok");
                 router.refresh();
               }
             })
@@ -1103,7 +1110,7 @@ export function ListingActions({
               target: "soft_launch",
             }).then((d) => {
               if (d && !("error" in d)) {
-                setMsg("Soft-launched to Open Lane");
+                toast("Live in the Open Lane", "ok");
                 router.refresh();
               }
             })
@@ -1126,7 +1133,8 @@ export function ListingActions({
               listingId,
               reason: "spam",
             }).then((d) => {
-              if (d && !("error" in d)) setMsg("Reported");
+              if (d && !("error" in d))
+                toast("Thanks \u2014 our moderators will review this work.", "ok");
             })
           }
         >

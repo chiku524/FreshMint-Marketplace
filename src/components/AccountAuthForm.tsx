@@ -107,14 +107,9 @@ export function AccountAuthForm({
           <a href={googleHref} className="fm-btn fm-btn--primary auth-shell__google">
             Continue with Google
           </a>
-        ) : (
-          <p className="fm-form-note">
-            Google sign-in is available once <code>GOOGLE_CLIENT_ID</code> and{" "}
-            <code>GOOGLE_CLIENT_SECRET</code> are set.
-          </p>
-        )}
+        ) : null}
 
-        <p className="fm-form-divider">or use email</p>
+        {googleEnabled ? <p className="fm-form-divider">or use email</p> : null}
 
         <form onSubmit={(e) => void onSubmit(e)} className="fm-form-stack">
           {mode === "sign-up" ? (

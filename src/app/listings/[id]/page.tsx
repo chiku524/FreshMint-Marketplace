@@ -1,3 +1,5 @@
+import { ListingPriceCard } from "@/components/ListingPriceCard";
+import { buildPurchaseSummary } from "@/lib/marketplace/purchase-summary";
 import { FmImage } from "@/components/FmImage";
 import { requestNow } from "@/lib/time";
 import { FollowButton } from "@/components/FollowButton";
@@ -125,7 +127,13 @@ export default async function ListingDetailPage({
   const media = listing.mediaUrl;
   const network = resolveNetwork(listing.network, listing.chain);
   const net = getNetwork(network);
-  const minted = Boolean(
+  // Boing nodes can acknowledge a mint with a placeholder (e.g. "ok") before the
+  // token is readable on-chain. Treat anything that isn't a real hash as pending.
+  const boingPendingMint =
+    listing.chain === "boing" &&
+    Boolean(listing.tokenId || listing.mintTxHash) &&
+    !(listing.mintTxHash && /^(0x)?[0-9a-f]{64}$/i.test(listing.mintTxHash));
+  const minted = !boingPendingMint && Boolean(
     listing.tokenId && listing.contractAddress && listing.mintTxHash,
   );
   const drop = dropWindowFor(listing, collection);
@@ -220,6 +228,27 @@ export default async function ListingDetailPage({
         ? "$—"
         : "Timed listing";
 
+  const purchaseSummary = buildPurchaseSummary({
+    saleMode,
+    listingType: listing.type,
+    displayPriceUsd:
+      englishAwardAmount ?? displayPriceUsd ?? listing.priceUsd ?? listing.startingBidUsd ?? null,
+    startingBidUsd: listing.startingBidUsd,
+    currentHighBidUsd: listing.currentHighBidUsd,
+    minBidUsd: minBid,
+    reserveUsd: listing.reserveUsd,
+    reserveMet: Boolean(reserveMet),
+    startsAt: listing.auctionStartsAt ?? listing.oeStartsAt ?? null,
+    endsAt: listing.auctionEndsAt ?? listing.oeEndsAt ?? null,
+    dropState: drop.state,
+    cap,
+    isSold: isSold || completedPurchase != null,
+    delisted: Boolean(listing.delisted),
+    minted,
+    isSecondary: Boolean(listing.isSecondary),
+    now,
+  });
+
   return (
     <div className="page-wrap">
       <PageViewTracker listingId={listing.id} />
@@ -246,10 +275,15 @@ export default async function ListingDetailPage({
 
         <div className="listing-detail__info">
           <div className="listing-detail__badges">
-            {emerging ? <span className="badge emerging">Emerging</span> : null}
+            {emerging ? <span
+                className="badge emerging"
+                title="Emerging: this artist is in their first 90 days, so a share of Rising is reserved for their work."
+              >
+                Emerging
+              </span> : null}
             {minted ? <span className="badge emerging">Minted</span> : null}
             <span className="badge">{net.label}</span>
-            <span className="badge">{saleModeBadge(listing)}</span>
+            {minted ? <span className="badge">{saleModeBadge(listing)}</span> : null}
             <span className="badge">{stageLabel(listing.stage)}</span>
             {cap != null ? (
               <span className="badge">
@@ -282,7 +316,9 @@ export default async function ListingDetailPage({
               <span className="listing-detail__sep" aria-hidden="true">
                 ·
               </span>
-              <span className="listing-detail__medium">{listing.medium}</span>
+              <span className="listing-detail__medium">
+                {listing.medium.replace(/[_-]+/g, " ")}
+              </span>
               {collection ? (
                 <>
                   <span className="listing-detail__sep" aria-hidden="true">
@@ -311,10 +347,59 @@ export default async function ListingDetailPage({
               ) : null}
             </p>
           </div>
+          <ListingPriceCard summary={purchaseSummary} />
+          <dl className="listing-provenance">
+            <div>
+              <dt>Creator</dt>
+              <dd>
+                <Link href={`/creators/${listing.creatorId}`}>
+                  {creator?.displayName ?? listing.creatorId}
+                </Link>
+              </dd>
+            </div>
+            {listing.isSecondary && sellerId && sellerId !== listing.creatorId ? (
+              <div>
+                <dt>Owner</dt>
+                <dd>
+                  <Link href={`/creators/${sellerId}`}>
+                    {engine.state.creators.get(sellerId)?.displayName ?? sellerId}
+                  </Link>
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>Network</dt>
+              <dd>{net.label}</dd>
+            </div>
+            <div>
+              <dt>On-chain</dt>
+              <dd>{minted ? "Minted" : boingPendingMint ? "Confirming on Boing" : "Not minted yet"}</dd>
+            </div>
+            {listing.isSecondary ? (
+              <div>
+                <dt>Sale</dt>
+                <dd>
+                  Resale
+                  {listing.creatorRoyaltyBps
+                    ? ` \u00b7 ${(listing.creatorRoyaltyBps / 100).toFixed(1)}% to the creator`
+                    : ""}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
           <p className="listing-detail__desc">
             {listing.description || "No description yet."}
           </p>
-          {minted || listing.tokenId ? (
+          {boingPendingMint ? (
+            <div className="listing-detail__chain" role="status">
+              <p className="listing-detail__token">
+                <strong>Not on Boing yet.</strong> The mint was submitted but the
+                token isn&apos;t readable on-chain so far. This usually clears in a
+                minute{isManager ? " — if it doesn’t, retry Mint & publish from the collection page" : ""}.
+                Buying opens once it&apos;s confirmed.
+              </p>
+            </div>
+          ) : minted || listing.tokenId ? (
             <div className="listing-detail__chain">
               {listing.tokenId ? (
                 <p
@@ -499,7 +584,7 @@ export default async function ListingDetailPage({
                   repeatable={cap == null || cap > 1}
                   minted={minted}
                   canStageRising={canUserStageListing(user, listing)}
-                  suppressBuy={saleMode === "english" && auctionLive}
+                  suppressBuy={(saleMode === "english" && auctionLive) || (Boolean(user?.id) && user?.id === sellerId)}
                   showSave={false}
                   showCommunityActions={false}
                   pendingPurchase={
@@ -556,7 +641,7 @@ export default async function ListingDetailPage({
                   You own this
                 </h3>
                 <p className="fm-form-note" style={{ margin: "0 0 0.5rem" }}>
-                  List it for sale on FreshMint (Buy now secondary).
+                  Resell it here at a fixed price. Buyers can purchase instantly; the creator&apos;s royalty and fees are shown before you confirm.
                 </p>
                 <ResaleListButton
                   purchaseId={completedPurchase.id}
