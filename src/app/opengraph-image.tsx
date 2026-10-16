@@ -23,6 +23,8 @@ export default async function Image() {
           background: "linear-gradient(135deg, #1a3a2c 0%, #0d1c15 48%, #07110d 100%)",
         }}
       >
+        {/* ImageResponse (Satori) renders plain <img>; next/image is not supported here. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           alt=""
           src={mintMarkSvgDataUri("fm-og")}

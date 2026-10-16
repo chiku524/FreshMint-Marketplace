@@ -8,7 +8,7 @@ import type { Listing } from "./types";
  */
 export function retrieveRisingCandidates(
   listings: Iterable<Listing>,
-  now = Date.now(),
+  _now = Date.now(),
 ): Listing[] {
   const eligible: Listing[] = [];
   for (const listing of listings) {

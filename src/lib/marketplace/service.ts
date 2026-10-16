@@ -978,19 +978,6 @@ export function isReleasableCollectionNameHold(
   return true;
 }
 
-/** Prefer in-memory engine when tests (or fallback) enabled memory mode. */
-async function engineForCollectionHold(): Promise<DiscoveryEngine> {
-  const { ensureDatabaseReady } = await import("@/lib/db-ready");
-  const { isMemoryMode, getMemoryEngine } = await import(
-    "@/lib/data/memory-store"
-  );
-  const mode = await ensureDatabaseReady();
-  if (mode === "memory" || isMemoryMode()) {
-    return getMemoryEngine();
-  }
-  return getDiscoveryEngine();
-}
-
 async function collectionHoldStorageMode(): Promise<{
   useMemory: boolean;
   engine: DiscoveryEngine;

@@ -37,9 +37,10 @@ export function CollectionEditModal({
 
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
 
     previouslyFocused.current =
-      (document.activeElement as HTMLElement | null) ?? triggerRef.current;
+      (document.activeElement as HTMLElement | null) ?? trigger;
 
     const dialog = dialogRef.current;
     const previousOverflow = document.body.style.overflow;
@@ -83,7 +84,7 @@ export function CollectionEditModal({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
-      const restore = previouslyFocused.current ?? triggerRef.current;
+      const restore = previouslyFocused.current ?? trigger;
       restore?.focus();
     };
   }, [open, close]);
