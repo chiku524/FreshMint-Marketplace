@@ -12,13 +12,13 @@ type DiscoveryLink = {
 };
 
 /** Primary product IA — SiteNav stays free of these lane duplicates. */
-const BROWSE: DiscoveryLink[] = [
+export const BROWSE_LINKS: DiscoveryLink[] = [
   { href: "/collections", label: "Collections", icon: "collections" },
   { href: "/collections/new", label: "New collections", icon: "collections" },
   { href: "/creators", label: "Creators", icon: "account" },
 ];
 
-const DISCOVER: DiscoveryLink[] = [
+export const DISCOVER_LINKS: DiscoveryLink[] = [
   { href: "/search", label: "Search", icon: "trending" },
   { href: "/open", label: "Open Lane", icon: "open" },
   { href: "/rising", label: "Rising", icon: "rising" },
@@ -29,7 +29,7 @@ const DISCOVER: DiscoveryLink[] = [
   { href: "/shelves", label: "Shelves", icon: "shelves" },
 ];
 
-function isActive(pathname: string, href: string) {
+export function isDiscoveryActive(pathname: string, href: string) {
   if (href === "/collections") {
     if (pathname === "/collections") return true;
     if (!pathname.startsWith("/collections/")) return false;
@@ -53,7 +53,7 @@ function DiscoveryGroup({
       <h2 className="discovery-rail__heading">{heading}</h2>
       <ul className="discovery-rail__list">
         {items.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = isDiscoveryActive(pathname, item.href);
           return (
             <li key={item.href}>
               <Link
@@ -108,10 +108,10 @@ export function DiscoverySidebar() {
       <div className="discovery-rail__scrim" aria-hidden="true" />
       <div className="discovery-rail__panel">
         <nav className="discovery-rail__nav" aria-label="Discovery">
-          <DiscoveryGroup heading="Browse" items={BROWSE} pathname={pathname} />
+          <DiscoveryGroup heading="Browse" items={BROWSE_LINKS} pathname={pathname} />
           <DiscoveryGroup
             heading="Discover"
-            items={DISCOVER}
+            items={DISCOVER_LINKS}
             pathname={pathname}
           />
         </nav>

@@ -1,3 +1,4 @@
+import { MobileDiscoveryNav } from "@/components/MobileDiscoveryNav";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
@@ -87,6 +88,7 @@ export default async function RootLayout({
           <div className="site-frame">
             <DiscoverySidebar />
             <div className="site-frame__main">
+              <MobileDiscoveryNav />
               <FridayRaffleBanner />
               <main id="main-content" tabIndex={-1} className="site-main">{children}</main>
               <footer className="site-footer">
