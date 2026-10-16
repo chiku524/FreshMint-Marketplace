@@ -81,7 +81,6 @@ export function CollectionPublishPanel({
   const mintedDrafts = drafts.filter((d) => d.minted);
   const unmintedDrafts = drafts.filter((d) => !d.minted);
   const privateCount = drafts.filter((d) => !d.listed).length;
-  const listedUnminted = drafts.filter((d) => d.listed && !d.minted).length;
 
   const lifecycle = useMemo(
     () =>
@@ -472,9 +471,6 @@ export function CollectionPublishPanel({
         {[
           privateCount > 0
             ? `${privateCount} private draft${privateCount === 1 ? "" : "s"}`
-            : null,
-          listedUnminted
-            ? `${listedUnminted} listed but not buyable until minted`
             : null,
           mintedDrafts.length ? `${mintedDrafts.length} minted, ready to go live` : null,
         ]

@@ -1,3 +1,4 @@
+import { friendlyError, looksLikeErrorCode } from "@/lib/client/friendly-error";
 /**
  * Buy CTA while FreshMint session is loading / known (session-first).
  * undefined = auth still loading; null = signed out; string = signed in.
@@ -94,8 +95,8 @@ export function humanizeCheckoutError(raw: string | null | undefined): string {
     return "Payment window expired";
   }
   // Keep short API codes readable
-  if (msg.length <= 48 && !msg.includes(" ")) {
-    return msg.replaceAll("_", " ");
+  if (looksLikeErrorCode(msg)) {
+    return friendlyError(msg, "Checkout failed \u2014 try again");
   }
   return msg.length > 120 ? `${msg.slice(0, 117)}…` : msg;
 }

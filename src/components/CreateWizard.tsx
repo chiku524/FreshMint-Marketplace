@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { CreateLivePreview } from "@/components/CreateLivePreview";
 import { ProgressMeter } from "@/components/ProgressMeter";
@@ -1312,7 +1313,7 @@ export function CreateWizard() {
         await ensureCollection();
         setStepIndex((i) => i + 1);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "collection_failed");
+        setError(friendlyError(e instanceof Error ? e.message : "collection_failed"));
       } finally {
         setBusy(false);
       }
@@ -1891,7 +1892,7 @@ export function CreateWizard() {
           />
         ))}
       </div>
-      <ol className="create-wizard__steps" aria-label="Creation steps">
+      <ol className="create-wizard__steps" aria-label="Creation steps" tabIndex={0}>
         {steps.map((s, index) => (
           <li
             key={s.id}

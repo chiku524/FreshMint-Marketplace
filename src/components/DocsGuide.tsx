@@ -11,17 +11,17 @@ const TOC = [
   {
     id: "flow",
     label: "The life of a work",
-    blurb: "Draft → deploy → mint → live. Buy with crypto. Own in-wallet.",
+    blurb: "Create a collection, mint it, and it goes live. Collectors buy with crypto and own the piece in their wallet.",
   },
   {
     id: "studio",
     label: "Studio",
-    blurb: "Finish incomplete publishes. Profile shows minted collections.",
+    blurb: "Pick up unfinished collections and curate shelves. Your profile shows what's live.",
   },
   {
     id: "settlement",
     label: "Settlement",
-    blurb: "Primary sales pay native on-chain, then transfer the NFT.",
+    blurb: "Buyers pay on-chain and the NFT is transferred to them right away.",
   },
   {
     id: "fees",
@@ -31,17 +31,17 @@ const TOC = [
   {
     id: "ownership",
     label: "Ownership",
-    blurb: "Mint happens at publish. Buys transfer that NFT — withdraw is legacy only.",
+    blurb: "Pieces are minted when you publish. A purchase moves the NFT straight to the buyer's wallet.",
   },
   {
     id: "rarity",
     label: "Trait rarity",
-    blurb: "Collection pages rank pieces from trait frequency when traits exist.",
+    blurb: "When a collection has traits, pieces are ranked by how rare their traits are.",
   },
   {
     id: "discovery",
     label: "Discovery",
-    blurb: "Attention is scarce. Emerging quota is enforced in code.",
+    blurb: "Part of every feed is reserved for new artists, so fresh work gets seen.",
   },
 ] as const;
 
@@ -110,10 +110,9 @@ export function DocsGuide() {
             maxWidth: "42ch",
           }}
         >
-          Collect on FreshMint with crypto. Creators move collections through
-          draft → deploy → mint → live in Studio; buyers list, buy, and offer
-          with a {PLATFORM_FEE_PERCENT.total}% treasury fee — NFT in-wallet at
-          purchase, not at withdraw.
+          Creators publish collections; collectors buy with crypto and get the
+          NFT in their wallet at purchase. FreshMint keeps a{" "}
+          {PLATFORM_FEE_PERCENT.total}% fee that funds the community treasury.
         </p>
       </header>
 

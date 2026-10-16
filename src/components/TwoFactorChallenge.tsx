@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { useState } from "react";
 
@@ -31,7 +32,7 @@ export function TwoFactorChallenge({
       if (!res.ok) throw new Error(data.error ?? "verify_failed");
       onSuccess(data.user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "verify_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "verify_failed"));
     } finally {
       setBusy(false);
     }

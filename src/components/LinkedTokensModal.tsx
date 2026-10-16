@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { FmDialog } from "@/components/FmDialog";
 import type { LinkedTokenRef } from "@/lib/marketplace/linked-tokens";
@@ -163,7 +164,7 @@ export function LinkedTokensModal({
       router.refresh();
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "update_failed");
+      setError(friendlyError(err instanceof Error ? err.message : "update_failed"));
     } finally {
       setBusy(false);
     }

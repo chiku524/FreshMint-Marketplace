@@ -1,4 +1,5 @@
 "use client";
+import { friendlyError } from "@/lib/client/friendly-error";
 
 import { useSingleFlight } from "@/lib/client/single-flight";
 import { useRouter } from "next/navigation";
@@ -63,7 +64,7 @@ export function SaleModeEditor({
       setMsg("Saved");
       router.refresh();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "save_failed");
+      setMsg(friendlyError(err instanceof Error ? err.message : "save_failed"));
     } finally {
       setBusy(false);
     }
