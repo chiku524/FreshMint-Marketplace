@@ -6590,3 +6590,38 @@ a.treasury-balances__addr:focus-visible {
 
 [data-testid="boing-wallet-settings-row"] .badge,
 [data-testid="linked-wallet-row"] .badge { display: block; white-space: normal; overflow-wrap: anywhere; text-transform: none; }
+
+/* --- UX refresh r5: create wizard + collection page --- */
+.create-wizard__notice {
+  margin: 0 0 0.85rem; padding: 0.7rem 0.85rem; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 0.9rem;
+}
+.create-wizard__error {
+  margin: 0.75rem 0 0; padding: 0.6rem 0.8rem; border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--danger); border-radius: 6px;
+}
+.create-wizard__failed-list {
+  list-style: none; margin: 0.4rem 0; padding: 0; max-height: 12rem; overflow: auto;
+  border: 1px solid var(--line); border-radius: 8px; font-size: 0.85rem;
+}
+.create-wizard__failed-list li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0.6rem; }
+.create-wizard__failed-list li + li { border-top: 1px solid var(--line); }
+.create-wizard__failed-list li span:first-child { overflow-wrap: anywhere; }
+.create-wizard__failed-list li span:last-child { color: var(--ink-muted); flex: none; }
+.create-wizard__next-steps { margin: 1rem 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; color: var(--ink-muted); }
+.create-wizard__success-links { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+@media (max-width: 640px) {
+  .create-wizard__nav { position: sticky; bottom: 0; background: var(--surface-header); padding: 0.6rem 0; z-index: 2; }
+  .create-wizard__nav .fm-btn { flex: 1; }
+  .create-wizard__summary { grid-template-columns: 1fr; }
+}
+.collection-profile__stat-note { display: block; font-size: 0.75rem; color: var(--ink-muted); font-weight: 400; }
+.collection-owner-callout {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.85rem 1.25rem;
+  margin: 1rem 0; padding: 1rem 1.1rem; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel-solid));
+}
+.collection-owner-callout__title { margin: 0; font-weight: 700; font-size: 1.05rem; }
+.collection-owner-callout__body { margin: 0.2rem 0 0; color: var(--ink-muted); font-size: 0.9rem; max-width: 52ch; }
+@media (max-width: 640px) { .collection-owner-callout .fm-btn { width: 100%; justify-content: center; } }

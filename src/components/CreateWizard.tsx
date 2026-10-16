@@ -50,6 +50,13 @@ import {
   type BoingWalletTx,
   type EvmWalletTx,
 } from "@/lib/onchain/wallet-client";
+import {
+  UPLOAD_SESSION_KEY,
+  defaultRoyaltyLabel,
+  describeInterruptedUpload,
+  mintGasExpectation,
+  type UploadSession,
+} from "@/lib/marketplace/mint-expectations";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -475,6 +482,31 @@ export function CreateWizard() {
       }
     }
   }
+
+  const [interruptedNote, setInterruptedNote] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(UPLOAD_SESSION_KEY);
+      const note = describeInterruptedUpload(
+        raw ? (JSON.parse(raw) as UploadSession) : null,
+        Date.now(),
+      );
+      // Read once after mount (localStorage is client-only).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (note) setInterruptedNote(note);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
 
   useEffect(() => {
     loadMine();
@@ -1011,6 +1043,14 @@ export function CreateWizard() {
         budget -= file.size;
         queued.push(file);
       }
+      try {
+        localStorage.setItem(
+          UPLOAD_SESSION_KEY,
+          JSON.stringify({ total: queued.length, startedAt: Date.now(), collectionId: id }),
+        );
+      } catch {
+        /* private mode */
+      }
       if (!queued.length) {
         if (skippedAlready && !skippedQuota) {
           setOk(
@@ -1117,9 +1157,11 @@ export function CreateWizard() {
 
       if (failed.length) {
         setFailedUploadFiles(failed.map((f) => queued[f.index]!));
-        const sample = failed
-          .slice(0, 3)
-          .map((f) => f.error.message || "upload_failed")
+        // Show each distinct reason once (10k failures often share one cause).
+        const sample = [
+          ...new Set(failed.map((f) => f.error.message || "upload_failed")),
+        ]
+          .slice(0, 2)
           .join("; ");
         const priorKept = batchUpload ? pieces.length : 0;
         const totalKept = priorKept + okPieces.length;
@@ -1153,6 +1195,12 @@ export function CreateWizard() {
       setError(uploadErrorMessage(raw, raw));
     } finally {
       if (keepAlive.id) clearInterval(keepAlive.id);
+      try {
+        localStorage.removeItem(UPLOAD_SESSION_KEY);
+      } catch {
+        /* private mode */
+      }
+      setInterruptedNote(null);
       setBusy(false);
       setUploadProgress(null);
     }
@@ -1752,21 +1800,28 @@ export function CreateWizard() {
               wait out the new-wallet cooldown and weekly cap.
             </p>
             <div className="create-wizard__success-links" aria-label="Published links">
-              <Link href={collectionHref} className="badge featured">
+              <Link href={collectionHref} className="fm-btn fm-btn--primary">
                 View collection
               </Link>
               {firstId ? (
-                <Link href={`/listings/${firstId}`} className="badge">
-                  Open listing
+                <Link href={`/listings/${firstId}`} className="fm-btn fm-btn--ghost">
+                  Open first listing
                 </Link>
               ) : null}
-              <Link href="/rising" className="badge emerging">
-                Rising
-              </Link>
-              <Link href="/me" className="badge">
+              <Link href="/me" className="fm-btn fm-btn--ghost">
                 Your works
               </Link>
             </div>
+            <ol className="create-wizard__next-steps" aria-label="Next steps">
+              <li>Share the collection link{" \u2014 "}collectors can buy straight away.</li>
+              <li>
+                Add a bio and photo in <Link href="/me/settings">Settings</Link> so
+                buyers know who made it.
+              </li>
+              <li>
+                Watch for bids and sales in <Link href="/notifications">Alerts</Link>.
+              </li>
+            </ol>
             {explorerHashes.length ? (
               <div className="create-wizard__tx-links">
                 <p className="create-wizard__hint">
@@ -2373,6 +2428,11 @@ export function CreateWizard() {
         {step.id === "artwork" ? (
           <>
             <h2 className="display create-wizard__title">Upload artwork</h2>
+            {interruptedNote ? (
+              <p className="create-wizard__notice" role="status">
+                {interruptedNote}
+              </p>
+            ) : null}
             <p className="create-wizard__lead">
               {batchUpload
                 ? "Select many files at once (Shift or Ctrl/Cmd click). Up to 100 MB each, 10 GB per collection. The live preview updates as files land."
@@ -2413,6 +2473,19 @@ export function CreateWizard() {
                   {failedUploadFiles.length} file
                   {failedUploadFiles.length === 1 ? "" : "s"} still need upload.
                 </p>
+              ) : null}
+              {failedUploadFiles.length ? (
+                <ul className="create-wizard__failed-list" aria-label="Files that failed">
+                  {failedUploadFiles.slice(0, 20).map((f, i) => (
+                    <li key={`${f.name}-${f.size}-${i}`}>
+                      <span>{f.name}</span>
+                      <span>{formatBytes(f.size)}</span>
+                    </li>
+                  ))}
+                  {failedUploadFiles.length > 20 ? (
+                    <li>{"\u2026"}and {(failedUploadFiles.length - 20).toLocaleString("en-US")} more</li>
+                  ) : null}
+                </ul>
               ) : null}
               <div
                 style={{
@@ -2651,7 +2724,7 @@ export function CreateWizard() {
 
         {step.id === "review" ? (
           <>
-            <h2 className="display create-wizard__title">Mint & publish</h2>
+            <h2 className="display create-wizard__title">Review, then mint & publish</h2>
             <p className="create-wizard__lead">
               Minting at publish is required to sell. Unminted drafts stay off
               the market and show as “Not minted yet” to collectors.
@@ -2737,6 +2810,14 @@ export function CreateWizard() {
                 </dd>
               </div>
               <div>
+                <dt>Network fees</dt>
+                <dd>{mintGasExpectation(network, Math.max(1, pieces.length))}</dd>
+              </div>
+              <div>
+                <dt>Royalties</dt>
+                <dd>{defaultRoyaltyLabel()}.</dd>
+              </div>
+              <div>
                 <dt>Traits</dt>
                 <dd>
                   {pieces.filter((p) => p.traits.length).length} of{" "}
@@ -2777,10 +2858,10 @@ export function CreateWizard() {
             . Successful uploads in this batch are kept.
           </p>
         ) : error ? (
-          <p style={{ color: "var(--danger)", margin: "0.75rem 0 0" }}>{error}</p>
+          <p role="alert" className="create-wizard__error">{error}</p>
         ) : null}
         {ok ? (
-          <p style={{ color: "var(--emergent)", margin: "0.75rem 0 0" }}>{ok}</p>
+          <p role="status" style={{ color: "var(--emergent)", margin: "0.75rem 0 0" }}>{ok}</p>
         ) : null}
 
         <div className="create-wizard__nav">

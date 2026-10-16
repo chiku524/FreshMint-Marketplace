@@ -114,6 +114,9 @@ export default async function CollectionDetailPage({
     hero?.description?.trim() ||
     `Creator-owned set on ${network}. Collectors pay crypto and receive the NFT at purchase.`;
   const headerItemCount = pieces.length || 0;
+  const awaitingMint = allInCollection.filter(
+    (l) => !l.delisted && !(l.tokenId && l.contractAddress),
+  ).length;
   const collectionActivity = await listCollectionActivity(collection.id, 30);
   const liveCount = allInCollection.filter(
     (l) => l.stage !== "draft" && !l.delisted,
@@ -168,6 +171,7 @@ export default async function CollectionDetailPage({
         coverUrl={coverUrl}
         chain={network}
         itemCount={headerItemCount}
+        pendingCount={awaitingMint}
         floorUsd={floorUsd}
         volumeUsd={volumeUsd}
         description={aboutBlurb}
@@ -224,7 +228,7 @@ export default async function CollectionDetailPage({
                 />
                 <Link
                   href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
-                  className="badge featured"
+                  className="fm-btn fm-btn--ghost"
                 >
                   Add works
                 </Link>
@@ -242,8 +246,25 @@ export default async function CollectionDetailPage({
         />
       ) : null}
 
+      {isOwner && awaitingMint > 0 ? (
+        <section className="collection-owner-callout" aria-label="Finish publishing">
+          <div>
+            <p className="collection-owner-callout__title">
+              {awaitingMint.toLocaleString("en-US")} piece{awaitingMint === 1 ? " is" : "s are"} waiting to be minted
+            </p>
+            <p className="collection-owner-callout__body">
+              Collectors can&apos;t see or buy {awaitingMint === 1 ? "it" : "them"} until you mint
+              and publish. You pay network gas; finished batches are kept if you stop.
+            </p>
+          </div>
+          <a href="#publish" className="fm-btn fm-btn--primary">
+            Finish minting
+          </a>
+        </section>
+      ) : null}
+
       {isOwner ? (
-        <div className="collection-detail__owner">
+        <div className="collection-detail__owner" id="publish">
           <CollectionPublishPanel
             collectionId={collection.id}
             network={network}
@@ -311,10 +332,10 @@ export default async function CollectionDetailPage({
           ) : (
             <p className="collection-detail__empty">
               {isOwner ? (
-                ownerDrafts.length > 0 ? (
+                ownerDrafts.length > 0 || awaitingMint > 0 ? (
                   <>
-                    No on-chain pieces yet. Use <strong>Mint &amp; publish
-                    remaining</strong> above to mint drafts, or{" "}
+                    Nothing is live yet. Use <strong>Finish minting</strong> above to
+                    mint your drafts, or{" "}
                     <Link
                       href={`/create?collectionId=${encodeURIComponent(collection.id)}`}
                     >
@@ -335,7 +356,15 @@ export default async function CollectionDetailPage({
                   </>
                 )
               ) : (
-                "No on-chain pieces in this collection yet."
+                <>
+                  {awaitingMint > 0
+                    ? "The creator hasn't minted these pieces yet, so nothing is for sale. "
+                    : "Nothing in this collection yet. "}
+                  <Link href={`/creators/${collection.creatorId}`}>
+                    Follow {creatorName}
+                  </Link>{" "}
+                  to hear when it goes live.
+                </>
               )}
             </p>
           )
