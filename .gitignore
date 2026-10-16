@@ -45,3 +45,7 @@ next-env.d.ts
 # Generated platform wallets / private keys — never commit
 .wallets/
 .env*
+
+# Vercel Marketplace agent skills (local only)
+.agents/
+skills-lock.json
