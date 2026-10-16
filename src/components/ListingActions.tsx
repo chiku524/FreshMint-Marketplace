@@ -160,6 +160,8 @@ export function ListingActions({
     listingNetwork,
   ]);
   const [quoteBusy, setQuoteBusy] = useState(false);
+  const [quoteFailed, setQuoteFailed] = useState(false);
+  const [quoteAttempt, setQuoteAttempt] = useState(0);
   const [serverPayFormatted, setServerPayFormatted] = useState<string | null>(
     null,
   );
@@ -216,7 +218,8 @@ export function ListingActions({
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/auth/me", { credentials: "include" })
+    const controller = new AbortController();
+    void fetch("/api/auth/me", { credentials: "include", signal: controller.signal })
       .then(async (res) => {
         const data = await res.json();
         if (cancelled) return;
@@ -240,6 +243,7 @@ export function ListingActions({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -252,6 +256,7 @@ export function ListingActions({
     // Quote state must reset synchronously when inputs change.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuoteBusy(true);
+    setQuoteFailed(false);
     setBridgeQuoteLoading(canLiveBridge);
     if (cross && !paymentAddress) {
       setBridgeFeeUsd(null);
@@ -264,9 +269,11 @@ export function ListingActions({
       setBridgeQuoteRequestId(null);
       setBridgeQuoteLoading(false);
     }
+    const controller = new AbortController();
     void fetch("/api/purchase/quote", {
       method: "POST",
       credentials: "include",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         listingId,
@@ -319,6 +326,8 @@ export function ListingActions({
       })
       .catch(() => {
         if (!cancelled) {
+          // Network error (not an API rejection): offer a retry.
+          setQuoteFailed(true);
           setServerPayFormatted(null);
           if (canLiveBridge) {
             setBridgeFeeUsd(null);
@@ -335,8 +344,9 @@ export function ListingActions({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [confirmBuy, listingId, payNetwork, priceUsd, paymentAddress, listingNetwork]);
+  }, [confirmBuy, listingId, payNetwork, priceUsd, paymentAddress, listingNetwork, quoteAttempt]);
 
   async function post(url: string, body: Record<string, unknown>) {
     const res = await fetch(url, {
@@ -957,6 +967,19 @@ export function ListingActions({
 
           <p className="listing-actions__wallet-note">
             {quoteBusy ? "Updating quote…" : null}
+            {!quoteBusy && quoteFailed ? (
+              <span role="alert">
+                Couldn’t load a live quote.{" "}
+                <button
+                  type="button"
+                  className="badge"
+                  style={{ cursor: "pointer", background: "transparent" }}
+                  onClick={() => setQuoteAttempt((n) => n + 1)}
+                >
+                  Retry
+                </button>{" "}
+              </span>
+            ) : null}
             {!quoteBusy && crossChain ? (
               <>
                 Cross-chain via Relay. You pay on{" "}
