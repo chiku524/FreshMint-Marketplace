@@ -1,6 +1,7 @@
 "use client";
 
 import { CreateLivePreview } from "@/components/CreateLivePreview";
+import { ProgressMeter } from "@/components/ProgressMeter";
 import { PlatformFeeBreakdown } from "@/components/PlatformFeeBreakdown";
 import { PublishConfetti } from "@/components/PublishConfetti";
 import { PublishLifecycleStatus } from "@/components/PublishLifecycleStatus";
@@ -2396,9 +2397,11 @@ export function CreateWizard() {
             </label>
             <div className="create-wizard__upload-status" aria-live="polite">
               {uploadProgress ? (
-                <p className="create-wizard__upload-count">
-                  Uploading {uploadProgress.current} of {uploadProgress.total}…
-                </p>
+                <ProgressMeter
+                  label="Uploading files"
+                  current={uploadProgress.current}
+                  total={uploadProgress.total}
+                />
               ) : null}
               <p className="drop-studio__quota">
                 {pieces.length
@@ -2750,15 +2753,19 @@ export function CreateWizard() {
           </p>
         ) : null}
         {listProgress ? (
-          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }} aria-live="polite">
-            Creating listings {listProgress.current} of {listProgress.total}…
-          </p>
+          <ProgressMeter
+            label="Saving drafts"
+            current={listProgress.current}
+            total={listProgress.total}
+          />
         ) : null}
         {mintProgress ? (
-          <p style={{ color: "var(--ink)", margin: "0.75rem 0 0" }} aria-live="polite">
-            Minting on-chain batch {mintProgress.current} of {mintProgress.total}
-            … (you pay gas)
-          </p>
+          <ProgressMeter
+            label="Minting on-chain (one wallet signature per batch)"
+            current={mintProgress.current}
+            total={mintProgress.total}
+            note="Approve each batch in your wallet. You pay the network gas; finished batches are kept if you need to retry."
+          />
         ) : null}
         {error === "sign_in" ||
         (error && /session expired|sign in again/i.test(error)) ? (
