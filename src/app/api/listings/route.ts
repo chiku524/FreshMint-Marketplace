@@ -1,4 +1,5 @@
 import { readJsonBody } from "@/lib/http/json";
+import { nextCursor, parsePage } from "@/lib/http/pagination";
 import { getSessionUser } from "@/lib/auth/session";
 import { isNetworkId, resolveNetwork, vmFromNetwork } from "@/lib/chains/registry";
 import { getDiscoveryEngine } from "@/lib/marketplace/service";
@@ -7,10 +8,18 @@ import type { ListingType, NetworkId } from "@/lib/discovery/types";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const engine = await getDiscoveryEngine();
+  // Paginated: a single 10k collection made the unbounded dump multi-MB.
+  const { limit, offset } = parsePage(req.nextUrl.searchParams, {
+    defaultLimit: 500,
+    maxLimit: 1000,
+  });
+  const all = [...engine.state.listings.values()];
   return NextResponse.json({
-    items: [...engine.state.listings.values()],
+    items: all.slice(offset, offset + limit),
+    total: all.length,
+    nextCursor: nextCursor(offset, limit, all.length),
     creators: [...engine.state.creators.values()],
     collections: [...engine.state.collections.values()],
     shelves: [...engine.state.shelves.values()],

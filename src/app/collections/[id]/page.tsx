@@ -54,11 +54,16 @@ export async function generateMetadata({
   });
 }
 
+const GALLERY_PAGE_SIZE = 200;
+
 export default async function CollectionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ page?: string }>;
 }) {
+  const pageParam = Number((await searchParams)?.page ?? "1");
   const { id: idOrSlug } = await params;
   const engine = await getDiscoveryEngine();
   const surface = engine.getCollectionSurface(idOrSlug);
@@ -108,6 +113,18 @@ export default async function CollectionDetailPage({
     (l) => l.stage !== "draft" && !l.delisted,
   ).length;
   const rarity = computeCollectionRarity(pieces);
+  // 10k-item collections: render the gallery a page at a time so the HTML /
+  // RSC payload stays small. Floor, rarity and counts still use every piece.
+  const pageCount = Math.max(1, Math.ceil(pieces.length / GALLERY_PAGE_SIZE));
+  const page = Number.isFinite(pageParam)
+    ? Math.min(Math.max(1, Math.floor(pageParam)), pageCount)
+    : 1;
+  const pagePieces = pieces.slice(
+    (page - 1) * GALLERY_PAGE_SIZE,
+    page * GALLERY_PAGE_SIZE,
+  );
+  const pageHref = (n: number) =>
+    `/collections/${collection.slug || collection.id}${n > 1 ? `?page=${n}` : ""}`;
   const rarityById = Object.fromEntries(rarity.byListingId);
 
   return (
@@ -241,8 +258,9 @@ export default async function CollectionDetailPage({
         activityCount={collectionActivity.length}
         items={
           pieces.length ? (
+            <>
             <CollectionItemsWithRarity
-              pieces={pieces}
+              pieces={pagePieces}
               rarityById={rarityById}
               hasTraits={rarity.hasTraits}
               soldIds={[...soldIds]}
@@ -255,6 +273,16 @@ export default async function CollectionDetailPage({
                 slug: collection.slug,
               }}
             />
+            {pageCount > 1 ? (
+              <nav aria-label="Collection pages" className="collection-detail__pager">
+                {page > 1 ? <Link href={pageHref(page - 1)}>{"\u2190 Previous"}</Link> : null}
+                <span>
+                  Page {page} of {pageCount}
+                </span>
+                {page < pageCount ? <Link href={pageHref(page + 1)}>{"Next \u2192"}</Link> : null}
+              </nav>
+            ) : null}
+            </>
           ) : (
             <p className="collection-detail__empty">
               {isOwner ? (
