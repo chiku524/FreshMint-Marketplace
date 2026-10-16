@@ -88,75 +88,26 @@ export default async function MeCollectionPage({
   return (
     <div className="profile-stack">
       <p className="profile-stack__lead">
-        Your minted collections, sales, shelves, and bridges. Open a collection
-        to browse or manage pieces.
+        Your collections and sales live here. Open a collection to manage its
+        pieces.
       </p>
-
-      <FridayRafflePanel
-        wallets={profile.wallets.map((w) => ({
-          chain: w.chain,
-          address: w.address,
-        }))}
-      />
-
-      {hasBoingWallet ? (
-        <section className="me-notice" data-testid="boing-wallet-balances">
-          <h2 className="display me-section__title">Boing balance</h2>
-          <p className="me-section__lead">
-            Live native BOING from linked Boing wallets.
-          </p>
-          {scanMeta.boingBalances.length === 0 ? (
-            <p className="fm-empty-copy">No usable Boing wallet address linked.</p>
-          ) : (
-            <ul className="me-list">
-              {scanMeta.boingBalances.map((bal) => (
-                <li
-                  key={bal.address}
-                  className="me-list__row"
-                  style={{ fontFamily: "monospace" }}
-                >
-                  {bal.ok ? (
-                    <>
-                      <a
-                        href={getNetwork("boing").explorerAddress(bal.address)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {shortBoingAddress(bal.address)}
-                      </a>
-                      {" · "}
-                      <strong style={{ fontFamily: "inherit" }}>
-                        {bal.balance ?? "0"} BOING
-                      </strong>
-                    </>
-                  ) : (
-                    <>
-                      <a
-                        href={getNetwork("boing").explorerAddress(bal.address)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {shortBoingAddress(bal.address)}
-                      </a>
-                      {" · "}
-                      <span style={{ color: "var(--ink-muted)" }}>
-                        balance not loaded
-                      </span>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {scanMeta.boingBalances.some((b) => !b.ok) ? (
-            <p className="fm-form-note" data-testid="boing-scan-warnings">
-              {formatBoingBalanceUserMessage(
-                scanMeta.boingBalances.find((b) => !b.ok)?.error,
-              )}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+      <div className="me-next-steps" aria-label="Next steps">
+        <Link href="/create" className="fm-btn fm-btn--primary">
+          Create a collection
+        </Link>
+        {unpublishedCount > 0 ? (
+          <Link href="/studio" className="fm-btn fm-btn--ghost">
+            Finish {unpublishedCount} draft{unpublishedCount === 1 ? "" : "s"}
+          </Link>
+        ) : (
+          <Link href="/studio" className="fm-btn fm-btn--ghost">
+            Open Studio
+          </Link>
+        )}
+        <Link href={`/creators/${user.id}`} className="fm-btn fm-btn--ghost">
+          View public profile
+        </Link>
+      </div>
 
       {openCheckouts.length > 0 ? (
         <section className="me-notice">
@@ -310,6 +261,75 @@ export default async function MeCollectionPage({
                 </ul>
               )}
             </section>
+            <div className="me-extras">
+              <h2 className="me-extras__title">Rewards &amp; balances</h2>
+            <FridayRafflePanel
+              wallets={profile.wallets.map((w) => ({
+                chain: w.chain,
+                address: w.address,
+              }))}
+            />
+
+            {hasBoingWallet ? (
+              <section className="me-notice" data-testid="boing-wallet-balances">
+                <h2 className="display me-section__title">Boing balance</h2>
+                <p className="me-section__lead">
+                  Live native BOING from linked Boing wallets.
+                </p>
+                {scanMeta.boingBalances.length === 0 ? (
+                  <p className="fm-empty-copy">No usable Boing wallet address linked.</p>
+                ) : (
+                  <ul className="me-list">
+                    {scanMeta.boingBalances.map((bal) => (
+                      <li
+                        key={bal.address}
+                        className="me-list__row"
+                        style={{ fontFamily: "monospace" }}
+                      >
+                        {bal.ok ? (
+                          <>
+                            <a
+                              href={getNetwork("boing").explorerAddress(bal.address)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {shortBoingAddress(bal.address)}
+                            </a>
+                            {" · "}
+                            <strong style={{ fontFamily: "inherit" }}>
+                              {bal.balance ?? "0"} BOING
+                            </strong>
+                          </>
+                        ) : (
+                          <>
+                            <a
+                              href={getNetwork("boing").explorerAddress(bal.address)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {shortBoingAddress(bal.address)}
+                            </a>
+                            {" · "}
+                            <span style={{ color: "var(--ink-muted)" }}>
+                              balance not loaded
+                            </span>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {scanMeta.boingBalances.some((b) => !b.ok) ? (
+                  <p className="fm-form-note" data-testid="boing-scan-warnings">
+                    {formatBoingBalanceUserMessage(
+                      scanMeta.boingBalances.find((b) => !b.ok)?.error,
+                    )}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
+            </div>
           </>
         }
       />

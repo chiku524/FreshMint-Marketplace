@@ -1,5 +1,7 @@
 import { CreatorAvatar } from "@/components/CreatorAvatar";
 import { FollowButton } from "@/components/FollowButton";
+import { PuzzleRail } from "@/components/PuzzleRail";
+import { WorkCard } from "@/components/WorkCard";
 import { ProfileWorksExplorer } from "@/components/ProfileWorksExplorer";
 import { getSessionUser } from "@/lib/auth/session";
 import { isEmergingCreator } from "@/lib/discovery";
@@ -57,6 +59,11 @@ export default async function CreatorProfilePage({
     volumes,
   });
 
+  const works = [...engine.state.listings.values()]
+    .filter((l) => l.creatorId === id && !l.delisted && l.softLaunchedAt != null)
+    .sort((a, b) => (b.softLaunchedAt ?? 0) - (a.softLaunchedAt ?? 0))
+    .slice(0, 12);
+
   const user = await getSessionUser();
   const following =
     user != null &&
@@ -104,9 +111,9 @@ export default async function CreatorProfilePage({
               {creator.displayName}
             </h1>
             <p className="profile-masthead__meta">
-              {creator.completedSales} sales · $
-              {Math.round(creator.lifetimePrimaryVolumeUsd)} primary volume ·
-              curator score {creator.curatorScore}
+              {creator.completedSales} sale{creator.completedSales === 1 ? "" : "s"}
+              {" \u00b7 "}
+              {"$" + Math.round(creator.lifetimePrimaryVolumeUsd).toLocaleString("en-US")} sold
             </p>
             {creator.bio ? (
               <p className="profile-masthead__bio">{creator.bio}</p>
@@ -145,12 +152,21 @@ export default async function CreatorProfilePage({
                 ) : null}
               </p>
             ) : null}
-            <p className="profile-masthead__wallets">
-              Wallets:{" "}
-              {creator.wallets
-                .map((w) => `${w.chain}:${w.address.slice(0, 8)}…`)
-                .join(" · ")}
-            </p>
+            {creator.wallets.length > 0 ? (
+              <details className="profile-masthead__wallets">
+                <summary>
+                  {creator.wallets.length} linked wallet
+                  {creator.wallets.length === 1 ? "" : "s"}
+                </summary>
+                <ul>
+                  {creator.wallets.map((w) => (
+                    <li key={`${w.chain}:${w.address}`} title={w.address}>
+                      {w.chain}: {w.address.slice(0, 6)}{"\u2026"}{w.address.slice(-4)}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </div>
         </div>
         <div className="profile-masthead__actions">
@@ -160,25 +176,41 @@ export default async function CreatorProfilePage({
             label="Follow artist"
           />
           {user?.id === id ? (
-            <Link
-              href="/me/settings"
-              className="badge"
-              style={{ fontSize: "0.82rem" }}
-            >
-              Edit profile photo
+            <Link href="/me/settings" className="fm-btn fm-btn--ghost">
+              Edit profile
             </Link>
           ) : null}
         </div>
       </header>
 
       <div className="profile-stack">
+        {works.length > 0 ? (
+          <section className="me-section">
+            <h2 className="display me-section__title">Works ({works.length})</h2>
+            <PuzzleRail>
+              {works.map((listing) => (
+                <WorkCard
+                  key={listing.id}
+                  listing={listing}
+                  creatorName={creator.displayName}
+                  creatorAvatarUrl={creator.avatarUrl}
+                  collection={
+                    listing.collectionId
+                      ? engine.state.collections.get(listing.collectionId) ?? null
+                      : null
+                  }
+                />
+              ))}
+            </PuzzleRail>
+          </section>
+        ) : null}
         <ProfileWorksExplorer
           initialView={initialView}
           creatorName={creator.displayName}
           collections={collectionItems}
           emptyCollections={
             <p className="fm-empty-copy">
-              No minted collections yet.
+              {works.length > 0 ? "No collections yet \u2014 works above are standalone pieces." : "Nothing published yet."}
               {user?.id === id ? (
                 <>
                   {" "}

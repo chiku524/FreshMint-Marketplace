@@ -126,6 +126,7 @@ function seedMemoryPurchases(): MemoryPurchase[] {
       amountUsd: 180,
       soldAt: now - 2 * day,
       txHash: "0xsoldfresh001",
+      status: "completed",
       chain: "evm",
     },
     {
@@ -135,6 +136,7 @@ function seedMemoryPurchases(): MemoryPurchase[] {
       amountUsd: 95,
       soldAt: now - 6 * day,
       txHash: "soldglitch002",
+      status: "completed",
       chain: "solana",
     },
   ];

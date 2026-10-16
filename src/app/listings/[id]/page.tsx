@@ -236,7 +236,7 @@ export default async function ListingDetailPage({
     endsAt: listing.auctionEndsAt ?? listing.oeEndsAt ?? null,
     dropState: drop.state,
     cap,
-    isSold: isSold && !pendingPurchase,
+    isSold: isSold || completedPurchase != null,
     delisted: Boolean(listing.delisted),
     minted,
     isSecondary: Boolean(listing.isSecondary),
