@@ -13,7 +13,7 @@
  */
 export function migratePolicy(env) {
   const flag = (v) => ["1", "true", "yes"].includes(String(v ?? "").trim().toLowerCase());
-  if (!String(env.DATABASE_URL ?? "").trim()) {
+  if (!String(env.STORAGE_DATABASE_URL ?? env.DATABASE_URL ?? "").trim()) {
     return { run: false, reason: "DATABASE_URL is not set (memory catalog mode)" };
   }
   if (flag(env.SKIP_DB_MIGRATE)) {

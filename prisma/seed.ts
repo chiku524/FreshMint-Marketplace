@@ -2,7 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { createPrismaAdapter } from "../src/lib/prisma-adapter";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.STORAGE_DATABASE_URL || process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL is required to seed");
 }

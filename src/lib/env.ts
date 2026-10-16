@@ -23,7 +23,8 @@ ensureEnv();
 
 export function getDatabaseUrl(): string | null {
   ensureEnv();
-  const url = process.env.DATABASE_URL?.trim();
+  // Neon store (STORAGE_* prefix, pooled) wins over the legacy Prisma Postgres URL.
+  const url = (process.env.STORAGE_DATABASE_URL || process.env.DATABASE_URL)?.trim();
   if (!url) return null;
   // Legacy sqlite file URLs are no longer supported after the Postgres cutover.
   if (url.startsWith("file:")) return null;
