@@ -54,8 +54,7 @@ export default async function SignInPage({
         initialName={params.name}
       />
       <p className="fm-form-note" style={{ marginTop: "1.15rem" }}>
-        Just looking? <Link href="/">Browse without an account</Link>. Wallets
-        are linked after sign-in, from Settings.
+        Just looking? <Link href="/">Browse without an account</Link>.
       </p>
     </div>
   );

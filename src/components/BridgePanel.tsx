@@ -3,6 +3,17 @@
 import { sendEvmWalletTx } from "@/lib/onchain/wallet-client";
 import { BridgeQuoteSummary } from "@/components/BridgeQuoteSummary";
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/client/toast";
+
+function readableBridgeError(raw: string): string {
+  const m = raw.toLowerCase();
+  if (m.includes("reject") || m.includes("denied")) return "Wallet request was rejected";
+  if (m.includes("insufficient")) return "Not enough funds on the source network";
+  if (m.includes("amount")) return "Enter a valid amount";
+  if (m.includes("address")) return "Connect a wallet or enter a valid address";
+  if (/^[a-z0-9_]+$/.test(raw)) return "Bridge request failed. Please try again.";
+  return raw.length > 140 ? `${raw.slice(0, 137)}\u2026` : raw;
+}
 
 type NetworkOption = {
   id: string;
@@ -94,7 +105,9 @@ export function BridgePanel() {
       setQuote(data.quote);
       setTransferId(data.transferId ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "quote_failed");
+      const text = readableBridgeError(e instanceof Error ? e.message : "quote_failed");
+      setError(text);
+      toast(text, "error");
     } finally {
       setBusy(false);
     }
@@ -149,8 +162,11 @@ export function BridgePanel() {
       if (!confirm.ok) throw new Error(conf.error ?? "confirm_failed");
       setStatus(conf.status ?? "submitted");
       setQuote(data.quote);
+      toast("Bridge submitted \u2014 funds usually arrive within a few minutes", "ok");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "execute_failed");
+      const text = readableBridgeError(e instanceof Error ? e.message : "execute_failed");
+      setError(text);
+      toast(text, "error");
     } finally {
       setBusy(false);
     }
@@ -159,9 +175,8 @@ export function BridgePanel() {
   return (
     <div className="fm-form-stack bridge-shell">
       <p className="fm-form-note">
-        Move native gas (ETH on Ethereum / Base / Arbitrum / Optimism, or SOL)
-        across mint-supported networks via Relay. Testnet mode until mainnet
-        wallets are funded.
+        1. Choose networks and an amount. 2. Get a quote. 3. Confirm in your
+        wallet. Bridging is powered by Relay.
       </p>
 
       <label>
@@ -195,21 +210,25 @@ export function BridgePanel() {
       </label>
 
       <label>
-        Amount (native units)
+        Amount ({networks.find((n) => n.id === fromNetwork)?.nativeSymbol ?? "ETH"})
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="fm-field"
+          inputMode="decimal"
+          autoComplete="off"
         />
       </label>
 
       <label>
-        Your address (auto-filled on connect)
+        Your wallet address
         <input
           value={userAddress}
           onChange={(e) => setUserAddress(e.target.value)}
           className="fm-field"
-          placeholder="0x… or Solana pubkey"
+          placeholder="Filled in when you connect a wallet"
+          autoComplete="off"
+          spellCheck={false}
         />
       </label>
 
@@ -230,7 +249,7 @@ export function BridgePanel() {
           disabled={busy}
           onClick={() => void onQuote()}
         >
-          {busy ? "…" : "Get quote"}
+          {busy ? "Working\u2026" : quote ? "Refresh quote" : "Get quote"}
         </button>
         <button
           type="button"
@@ -238,7 +257,7 @@ export function BridgePanel() {
           disabled={busy || !quote}
           onClick={() => void onExecute()}
         >
-          Execute bridge
+          {quote ? "Bridge now" : "Bridge (get a quote first)"}
         </button>
       </div>
 
@@ -252,7 +271,7 @@ export function BridgePanel() {
 
       {status ? (
         <p role="status" aria-live="polite" className="fm-form-note" style={{ color: "var(--emergent)" }}>
-          Status: {status}
+          Bridge status: {status.replace(/_/g, " ")}
         </p>
       ) : null}
       {error ? <p role="alert" className="fm-form-error">{error}</p> : null}

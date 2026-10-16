@@ -23,7 +23,7 @@ export const BROWSE_LINKS: DiscoveryLink[] = [
 export const DISCOVER_LINKS: DiscoveryLink[] = [
   { href: "/search", label: "Search", icon: "trending" },
   { href: "/open", label: "Open Lane", icon: "open", hint: "Every published work, newest first. No ranking, no paid placement." },
-  { href: "/rising", label: "Rising", icon: "rising", hint: "Ranked picks. A fixed share is reserved for Emerging artists (first 90 days)." },
+  { href: "/rising", label: "Rising", icon: "rising", hint: "Fresh work, with a daily share reserved for new artists." },
   { href: "/featured", label: "Featured", icon: "featured" },
   { href: "/trending", label: "Most viewed", icon: "trending" },
   { href: "/auctions", label: "Auctions", icon: "auctions" },

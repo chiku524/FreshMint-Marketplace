@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Collections",
   description:
-    "Browse creator collections with at least $1,000 all-time completed primary volume.",
+    "Browse top creator collections on FreshMint, plus new collections this week.",
 };
 
 export default async function CollectionsPage() {

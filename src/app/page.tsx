@@ -105,16 +105,16 @@ export default async function HomePage() {
             Discover new art before it floods the feed.
           </h1>
           <p className="fm-home-hero__lede anim-rise-delay">
-            Fair discovery for digital art. Emerging artists get a real quota.
+            A marketplace for digital art where new artists always get seen.
           </p>
           <ul className="fm-home-hero__terms anim-rise-delay" aria-label="How discovery works">
             <li>
-              <strong>Emerging</strong> artists are in their first 90 days; a fixed
-              share of Rising is reserved for them.
+              <strong>Emerging</strong> artists (in their first 90 days) get a
+              reserved share of Rising every day.
             </li>
             <li>
               <strong>Open Lane</strong> lists every published work, newest first
-              {" \u2014 "}no ranking, no paid placement.
+              {" \u2014 "}no paid placement.
             </li>
           </ul>
           <div className="fm-home-hero__actions anim-rise-delay">
@@ -263,7 +263,7 @@ export default async function HomePage() {
           title={
             personalized
               ? `For ${user!.displayName}`
-              : "Composed for you"
+              : "Picked for you"
           }
           subtitle={
             personalized
@@ -287,7 +287,7 @@ export default async function HomePage() {
             title={marketplaceEmpty ? "Your feed will fill up as creators publish" : "Nothing matches these tastes yet"}
             body={
               marketplaceEmpty
-                ? "Choose a few tastes above now; matching new work appears here automatically."
+                ? "Pick a few styles above and matching new work will appear here."
                 : "Try other tastes, or browse everything in the Open Lane."
             }
             actions={marketplaceEmpty ? [] : [{ href: "/open", label: "Browse the Open Lane", variant: "ghost" }]}

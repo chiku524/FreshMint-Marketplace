@@ -1,5 +1,5 @@
 "use client";
-
+import { toast } from "@/lib/client/toast";
 import { useSingleFlight } from "@/lib/client/single-flight";
 import { PLATFORM_FEE_PERCENT } from "@/lib/fees/platform";
 import type { Chain, NetworkId } from "@/lib/discovery/types";
@@ -137,7 +137,9 @@ export function ListingActions({
   const guard = useSingleFlight();
   const [msg, setMsg] = useState<string | null>(null);
   const showCheckoutError = (raw: string | null | undefined) => {
-    setMsg(humanizeCheckoutError(raw));
+    const text = humanizeCheckoutError(raw);
+    setMsg(text);
+    toast(text, "error");
     void captureCheckoutError(new Error(String(raw || "checkout_failed")), {
       route: "ListingActions",
       listingId,
@@ -391,6 +393,7 @@ export function ListingActions({
                           ? "Couldn't start this purchase. Try again."
                           : raw;
       setMsg(error);
+      if (error !== "already_sold") toast(humanizeCheckoutError(error), "error");
       return { error };
     }
     return data as Record<string, unknown>;
@@ -726,6 +729,7 @@ export function ListingActions({
     const xfer =
       typeof data.transferTxHash === "string" ? data.transferTxHash : null;
     setMsg(`${prefix}${feeNote}`);
+    toast("Purchase complete \u2014 it\u2019s in your collection", "ok", { href: "/me", label: "View collection" });
     setLastTxHash(xfer);
     setBoughtThisSession(true);
     setHeldPurchase(null);
@@ -789,7 +793,7 @@ export function ListingActions({
                 );
                 router.refresh();
               } else if (d && "error" in d) {
-                setMsg(String((d as { error?: string }).error ?? "nominate_failed"));
+                setMsg("Couldn\u2019t nominate this work. Please try again.");
               }
             })
           }

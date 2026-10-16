@@ -94,7 +94,7 @@ export default async function RootLayout({
               <main id="main-content" tabIndex={-1} className="site-main">{children}</main>
               <footer className="site-footer">
                 <span className="site-footer__tagline">
-                  Attention is scarce. Emerging artists get a coded quota.
+                  Every day, part of the spotlight is reserved for new artists.
                 </span>
                 <span className="site-footer__links">
                   <Link href="/docs#settlement">How it works</Link>

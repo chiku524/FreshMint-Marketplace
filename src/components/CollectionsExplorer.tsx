@@ -153,7 +153,7 @@ export function CollectionsExplorer({
   const blurb =
     lane === "new"
       ? "Collections created in the last 7 days with at least one published work — newest first."
-      : `Creator-owned sets with at least $${COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} all-time completed primary volume.`;
+      : `Top collections \u2014 each has sold at least $${COLLECTION_INDEX_MIN_VOLUME_USD.toLocaleString()} in total.`;
 
   return (
     <>
@@ -207,10 +207,10 @@ export function CollectionsExplorer({
               sets are listed under New this week.
             </p>
             <div className="fm-empty-state__actions">
-              <Link href="/collections/new" className="fm-btn fm-btn--ghost">
-                New this week
+              <Link href="/collections/new" className="fm-btn fm-btn--primary">
+                See new this week
               </Link>
-              <Link href="/create?intent=drop" className="fm-btn fm-btn--primary">
+              <Link href="/create?intent=drop" className="fm-btn fm-btn--ghost">
                 Start a collection
               </Link>
             </div>

@@ -124,6 +124,8 @@ export default async function AuctionsPage({
         </section>
       ) : null}
 
+      {empty ? null : (
+      <>
       <section style={{ marginTop: "1.75rem", marginBottom: "3rem" }}>
         <h2 className="display" style={{ margin: "0 0 1rem", fontSize: "1.45rem" }}>
           {liveHeading(filter, live.length)}
@@ -192,6 +194,8 @@ export default async function AuctionsPage({
           </PuzzleRail>
         )}
       </section>
+      </>
+      )}
     </div>
   );
 }

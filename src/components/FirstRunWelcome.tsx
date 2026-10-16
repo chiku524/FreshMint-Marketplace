@@ -48,7 +48,7 @@ export function FirstRunWelcome({ signedIn }: { signedIn: boolean }) {
         </Link>
       </div>
       <p className="fm-first-run__collector">
-        Here to collect? Pick a few tastes below and new work will show up here as soon as it lands.
+        Here to collect? Pick a few styles below and new work will show up as soon as it lands.
       </p>
     </section>
   );
