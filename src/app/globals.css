@@ -6413,10 +6413,15 @@ a.treasury-balances__addr:focus-visible {
     min-width: 0;
     flex: 1 1 auto;
   }
-  .site-header__start .site-nav {
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
+  .site-header__start .site-nav,
+  .site-nav--end {
+    flex-wrap: nowrap;
+    gap: 0.15rem 0.55rem;
+    font-size: 0.86rem;
+  }
+  .site-header .site-nav__trigger svg,
+  .site-header .site-nav__trigger .site-nav__icon {
+    display: none;
   }
   .site-header__end {
     gap: 0.3rem;
