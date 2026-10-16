@@ -23,7 +23,7 @@ Use **Demo persona** in the header (or Connect EVM wallet) → **Create** to sof
 - Primary store is **Postgres** via `DATABASE_URL` (local Docker maps **5433→5432**).
 - Runtime **never** shells out to `npx prisma` (that crashes Vercel sandboxes).
 - If Postgres is unset or unreachable → **in-memory seeded catalog**.
-- Check `GET /api/health` for `{ mode: "prisma" | "memory", blobConfigured, evmMarket }`.
+- Check `GET /api/health` for `{ ok, database: "ok" | "unreachable" | "not_configured" }`.
 
 For hosted previews, set `DATABASE_URL` to a managed Postgres URL (Neon, Supabase, Vercel Postgres, etc.).
 
