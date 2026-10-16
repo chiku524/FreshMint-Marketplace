@@ -2461,58 +2461,114 @@ export async function updateCollectionDrop(input: {
   };
 }
 
+/**
+ * Count an upload against a collection's storage quota BEFORE it is written to
+ * Blob. Keyed by content hash: re-uploading / retrying the same file in the
+ * same collection is not counted twice (`duplicate: true`). Call
+ * releaseCollectionMedia() if the Blob write then fails.
+ */
 export async function reserveCollectionMedia(input: {
   collectionId: string;
   creatorId: string;
   size: number;
+  mediaHash: string;
 }) {
   const { COLLECTION_MEDIA_CAP_BYTES } = await import("@/lib/marketplace/drops");
   if (!(input.size > 0)) {
     return { ok: false as const, error: "empty_file" };
   }
 
-  const engine = await getDiscoveryEngine();
-  const existing = engine.state.collections.get(input.collectionId);
-  if (!existing) return { ok: false as const, error: "collection_not_found" };
-  if (existing.creatorId !== input.creatorId) {
-    return { ok: false as const, error: "collection_forbidden" };
-  }
-  const used = existing.mediaBytes ?? 0;
-  if (used + input.size > COLLECTION_MEDIA_CAP_BYTES) {
-    return { ok: false as const, error: "collection_quota" };
-  }
-
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
-  const mediaBytes = used + input.size;
 
   if (mode === "memory" || isMemoryMode()) {
-    getMemoryEngine().state.collections.set(input.collectionId, {
-      ...existing,
-      mediaBytes,
-    });
-    return { ok: true as const, mediaBytes };
+    const mem = getMemoryEngine();
+    const existing = mem.state.collections.get(input.collectionId);
+    if (!existing) return { ok: false as const, error: "collection_not_found" };
+    if (existing.creatorId !== input.creatorId) {
+      return { ok: false as const, error: "collection_forbidden" };
+    }
+    const used = existing.mediaBytes ?? 0;
+    if (used + input.size > COLLECTION_MEDIA_CAP_BYTES) {
+      return { ok: false as const, error: "collection_quota" };
+    }
+    mem.state.collections.set(input.collectionId, { ...existing, mediaBytes: used + input.size });
+    return { ok: true as const, mediaBytes: used + input.size, duplicate: false };
   }
 
-  // Atomic conditional increment: safe under parallel uploads (the old
-  // read-modify-write could lose bytes or overshoot the cap) and costs one
-  // statement per file.
-  const res = await prisma.collection.updateMany({
-    where: {
-      id: input.collectionId,
-      creatorId: input.creatorId,
-      mediaBytes: { lte: COLLECTION_MEDIA_CAP_BYTES - input.size },
-    },
-    data: { mediaBytes: { increment: input.size } },
+  const collection = await prisma.collection.findUnique({
+    where: { id: input.collectionId },
+    select: { creatorId: true, mediaBytes: true },
   });
-  if (res.count === 0) {
-    return { ok: false as const, error: "collection_quota" };
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
   }
-  const current = engine.state.collections.get(input.collectionId) ?? existing;
-  const next = (current.mediaBytes ?? 0) + input.size;
-  engine.state.collections.set(input.collectionId, { ...current, mediaBytes: next });
-  return { ok: true as const, mediaBytes: Math.max(next, mediaBytes) };
+
+  try {
+    const mediaBytes = await prisma.$transaction(async (tx) => {
+      const prior = await tx.collectionMediaReservation.findUnique({
+        where: {
+          collectionId_mediaHash: {
+            collectionId: input.collectionId,
+            mediaHash: input.mediaHash,
+          },
+        },
+        select: { id: true },
+      });
+      if (prior) return null;
+      await tx.collectionMediaReservation.create({
+        data: {
+          collectionId: input.collectionId,
+          mediaHash: input.mediaHash,
+          size: input.size,
+        },
+      });
+      // Atomic conditional increment (safe under parallel uploads).
+      const res = await tx.collection.updateMany({
+        where: {
+          id: input.collectionId,
+          mediaBytes: { lte: COLLECTION_MEDIA_CAP_BYTES - input.size },
+        },
+        data: { mediaBytes: { increment: input.size } },
+      });
+      if (res.count === 0) throw new Error("collection_quota");
+      return (collection.mediaBytes ?? 0) + input.size;
+    });
+    if (mediaBytes === null) {
+      return { ok: true as const, mediaBytes: collection.mediaBytes ?? 0, duplicate: true };
+    }
+    return { ok: true as const, mediaBytes, duplicate: false };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === "collection_quota") return { ok: false as const, error: "collection_quota" };
+    // Unique race: a parallel request reserved the same file first.
+    if ((e as { code?: string })?.code === "P2002") {
+      return { ok: true as const, mediaBytes: collection.mediaBytes ?? 0, duplicate: true };
+    }
+    throw e;
+  }
+}
+
+/** Undo a reservation when the Blob write failed (so the quota isn't leaked). */
+export async function releaseCollectionMedia(input: {
+  collectionId: string;
+  mediaHash: string;
+}) {
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  if (isMemoryMode()) return;
+  await prisma.$transaction(async (tx) => {
+    const row = await tx.collectionMediaReservation.findUnique({
+      where: { collectionId_mediaHash: input },
+    });
+    if (!row) return;
+    await tx.collectionMediaReservation.delete({ where: { id: row.id } });
+    await tx.collection.updateMany({
+      where: { id: input.collectionId, mediaBytes: { gte: row.size } },
+      data: { mediaBytes: { decrement: row.size } },
+    });
+  });
 }
 
 export async function listCollectionsForUser(

@@ -75,6 +75,18 @@ function mimeFromName(name: string): string | null {
 }
 
 export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
+  return persistPreparedMedia(await prepareUploadedMedia(file));
+}
+
+export type PreparedMedia = {
+  bytes: Buffer;
+  mimeType: string;
+  mediaHash: string;
+  fileName: string;
+};
+
+/** Validate + hash an upload without storing it (so quota can be checked first). */
+export async function prepareUploadedMedia(file: File): Promise<PreparedMedia> {
   if (file.size <= 0) throw new Error("empty_file");
   if (file.size > MAX_BYTES) throw new Error("file_too_large");
   const mimeType =
@@ -89,7 +101,11 @@ export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
   }
   const mediaHash = createHash("sha256").update(bytes).digest("hex").slice(0, 32);
   const fileName = `${Date.now()}-${randomBytes(4).toString("hex")}.${extFor(mimeType)}`;
+  return { bytes, mimeType, mediaHash, fileName };
+}
 
+export async function persistPreparedMedia(prepared: PreparedMedia): Promise<StoredMedia> {
+  const { bytes, mimeType, mediaHash, fileName } = prepared;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const blob = await put(`freshmint/${fileName}`, bytes, {
       access: "public",
