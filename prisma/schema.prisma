@@ -198,6 +198,8 @@ model Listing {
   @@index([chain])
   @@index([network])
   @@index([mediaHash])
+  /// One listing per media fingerprint per collection (bulk/retry idempotency).
+  @@unique([collectionId, mediaHash])
   @@index([saleMode])
   @@index([highBidderId])
   @@index([collectionId])
@@ -272,6 +274,7 @@ model Collection {
 
   creator  User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   listings Listing[]
+  mediaReservations CollectionMediaReservation[]
   packagePurchases PackagePurchase[]
 
   @@index([createdAt])
@@ -543,4 +546,18 @@ model PackagePurchase {
 
   @@index([collectionId])
   @@index([buyerId])
+}
+
+/// Media bytes counted against a collection's storage quota, keyed by content
+/// hash so retried / re-uploaded files are only counted once.
+model CollectionMediaReservation {
+  id           String   @id @default(cuid())
+  collectionId String
+  mediaHash    String
+  size         Int
+  createdAt    DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, mediaHash])
 }

@@ -64,8 +64,17 @@ export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
   }
 
   try {
-    const state = await loadMarketplaceState();
-    const engine = new DiscoveryEngine(state);
+    const { createEngineCache, engineCacheTtlMs } = await import(
+      "@/lib/data/engine-cache"
+    );
+    const g = globalThis as unknown as {
+      __fmEngineCache?: ReturnType<typeof createEngineCache<DiscoveryEngine>>;
+    };
+    g.__fmEngineCache ??= createEngineCache<DiscoveryEngine>();
+    const engine = await g.__fmEngineCache.get(
+      async () => new DiscoveryEngine(await loadMarketplaceState()),
+      { ttlMs: engineCacheTtlMs() },
+    );
     const promoted = engine.promoteEligibleSoftLaunches();
     if (promoted.length) {
       await persistRisingPromotions(engine, promoted);
@@ -73,10 +82,10 @@ export async function getDiscoveryEngine(): Promise<DiscoveryEngine> {
     return engine;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const { enableMemoryMode, getMemoryEngine } = await import(
+    const { markDatabaseOutage, getMemoryEngine } = await import(
       "@/lib/data/memory-store"
     );
-    enableMemoryMode(message);
+    markDatabaseOutage(message);
     const engine = getMemoryEngine();
     engine.promoteEligibleSoftLaunches();
     return engine;
@@ -87,19 +96,26 @@ async function persistRisingPromotions(
   engine: DiscoveryEngine,
   promoted: Listing[],
 ) {
-  for (const listing of promoted) {
-    await prisma.listing.update({
-      where: { id: listing.id },
-      data: {
-        stage: listing.stage,
-        risingEligibleAt: listing.risingEligibleAt
-          ? new Date(listing.risingEligibleAt)
-          : null,
-      },
-    });
-    const creator = engine.state.creators.get(listing.creatorId);
+  // One transaction per promotion sweep instead of 2 sequential round trips
+  // per listing; creator stats are written once per creator.
+  const creatorIds = [...new Set(promoted.map((l) => l.creatorId))];
+  await prisma.$transaction([
+    ...promoted.map((listing) =>
+      prisma.listing.update({
+        where: { id: listing.id },
+        data: {
+          stage: listing.stage,
+          risingEligibleAt: listing.risingEligibleAt
+            ? new Date(listing.risingEligibleAt)
+            : null,
+        },
+      }),
+    ),
+  ]);
+  for (const creatorId of creatorIds) {
+    const creator = engine.state.creators.get(creatorId);
     if (!creator) continue;
-    await persistCreatorStats(listing.creatorId, {
+    await persistCreatorStats(creatorId, {
       risingEntriesThisWeek: creator.risingEntriesThisWeek,
       openLaneListingsToday: creator.openLaneListingsToday,
       firstListingAt: creator.firstListingAt
@@ -2082,6 +2098,20 @@ export async function confirmCollectionMintBatch(input: {
     return { ok: false as const, error: "simulated_mint_not_allowed" };
   }
 
+  const pendingListingWrites = new Map<string, Record<string, unknown>>();
+  const stagedCreatorIds = new Set<string>();
+  const flushPendingListingWrites = async () => {
+    if (memory || pendingListingWrites.size === 0) return;
+    const writes = [...pendingListingWrites.entries()];
+    pendingListingWrites.clear();
+    for (let i = 0; i < writes.length; i += 200) {
+      await prisma.$transaction(
+        writes.slice(i, i + 200).map(([id, data]) =>
+          prisma.listing.update({ where: { id }, data }),
+        ),
+      );
+    }
+  };
   const mintedDraftIds: string[] = [];
   const skippedUnverified: Array<{ listingId: string; error: string }> = [];
 
@@ -2125,13 +2155,11 @@ export async function confirmCollectionMintBatch(input: {
     if (memory) {
       getMemoryEngine().state.listings.set(listingId, next);
     } else {
-      await prisma.listing.update({
-        where: { id: listingId },
-        data: {
-          mintTxHash,
-          tokenId,
-          ...(contractAddress ? { contractAddress } : {}),
-        },
+      // Deferred: merged with the soft-launch write and flushed in batches.
+      pendingListingWrites.set(listingId, {
+        mintTxHash,
+        tokenId,
+        ...(contractAddress ? { contractAddress } : {}),
       });
       engine.state.listings.set(listingId, next);
     }
@@ -2139,6 +2167,7 @@ export async function confirmCollectionMintBatch(input: {
   }
 
   if (mintedDraftIds.length === 0 && skippedUnverified.length > 0) {
+    await flushPendingListingWrites();
     return {
       ok: false as const,
       error: "boing_token_not_on_chain",
@@ -2161,9 +2190,8 @@ export async function confirmCollectionMintBatch(input: {
     }
     softLaunched.push(listingId);
     if (!memory) {
-      await prisma.listing.update({
-        where: { id: listingId },
-        data: {
+      pendingListingWrites.set(listingId, {
+        ...(pendingListingWrites.get(listingId) ?? {}),
           stage: staged.listing.stage,
           softLaunchedAt: staged.listing.softLaunchedAt
             ? new Date(staged.listing.softLaunchedAt)
@@ -2174,19 +2202,22 @@ export async function confirmCollectionMintBatch(input: {
           featuredAt: staged.listing.featuredAt
             ? new Date(staged.listing.featuredAt)
             : null,
-        },
       });
-      const creator = engine.state.creators.get(staged.listing.creatorId);
-      if (creator) {
-        await persistCreatorStats(staged.listing.creatorId, {
-          risingEntriesThisWeek: creator.risingEntriesThisWeek,
-          openLaneListingsToday: creator.openLaneListingsToday,
-          firstListingAt: creator.firstListingAt
-            ? new Date(creator.firstListingAt)
-            : null,
-        });
-      }
+      stagedCreatorIds.add(staged.listing.creatorId);
     }
+  }
+
+  // One combined write per listing (was 2 + a creator-stats write each),
+  // sent in transactions of 200 instead of thousands of round trips.
+  await flushPendingListingWrites();
+  for (const creatorId of stagedCreatorIds) {
+    const creator = engine.state.creators.get(creatorId);
+    if (!creator) continue;
+    await persistCreatorStats(creatorId, {
+      risingEntriesThisWeek: creator.risingEntriesThisWeek,
+      openLaneListingsToday: creator.openLaneListingsToday,
+      firstListingAt: creator.firstListingAt ? new Date(creator.firstListingAt) : null,
+    });
   }
 
   return {
@@ -2445,46 +2476,114 @@ export async function updateCollectionDrop(input: {
   };
 }
 
+/**
+ * Count an upload against a collection's storage quota BEFORE it is written to
+ * Blob. Keyed by content hash: re-uploading / retrying the same file in the
+ * same collection is not counted twice (`duplicate: true`). Call
+ * releaseCollectionMedia() if the Blob write then fails.
+ */
 export async function reserveCollectionMedia(input: {
   collectionId: string;
   creatorId: string;
   size: number;
+  mediaHash: string;
 }) {
   const { COLLECTION_MEDIA_CAP_BYTES } = await import("@/lib/marketplace/drops");
   if (!(input.size > 0)) {
     return { ok: false as const, error: "empty_file" };
   }
 
-  const engine = await getDiscoveryEngine();
-  const existing = engine.state.collections.get(input.collectionId);
-  if (!existing) return { ok: false as const, error: "collection_not_found" };
-  if (existing.creatorId !== input.creatorId) {
-    return { ok: false as const, error: "collection_forbidden" };
-  }
-  const used = existing.mediaBytes ?? 0;
-  if (used + input.size > COLLECTION_MEDIA_CAP_BYTES) {
-    return { ok: false as const, error: "collection_quota" };
-  }
-
   const { ensureDatabaseReady } = await import("@/lib/db-ready");
   const { isMemoryMode, getMemoryEngine } = await import("@/lib/data/memory-store");
   const mode = await ensureDatabaseReady();
-  const mediaBytes = used + input.size;
 
   if (mode === "memory" || isMemoryMode()) {
-    getMemoryEngine().state.collections.set(input.collectionId, {
-      ...existing,
-      mediaBytes,
-    });
-    return { ok: true as const, mediaBytes };
+    const mem = getMemoryEngine();
+    const existing = mem.state.collections.get(input.collectionId);
+    if (!existing) return { ok: false as const, error: "collection_not_found" };
+    if (existing.creatorId !== input.creatorId) {
+      return { ok: false as const, error: "collection_forbidden" };
+    }
+    const used = existing.mediaBytes ?? 0;
+    if (used + input.size > COLLECTION_MEDIA_CAP_BYTES) {
+      return { ok: false as const, error: "collection_quota" };
+    }
+    mem.state.collections.set(input.collectionId, { ...existing, mediaBytes: used + input.size });
+    return { ok: true as const, mediaBytes: used + input.size, duplicate: false };
   }
 
-  const updated = await prisma.collection.update({
+  const collection = await prisma.collection.findUnique({
     where: { id: input.collectionId },
-    data: { mediaBytes },
+    select: { creatorId: true, mediaBytes: true },
   });
-  engine.state.collections.set(input.collectionId, toCollection(updated));
-  return { ok: true as const, mediaBytes: updated.mediaBytes };
+  if (!collection) return { ok: false as const, error: "collection_not_found" };
+  if (collection.creatorId !== input.creatorId) {
+    return { ok: false as const, error: "collection_forbidden" };
+  }
+
+  try {
+    const mediaBytes = await prisma.$transaction(async (tx) => {
+      const prior = await tx.collectionMediaReservation.findUnique({
+        where: {
+          collectionId_mediaHash: {
+            collectionId: input.collectionId,
+            mediaHash: input.mediaHash,
+          },
+        },
+        select: { id: true },
+      });
+      if (prior) return null;
+      await tx.collectionMediaReservation.create({
+        data: {
+          collectionId: input.collectionId,
+          mediaHash: input.mediaHash,
+          size: input.size,
+        },
+      });
+      // Atomic conditional increment (safe under parallel uploads).
+      const res = await tx.collection.updateMany({
+        where: {
+          id: input.collectionId,
+          mediaBytes: { lte: COLLECTION_MEDIA_CAP_BYTES - input.size },
+        },
+        data: { mediaBytes: { increment: input.size } },
+      });
+      if (res.count === 0) throw new Error("collection_quota");
+      return (collection.mediaBytes ?? 0) + input.size;
+    });
+    if (mediaBytes === null) {
+      return { ok: true as const, mediaBytes: collection.mediaBytes ?? 0, duplicate: true };
+    }
+    return { ok: true as const, mediaBytes, duplicate: false };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === "collection_quota") return { ok: false as const, error: "collection_quota" };
+    // Unique race: a parallel request reserved the same file first.
+    if ((e as { code?: string })?.code === "P2002") {
+      return { ok: true as const, mediaBytes: collection.mediaBytes ?? 0, duplicate: true };
+    }
+    throw e;
+  }
+}
+
+/** Undo a reservation when the Blob write failed (so the quota isn't leaked). */
+export async function releaseCollectionMedia(input: {
+  collectionId: string;
+  mediaHash: string;
+}) {
+  const { isMemoryMode } = await import("@/lib/data/memory-store");
+  if (isMemoryMode()) return;
+  await prisma.$transaction(async (tx) => {
+    const row = await tx.collectionMediaReservation.findUnique({
+      where: { collectionId_mediaHash: input },
+    });
+    if (!row) return;
+    await tx.collectionMediaReservation.delete({ where: { id: row.id } });
+    await tx.collection.updateMany({
+      where: { id: input.collectionId, mediaBytes: { gte: row.size } },
+      data: { mediaBytes: { decrement: row.size } },
+    });
+  });
 }
 
 export async function listCollectionsForUser(
@@ -3946,7 +4045,24 @@ export async function purchaseListing(input: {
     });
     purchaseId = row.id;
   } else {
-    const row = await prisma.purchase.create({
+    // Re-check supply and insert under a per-listing advisory lock in one
+    // transaction, so two buyers racing for the last edition can't both win.
+    const { purchaseReservesSupply } = await import("@/lib/marketplace/lifecycle");
+    const row = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"purchase:" + input.listingId}))`;
+      if (cap != null) {
+        const reserving = await tx.purchase.findMany({
+          where: {
+            listingId: input.listingId,
+            status: { in: ["completed", "pending_transfer", "pending_payment"] },
+          },
+          select: { status: true, createdAt: true },
+        });
+        if (reserving.filter((p) => purchaseReservesSupply(p)).length >= cap) {
+          throw new Error("already_sold");
+        }
+      }
+      return tx.purchase.create({
       data: {
         listingId: input.listingId,
         buyerId: input.buyerId,
@@ -3968,6 +4084,11 @@ export async function purchaseListing(input: {
         withdrawnAt: withdrawnAt ? new Date(withdrawnAt) : null,
       },
     });
+    }).catch((e: unknown) => {
+      if (e instanceof Error && e.message === "already_sold") return null;
+      throw e;
+    });
+    if (!row) return { ok: false as const, error: "already_sold" };
     purchaseId = row.id;
 
     if (status === "completed") {

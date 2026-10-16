@@ -19,6 +19,20 @@ import {
   resolveBoingNftDeployTemplateVersion,
 } from "@/lib/onchain/boing";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+async function probeDatabase(): Promise<"ok" | "unreachable" | "not_configured"> {
+  if (!isPostgresConfigured()) return "not_configured";
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+    ]);
+    return "ok";
+  } catch {
+    return "unreachable";
+  }
+}
 
 export async function GET() {
   const mode = await ensureDatabaseReady();
@@ -27,9 +41,14 @@ export async function GET() {
   for (const id of EVM_NETWORK_IDS) {
     markets[id] = marketAddressFor(id as NetworkId);
   }
-  const boing = await probeBoingNetwork();
+  const [boing, database] = await Promise.all([
+    probeBoingNetwork(),
+    probeDatabase(),
+  ]);
+  const degraded = database === "unreachable";
   return NextResponse.json({
-    ok: true,
+    ok: !degraded,
+    database,
     mode: isMemoryMode() ? "memory" : mode,
     postgresConfigured: isPostgresConfigured(),
     databaseHost: url
@@ -58,5 +77,5 @@ export async function GET() {
       },
     },
     timestamp: new Date().toISOString(),
-  });
+  }, { status: degraded ? 503 : 200 });
 }

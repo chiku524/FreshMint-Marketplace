@@ -75,6 +75,18 @@ function mimeFromName(name: string): string | null {
 }
 
 export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
+  return persistPreparedMedia(await prepareUploadedMedia(file));
+}
+
+export type PreparedMedia = {
+  bytes: Buffer;
+  mimeType: string;
+  mediaHash: string;
+  fileName: string;
+};
+
+/** Validate + hash an upload without storing it (so quota can be checked first). */
+export async function prepareUploadedMedia(file: File): Promise<PreparedMedia> {
   if (file.size <= 0) throw new Error("empty_file");
   if (file.size > MAX_BYTES) throw new Error("file_too_large");
   const mimeType =
@@ -84,9 +96,16 @@ export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
   if (!ALLOWED.has(mimeType)) throw new Error("unsupported_type");
 
   const bytes = Buffer.from(await file.arrayBuffer());
+  if (mimeType === "image/svg+xml" && !isSafeSvg(bytes.toString("utf8"))) {
+    throw new Error("unsafe_svg");
+  }
   const mediaHash = createHash("sha256").update(bytes).digest("hex").slice(0, 32);
   const fileName = `${Date.now()}-${randomBytes(4).toString("hex")}.${extFor(mimeType)}`;
+  return { bytes, mimeType, mediaHash, fileName };
+}
 
+export async function persistPreparedMedia(prepared: PreparedMedia): Promise<StoredMedia> {
+  const { bytes, mimeType, mediaHash, fileName } = prepared;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const blob = await put(`freshmint/${fileName}`, bytes, {
       access: "public",
@@ -104,6 +123,24 @@ export async function storeUploadedMedia(file: File): Promise<StoredMedia> {
   }
 
   return storeLocal(bytes, fileName, mimeType, mediaHash);
+}
+
+/**
+ * SVG is XML that can carry script. We keep accepting plain artwork SVGs (they
+ * display through <img>, which never runs script) but reject files with active
+ * content: script/foreignObject/iframe/embed elements, on* event handlers,
+ * javascript:/data:text/html URLs, external entity tricks, or xlink to other
+ * origins' scripts. Rejecting beats rewriting: we never store altered art.
+ */
+export function isSafeSvg(text: string): boolean {
+  const t = text.toLowerCase();
+  if (/<\s*(script|foreignobject|iframe|embed|object|handler)\b/.test(t)) return false;
+  if (/\son[a-z]+\s*=/.test(t)) return false;
+  if (/(javascript|vbscript)\s*:/.test(t)) return false;
+  if (/data\s*:\s*text\/html/.test(t)) return false;
+  if (/<!entity/.test(t)) return false;
+  if (/<\s*set\b[^>]*attributename\s*=\s*["']?(href|xlink:href)/.test(t)) return false;
+  return true;
 }
 
 export function hashTextMedia(content: string): string {

@@ -49,6 +49,22 @@ describe("safeNextPath", () => {
     expect(safeNextPath("https://evil.example")).toBe("/me");
     expect(safeNextPath("//evil.example")).toBe("/me");
     expect(safeNextPath(null)).toBe("/me");
+    expect(safeNextPath("/\t/evil.example")).toBe("/me");
+    expect(safeNextPath("/\\evil.example")).toBe("/me");
+    expect(safeNextPath("/a?b=1#c")).toBe("/a?b=1#c");
+  });
+});
+
+describe("profile sanitizers", () => {
+  it("strips control/bidi characters from bios", async () => {
+    const { sanitizeBio } = await import("@/lib/auth/account");
+    expect(sanitizeBio("  hi\u202Eevil\u0007\r\n\n\n\nthere ")).toBe("hievil\n\nthere");
+  });
+  it("rejects non-http and credentialed links", async () => {
+    const { sanitizeProfileLink } = await import("@/lib/auth/account");
+    expect(() => sanitizeProfileLink("javascript:alert(1)")).toThrow();
+    expect(() => sanitizeProfileLink("https://a:b@evil.example")).toThrow();
+    expect(sanitizeProfileLink("https://ok.example/x")).toBe("https://ok.example/x");
   });
 });
 

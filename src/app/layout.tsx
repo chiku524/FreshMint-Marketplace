@@ -1,3 +1,4 @@
+import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import Link from "next/link";
@@ -51,6 +52,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${contra.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full">
+        <MaintenanceBanner />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

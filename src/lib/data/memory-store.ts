@@ -49,6 +49,7 @@ const globalMemory = globalThis as unknown as {
   __freshmintMemoryState?: MarketplaceState;
   __freshmintMemoryEngine?: DiscoveryEngine;
   __freshmintUseMemory?: boolean;
+  __freshmintOutageAt?: number | null;
   __freshmintNominations?: MemoryNomination[];
   __freshmintPurchases?: MemoryPurchase[];
   __freshmintNotifications?: MemoryNotification[];
@@ -61,6 +62,30 @@ export function enableMemoryMode(reason: string): void {
     );
   }
   globalMemory.__freshmintUseMemory = true;
+}
+
+/**
+ * Postgres is configured but failed. Serve the memory catalog for now, but
+ * remember when so ensureDatabaseReady() re-probes after a cooldown instead of
+ * staying on demo data until the next cold start.
+ */
+export function markDatabaseOutage(reason: string): void {
+  enableMemoryMode(reason);
+  globalMemory.__freshmintOutageAt ??= Date.now();
+}
+
+export function clearDatabaseOutage(): void {
+  if (globalMemory.__freshmintOutageAt != null) {
+    console.info("[freshmint] postgres reachable again — leaving memory mode");
+  }
+  globalMemory.__freshmintOutageAt = null;
+  globalMemory.__freshmintUseMemory = false;
+  const g = globalThis as unknown as { __fmEngineCache?: { invalidate(): void } };
+  g.__fmEngineCache?.invalidate();
+}
+
+export function databaseOutageSince(): number | null {
+  return globalMemory.__freshmintOutageAt ?? null;
 }
 
 export function isMemoryMode(): boolean {

@@ -402,7 +402,21 @@ export async function updateAvatarUrl(input: {
 }
 
 
-function sanitizeProfileLink(value: string | null | undefined): string | null {
+/**
+ * Bios render as React text (already HTML-escaped). Additionally strip
+ * control characters (keeping newlines/tabs) and Unicode bidi overrides that
+ * can visually spoof text, and collapse runs of blank lines.
+ */
+export function sanitizeBio(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 500);
+}
+
+export function sanitizeProfileLink(value: string | null | undefined): string | null {
   if (value == null) return null;
   const v = value.trim();
   if (!v) return null;
@@ -410,6 +424,10 @@ function sanitizeProfileLink(value: string | null | undefined): string | null {
   try {
     const u = new URL(v);
     if (u.protocol !== "https:" && u.protocol !== "http:") {
+      throw new AccountError("invalid_profile_link");
+    }
+    // No embedded credentials (https://user:pass@host phishing-style links).
+    if (u.username || u.password) {
       throw new AccountError("invalid_profile_link");
     }
     return u.toString();
@@ -437,7 +455,7 @@ export async function updateCreatorProfileFields(input: {
     farcasterUrl?: string | null;
   } = {};
   if (input.bio !== undefined) {
-    data.bio = input.bio.trim().slice(0, 500);
+    data.bio = sanitizeBio(input.bio);
   }
   if (input.websiteUrl !== undefined) {
     data.websiteUrl = sanitizeProfileLink(input.websiteUrl);
