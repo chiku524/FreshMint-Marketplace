@@ -1,0 +1,20 @@
+name: fm-assemble-parts
+on:
+  push:
+    branches: ["cursor/collection-profile-settings-8c12"]
+    paths:
+      - ".fm-assemble/**"
+      - "scripts/fm-assemble-hex.py"
+      - ".github/workflows/fm-assemble-parts.yml"
+permissions:
+  contents: write
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cursor/collection-profile-settings-8c12
+          fetch-depth: 0
+      - name: Assemble hex parts into source files
+        run: python3 scripts/fm-assemble-hex.py

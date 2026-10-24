@@ -1,0 +1,16 @@
+[
+  {
+    "label": "panel",
+    "dest": "src/components/CollectionPackagePanel.tsx",
+    "n": 16,
+    "sha256": "de64600954dc2a06af6e11ef914d9410a2d34fb79f33cba6966d693bea1bc2f1",
+    "size": 18635
+  },
+  {
+    "label": "page",
+    "dest": "src/app/collections/[id]/page.tsx",
+    "n": 15,
+    "sha256": "6ca683d929a863d4d150359d0e3c3b93da07585a9c0993ed306401d30f4f8e36",
+    "size": 17688
+  }
+]
