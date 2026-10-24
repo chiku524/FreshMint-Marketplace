@@ -1,1 +1,1 @@
-PLACEHOLDER
+@file:///tmp/PANEL_ONLY.tsx
